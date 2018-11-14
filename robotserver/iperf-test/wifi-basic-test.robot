@@ -1,28 +1,29 @@
 *** Settings ***
 Library                 DebugLibrary
-Library                 Remote    http://${ADDRESS1}:${PORT1}     10    WITH NAME   EndpointAgent1
+Library                 Remote    http://${ADDRESS_AGENT1}:${PORT_AGENT}     10    WITH NAME   EndpointAgent1
 Resource                mykeywords.robot
 
 *** Variables ***
-${ADDRESS1}    127.0.0.1
-${PORT1}       8270
-${PORT2}       8271
+${ADDRESS_AGENT1}       127.0.0.1
+${PORT_AGENT}           8270
+${PORT_TEST}            8271
 
 *** Test Cases ***
 Set up the test
-    EndpointAgent1.start                     ${testcase}
+    EndpointAgent1.start                        ${testcase}
 
 Ping test
-    Import Library          Remote      http://${ADDRESS1}:${PORT2}     WITH NAME   Endpoint1
-    Endpoint1.Connect To Dut Device     ${STA1}
-    Endpoint1.open wifi                 ${STA1}
-    Endpoint1.scan networks
-    Endpoint1.connect to network    tplink886     \
-    ${ret} =              Endpoint1.ping          AP            100
-    Should Be Equal       ${ret}        100
-    ${ret} =              Endpoint1.ping          testbox1      100
-    Should Be Equal       ${ret}        100
-    EndpointAgent1.stop                     ${testcase}
+    Import Library          Remote              http://${ADDRESS_AGENT1}:${PORT_TEST}     WITH NAME   Endpoint1
+    Endpoint1.Connect Dut                       ${STA1}
+    Endpoint1.open wifi                         ${STA1}
+    Endpoint1.scan networks                     ${STA1}
+    Endpoint1.connect to network                ${STA1}     tplink886   12345678
+    ${ret} =              Endpoint1.ping        ${STA1}     AP          1
+    Should Be Equal       ${ret}                1
+    ${ret} =              Endpoint1.ping        ${STA1}     testbox1    1
+    Should Be Equal       ${ret}                1
+    Endpoint1.Disconnect Dut                    ${STA1}
+    EndpointAgent1.stop                         ${testcase}
 ***
 iperf test as UDP TX
     connect to dut device    STA1

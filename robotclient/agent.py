@@ -42,13 +42,16 @@ class agent(object):
         #start_server(testlib.iperftest())
 
     def stop(self, testcase):
+        if not testcase.endswith(".py"):
+            testcase += ".py"
+
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
         else:
-            print("test {0} is not running".format(testcase))
+            raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
-        print("downloading " + testcase)
+        # os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
         shutil.copy(testcase, DOWNLOAD_LIB)
 
     def _verify(self, testcase):
