@@ -89,7 +89,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-**/sandbox/
+sandbox/
 
 # Spyder project settings
 .spyderproject
@@ -102,9 +102,9 @@ venv.bak/
 /site
 
 # mypy
-**/__pycache__/
-**/output.xml
-**/report.html
-**/log.html
+__pycache__/
+output.xml
+report.html
+log.html
 .vscode/
 /robotclient/testlibs/
