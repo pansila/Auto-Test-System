@@ -1,0 +1,17 @@
+### set up the test environment
+#### client
+```
+cd robotclient
+sandbox\scripts\active.bat
+python agent.py
+```
+robot remote server starts to listen now.
+
+#### server
+```
+cd robotserver
+sandbox\scripts\active.bat
+robot iperf-test\wifi-basic-test.robot
+```
+
+robot starts to connect to client and run the test there
