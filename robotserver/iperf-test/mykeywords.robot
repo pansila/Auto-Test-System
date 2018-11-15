@@ -4,5 +4,5 @@ load the test end point
 
 *** Variables ***
 ${testcase}     pingtest
-${STA1}         test1
-${STA2}         test2
+${dut1}         test1
+${dut2}         test2

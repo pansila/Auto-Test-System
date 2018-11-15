@@ -1,30 +1,41 @@
 *** Settings ***
 Library                 DebugLibrary
-Library                 Remote    http://${ADDRESS_AGENT1}:${PORT_AGENT}     10    WITH NAME   EndpointAgent1
+Library                 Remote    http://${address_agent1}:${port_agent}     10    WITH NAME   ${endpoint_agent}
 Resource                mykeywords.robot
 
 *** Variables ***
-${ADDRESS_AGENT1}       127.0.0.1
-${PORT_AGENT}           8270
-${PORT_TEST}            8271
+${address_agent1}       127.0.0.1
+${port_agent}           8270
+${port_test}            8271
+${endpoint_agent}       EndpointAgent1
+${endpoint}             Endpoint1
 
 *** Test Cases ***
-Set up the test
-    EndpointAgent1.start                        ${testcase}
-
 Ping test
-    Import Library          Remote              http://${ADDRESS_AGENT1}:${PORT_TEST}     WITH NAME   Endpoint1
-    Endpoint1.Connect Dut                       ${STA1}
-    Endpoint1.open wifi                         ${STA1}
-    Endpoint1.scan networks                     ${STA1}
-    Endpoint1.connect to network                ${STA1}     tplink886   12345678
-    ${ret} =              Endpoint1.ping        ${STA1}     AP          5
-    Should Be Equal       ${ret}                5
-    Endpoint1.Disconnect Dut                    ${STA1}
-    EndpointAgent1.stop                         ${testcase}
+    [Setup]                 Setup Remote        ${endpoint_agent}      pingtest
+    [Teardown]              Teardown Remote     ${endpoint_agent}      pingtest    ${endpoint}  ${dut1}
+    Import Library          Remote              http://${ADDRESS_AGENT1}:${PORT_TEST}     WITH NAME   ${endpoint}
+    Run Keyword             ${endpoint}.Connect Dut                    ${dut1}
+    Run Keyword             ${endpoint}.open wifi                      ${dut1}
+    Run Keyword             ${endpoint}.scan networks                  ${dut1}
+    Run Keyword             ${endpoint}.connect to network             ${dut1}     tplink886   12345678
+    ${ret} =                Run Keyword         ${endpoint}.ping       ${dut1}     AP          5
+    Should Be Equal         ${ret}              4
+    Run Keyword             ${endpoint}.Disconnect Dut                 ${dut1}
+
+*** Keywords ***
+Setup Remote
+    [Arguments]     ${agent}    ${testcase}
+    Run Keyword     ${agent}.start                  ${testcase}
+
+Teardown Remote
+    [Arguments]     ${agent}    ${testcase}     ${endpoint}     ${dut}
+    Run Keyword     ${agent}.stop                   ${testcase}
+    Run Keyword     ${endpoint}.Disconnect Dut      ${dut}
+
 ***
 iperf test as UDP TX
-    connect to dut device    STA1
+    connect to dut device    dut1
     open wifi
     scan networks
     connect to network       tplink886    12345678
@@ -34,7 +45,7 @@ iperf test as UDP TX
     Status Should Be         NO EARLY STOP
 
 wifi enable/disable test
-    connect to dut device    STA1
+    connect to dut device    dut1
     :FOR    ${var}    in     @{VALUE}
     \       Log       ${var}
     open wifi
@@ -45,7 +56,7 @@ wifi enable/disable test
     close wifi
 
 wifi password test
-    connect to dut device    STA1
+    connect to dut device    dut1
     open wifi
     scan networks
     connect to network    tplink886     1212

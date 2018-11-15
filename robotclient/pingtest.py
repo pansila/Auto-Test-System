@@ -27,7 +27,6 @@ class pingtest(object):
 
     #@keyword
     def connect_dut(self, deviceName):
-        # raise AssertionError(str(sys.stdout))
         self.serialport = serial.Serial('COM9', 115200, timeout=0.5)
 
     def disconnect_dut(self, deviceName):

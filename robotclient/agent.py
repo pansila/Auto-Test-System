@@ -30,7 +30,7 @@ class agent(object):
         self._verify(testcase)
 
         importlib.invalidate_caches()
-        testlib = importlib.import_module(".pingtest", DOWNLOAD_LIB)
+        testlib = importlib.import_module(".%s" % testcase[0:-3], DOWNLOAD_LIB)
         server, server_thread = start_server(testlib.pingtest(), port=8271)
         if testcase not in self.tests:
             self.tests[testcase] = {"server": server, "thread": server_thread}
@@ -51,10 +51,10 @@ class agent(object):
             raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
-        try:
-            os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
-        except FileNotFoundError:
-            pass
+        # try:
+        #     os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
+        # except FileNotFoundError:
+        #     pass
         shutil.copy(testcase, DOWNLOAD_LIB)
 
     def _verify(self, testcase):
