@@ -51,7 +51,10 @@ class agent(object):
             raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
-        # os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
+        try:
+            os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
+        except FileNotFoundError:
+            pass
         shutil.copy(testcase, DOWNLOAD_LIB)
 
     def _verify(self, testcase):

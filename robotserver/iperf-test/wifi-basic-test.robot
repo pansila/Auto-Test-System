@@ -18,10 +18,8 @@ Ping test
     Endpoint1.open wifi                         ${STA1}
     Endpoint1.scan networks                     ${STA1}
     Endpoint1.connect to network                ${STA1}     tplink886   12345678
-    ${ret} =              Endpoint1.ping        ${STA1}     AP          1
-    Should Be Equal       ${ret}                1
-    ${ret} =              Endpoint1.ping        ${STA1}     testbox1    1
-    Should Be Equal       ${ret}                1
+    ${ret} =              Endpoint1.ping        ${STA1}     AP          5
+    Should Be Equal       ${ret}                5
     Endpoint1.Disconnect Dut                    ${STA1}
     EndpointAgent1.stop                         ${testcase}
 ***

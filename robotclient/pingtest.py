@@ -7,8 +7,10 @@ import re
 import time
 #from robotlibcore import keyword
 
+TIMEOUT = -1
 SCAN_TIMEOUT = 5        # seconds
 CONNECT_TIMEOUT = 10    # seconds
+PING_TIMEOUT = 10    # seconds
 
 class pingtest(object):
 
@@ -17,6 +19,7 @@ class pingtest(object):
                                       '..', 'sut', 'login.py')
         self._status = ''
         self.serialport = None
+        self.IP_AP = None
 
     def __del__(self):
         if self.serialport is not None:
@@ -39,21 +42,43 @@ class pingtest(object):
 
     def scan_networks(self, deviceName):
         self.serialport.write(b'wifi_scan\r')
-        usedTime, result = self._serial_read(SCAN_TIMEOUT, 'scan finished')
-        print('Scan used time {0}s'.format(usedTime))
+        elapsedTime, result, _ = self._serial_read(SCAN_TIMEOUT, 'scan finished')
         print(result)
+        if elapsedTime == TIMEOUT:
+            raise AssertionError('Scan timeout')
+        print('Scan used time {0}s'.format(elapsedTime))
 
     def connect_to_network(self, deviceName, ssid, password):
         self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
-        usedTime, result = self._serial_read(CONNECT_TIMEOUT, 'ip configured')
-        print('Connecting used time {0}s'.format(usedTime))
+        elapsedTime, result, _ = self._serial_read(CONNECT_TIMEOUT, 'ip configured')
         print(result)
+        if elapsedTime == TIMEOUT:
+            raise AssertionError('Connecting timeout')
+        print('Connecting used time {0}s'.format(elapsedTime))
+
+        ret = re.compile(r'IP: (\d{1,3}(\.\d{1,3}){3})').search(result)
+        if ret and ret.groups():
+            ip = ret.groups()[0].split('.')
+            ip.pop()
+            ip.append('1')
+            self.IP_AP = '.'.join(ip)
+        else:
+            raise AssertionError("Can't get device's IP")
     
     def ping(self, deviceName, target, times):
-        ret = subprocess.call(['ping', '-n', times, '127.0.0.1'])
-        if ret != 0:
-            raise AssertionError('Running ping failed')
-        return times
+        self.serialport.write('ping {0} {1}\r'.format(self.IP_AP, times).encode())
+        elapsedTime, result, groups = self._serial_read(int(times) + 2, r'(\d+) packets transmitted, (\d+) received')
+        print(result)
+
+        if elapsedTime == TIMEOUT:
+            raise AssertionError('Ping timeout')
+        if len(groups) != 2:
+            raise AssertionError('Searching ping result failed')
+        if groups[0] != times:
+            raise AssertionError('Except pinging {0} times, but sent {1} packets only'.format(times, groups[0]))
+
+        print('Ping used time {0}s'.format(elapsedTime))
+        return groups[1]
 
     def change_password(self, username, old_pwd, new_pwd):
         self._run_command('change-password', username, old_pwd, new_pwd)
@@ -70,14 +95,20 @@ class pingtest(object):
         self._status = process.communicate()[0].strip()
 
     def _serial_read(self, timeout, term=None):
+        match = None
         if term is not None:
             matcher = re.compile(term)
         tic = time.time()
         ret = b""
         buff = self.serialport.readline()
+
         while (time.time() - tic) < timeout:
             ret += buff
-            if matcher and matcher.search(buff.decode()):
+            match = matcher.search(buff.decode())
+            if match:
                 break
             buff = self.serialport.readline()
-        return time.time() - tic, ret.decode()
+        else:
+            return TIMEOUT, ret.decode(), None
+
+        return time.time() - tic, ret.decode(), match.groups() if match else None
