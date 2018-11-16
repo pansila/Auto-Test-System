@@ -9,6 +9,8 @@ port_agent: 8270
 port_test: 8271
 test_dir: testlibs
 host: 127.0.0.1
+server_url: http://127.0.0.1
+server_port: 3000
 
 # DUTs
 DUT:

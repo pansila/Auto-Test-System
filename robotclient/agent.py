@@ -6,6 +6,7 @@ import shutil
 import threading
 import signal
 import yaml
+import requests
 from robotremoteserver import RobotRemoteServer
 #from robotlibcore import HybridCore
 
@@ -57,8 +58,11 @@ class agent(object):
             raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
-        print('Downloading test file {0} ...'.format(testcase))
-        shutil.copy(testcase, self.config["test_dir"])
+        url = "{0}:{1}/scripts/{2}".format(self.config["server_url"], self.config["server_port"], testcase)
+        print('Downloading test file {0} from {1}'.format(testcase, url))
+        r = requests.get(url)
+        with open('{0}\\{1}'.format(self.config['test_dir'], testcase), 'wb') as f:
+            f.write(r.content)
         print('Downloading test file {0} succeeded'.format(testcase))
 
     def _verify(self, testcase):
@@ -99,6 +103,13 @@ def start_agent(config_file = "config.yml"):
         g_config["port_test"] = 8271
     if "host" not in g_config:
         g_config["host"] = "127.0.0.1"
+    if "server_url" not in g_config:
+        raise AssertionError('Server is not set in the config file')
+    else:
+        if not g_config['server_url'].startswith('http://'):
+            g_config['server_url'] += 'http://'
+        if g_config['server_url'][-1] == '/':
+            g_config['server_url'] = g_config['server_url'][0:-1]
 
     server, server_thread = start_remote_server(agent(g_config), port=g_config["port_agent"])
     #signal.signal(signal.SIGHUG, lambda signum, frame: server.stop())
