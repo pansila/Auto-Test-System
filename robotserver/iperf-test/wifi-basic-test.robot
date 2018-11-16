@@ -4,7 +4,7 @@ Library                     Remote          ${remote_agent_address}   10    WITH
 Resource                    mykeywords.robot
 
 *** Variables ***
-${address_agent1}           127.0.0.1
+${address_agent1}           192.168.1.100
 ${port_agent}               8270
 ${port_test}                8271
 ${remote_agent_address}     http://${address_agent1}:${port_agent}
@@ -29,13 +29,13 @@ Ping test
 
 *** Keywords ***
 Setup Remote
-    [Arguments]     ${agent}    ${testcase}
-    Run Keyword     ${agent}.start                  ${testcase}
+    [Arguments]             ${agent}            ${testcase}
+    Run Keyword             ${agent}.start      ${testcase}
 
 Teardown Remote
-    [Arguments]     ${agent}    ${testcase}         ${endpoint}     ${dut}
-    Run Keyword     ${agent}.stop                   ${testcase}
-    Run Keyword     ${endpoint}.Disconnect Dut      ${dut}
+    [Arguments]             ${agent}            ${testcase}             ${endpoint}     ${dut}
+    Run Keyword             ${agent}.stop                               ${testcase}
+    Run Keyword             ${endpoint}.Disconnect Dut                  ${dut}
 
 ***
 iperf test as UDP TX

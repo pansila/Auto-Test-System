@@ -32,7 +32,8 @@ robot remote server starts to listen now.
 ```dos
 cd robotserver
 venv\scripts\active.bat
-robot iperf-test\wifi-basic-test.robot
+cd iperf-test
+robot wifi-basic-test.robot
 ```
 
 robot starts to connect to client and run the test there

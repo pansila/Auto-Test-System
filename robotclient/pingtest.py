@@ -5,6 +5,7 @@ import agent
 import serial
 import re
 import time
+import yaml
 #from robotlibcore import keyword
 
 TIMEOUT = -1
@@ -12,14 +13,17 @@ SCAN_TIMEOUT = 5        # seconds
 CONNECT_TIMEOUT = 10    # seconds
 PING_TIMEOUT = 10    # seconds
 
+REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
+
 class pingtest(object):
 
-    def __init__(self):
+    def __init__(self, config):
         self._iperf_path = os.path.join(os.path.dirname(__file__),
                                       '..', 'sut', 'login.py')
         self._status = ''
         self.serialport = None
         self.IP_AP = None
+        self.config = config
 
     def __del__(self):
         if self.serialport is not None:
@@ -27,7 +31,10 @@ class pingtest(object):
 
     #@keyword
     def connect_dut(self, deviceName):
-        self.serialport = serial.Serial('COM9', 115200, timeout=0.5)
+        for dut in self.config['DUT']:
+            if deviceName != dut['name']:
+                continue
+            self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
 
     def disconnect_dut(self, deviceName):
         if self.serialport is not None:
@@ -55,7 +62,7 @@ class pingtest(object):
             raise AssertionError('Connecting timeout')
         print('Connecting used time {0}s'.format(elapsedTime))
 
-        ret = re.compile(r'IP: (\d{1,3}(\.\d{1,3}){3})').search(result)
+        ret = re.compile('IP: {0}'.format(REGEXP_IP)).search(result)
         if ret and ret.groups():
             ip = ret.groups()[0].split('.')
             ip.pop()
@@ -65,7 +72,13 @@ class pingtest(object):
             raise AssertionError("Can't get device's IP")
     
     def ping(self, deviceName, target, times):
-        self.serialport.write('ping {0} {1}\r'.format(self.IP_AP, times).encode())
+        ping_dst = target
+        if target == "AP":
+            ping_dst = self.IP_AP
+        else:
+            if re.compile(REGEXP_IP).match(target) is None:
+                raise AssertionError("ping destination {0} is not a valid IP".format(target))
+        self.serialport.write('ping {0} {1}\r'.format(ping_dst, times).encode())
         elapsedTime, result, groups = self._serial_read(int(times) + 2, r'(\d+) packets transmitted, (\d+) received')
         print(result)
 

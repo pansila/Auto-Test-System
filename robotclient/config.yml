@@ -1,0 +1,36 @@
+### WiFi Test Suite Agent Configuration
+
+# Test setup information
+name: Test Box 1
+group: Room 703
+description: A test box in the room 703
+
+port_agent: 8270
+port_test: 8271
+test_dir: testlibs
+host: 192.168.1.100
+
+# DUTs
+DUT:
+  - name: STA1
+    com: COM9
+    baudrate: 115200
+  - name: STA2
+    com: COM11
+    baudrate: 115200
+
+# Control AP
+## a AP with fixed configuration or a device running openWRT
+AP:
+  - name: TL-WR886N
+    mode: fixed
+    configuration:
+      ssid: tplink886-wpa2
+      bssid:
+      key_mgmt: WPA-PSK
+      psk: 12345678
+  # raspberry pi running OpenWRT firmware
+  - name: raspberry pi 1
+    mode: auto
+    telnet: 192.168.1.100
+    com:

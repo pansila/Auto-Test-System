@@ -5,17 +5,20 @@ import importlib
 import shutil
 import threading
 import signal
+import yaml
 from robotremoteserver import RobotRemoteServer
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
 
+g_config = {}
+
 class agent(object):
 
     def __init__(self):
-        if os.path.exists(DOWNLOAD_LIB):
-            shutil.rmtree(DOWNLOAD_LIB)
-        os.makedirs(DOWNLOAD_LIB)
+        if os.path.exists(g_config["test_dir"]):
+            shutil.rmtree(g_config["test_dir"])
+        os.makedirs(g_config["test_dir"])
         self.tests = {}
 
     def start(self, testcase):
@@ -30,13 +33,13 @@ class agent(object):
         self._verify(testcase)
 
         importlib.invalidate_caches()
-        testlib = importlib.import_module(".%s" % testcase[0:-3], DOWNLOAD_LIB)
-        server, server_thread = start_server(testlib.pingtest(), port=8271)
+        testlib = importlib.import_module(".%s" % testcase[0:-3], g_config["test_dir"])
+        server, server_thread = start_server(testlib.pingtest(g_config), port=g_config["port_test"])
         if testcase not in self.tests:
             self.tests[testcase] = {"server": server, "thread": server_thread}
         return
         #importlib.invalidate_caches()
-        #testlib = importlib.import_module(".iperftest", DOWNLOAD_LIB)
+        #testlib = importlib.import_module(".iperftest", g_config["test_dir"])
         #libraries = [testlib.iperftest()]
         #HybridCore.__init__(self, libraries)
         #start_server(testlib.iperftest())
@@ -52,13 +55,13 @@ class agent(object):
 
     def _download(self, testcase):
         # try:
-        #     os.unlink(os.path.join(DOWNLOAD_LIB, testcase))
+        #     os.unlink(os.path.join(g_config["test_dir"], testcase))
         # except FileNotFoundError:
         #     pass
-        shutil.copy(testcase, DOWNLOAD_LIB)
+        shutil.copy(testcase, g_config["test_dir"])
 
     def _verify(self, testcase):
-        testlib = os.path.join(DOWNLOAD_LIB, testcase)
+        testlib = os.path.join(g_config["test_dir"], testcase)
         if not os.path.exists(testlib):
             raise AssertionError("Downloading file %s failed" % testcase)
 
@@ -69,13 +72,25 @@ class agent(object):
         pass
 
 def start_server(testlib, port=8270):
-    server = RobotRemoteServer(testlib, *sys.argv[1:], serve=False, port=port)
+    server = RobotRemoteServer(testlib, host=g_config["host"], serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()
     return server, server_thread
 
 if __name__ == '__main__':
-    server, server_thread = start_server(agent())
+    with open('config.yml') as f:
+        g_config = yaml.load(f)
+
+    if "test_dir" not in g_config:
+        g_config["test_dir"] = DOWNLOAD_LIB
+    if "port_agent" not in g_config:
+        g_config["port_agent"] = 8270
+    if "port_test" not in g_config:
+        g_config["port_test"] = 8271
+    if "host" not in g_config:
+        g_config["host"] = "127.0.0.1"
+
+    server, server_thread = start_server(agent(), port=g_config["port_agent"])
     #signal.signal(signal.SIGHUG, lambda signum, frame: server.stop())
     server_thread.join()
     #while server_thread.is_alive():
