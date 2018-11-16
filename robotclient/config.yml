@@ -8,7 +8,7 @@ description: A test box in the room 703
 port_agent: 8270
 port_test: 8271
 test_dir: testlibs
-host: 192.168.1.100
+host: 127.0.0.1
 
 # DUTs
 DUT:

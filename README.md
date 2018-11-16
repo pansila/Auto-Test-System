@@ -36,4 +36,6 @@ cd iperf-test
 robot wifi-basic-test.robot
 ```
 
-robot starts to connect to client and run the test there
+Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
+
+The server and client of demo run on the same local PC, if you want to deploy the them on the different PCs, change the IP addresses in the server's robot test script and client's endpoint config file. Don't forget to configure the firewall to let pass the communication on the TCP port 8270/8271.

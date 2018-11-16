@@ -1,14 +1,11 @@
 *** Settings ***
+Resource                    config-keywords.robot
 Library                     DebugLibrary
 Library                     Remote          ${remote_agent_address}   10    WITH NAME   ${endpoint_agent}
-Resource                    mykeywords.robot
 
 *** Variables ***
-${address_agent1}           192.168.1.100
-${port_agent}               8270
-${port_test}                8271
-${remote_agent_address}     http://${address_agent1}:${port_agent}
-${remote_test_address}      http://${address_agent1}:${port_test}
+${dut1}                     STA1
+${dut2}                     STA2
 ${endpoint_agent}           EndpointAgent1
 ${endpoint}                 Endpoint1
 ${ap_ssid}                  tplink886
