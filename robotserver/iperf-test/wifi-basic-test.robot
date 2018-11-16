@@ -1,5 +1,5 @@
 *** Settings ***
-Resource                    config-keywords.robot
+Resource                    config.robot
 Library                     DebugLibrary
 Library                     Remote          ${remote_agent_address}   10    WITH NAME   ${endpoint_agent}
 
@@ -26,13 +26,13 @@ Ping test
 
 *** Keywords ***
 Setup Remote
-    [Arguments]             ${agent}            ${testcase}
-    Run Keyword             ${agent}.start      ${testcase}
+    [Arguments]             ${agent}                ${testcase}
+    Run Keyword             ${agent}.start test     ${testcase}
 
 Teardown Remote
-    [Arguments]             ${agent}            ${testcase}             ${endpoint}     ${dut}
-    Run Keyword             ${agent}.stop                               ${testcase}
+    [Arguments]             ${agent}                ${testcase}         ${endpoint}     ${dut}
     Run Keyword             ${endpoint}.Disconnect Dut                  ${dut}
+    Run Keyword             ${agent}.stop test                          ${testcase}
 
 ***
 iperf test as UDP TX

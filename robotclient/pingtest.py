@@ -35,10 +35,12 @@ class pingtest(object):
             if deviceName != dut['name']:
                 continue
             self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
+            break
 
     def disconnect_dut(self, deviceName):
         if self.serialport is not None:
             self.serialport.close()
+            self.serialport = None
 
     def open_wifi(self, deviceName):
         pass
@@ -50,6 +52,7 @@ class pingtest(object):
         self.serialport.write(b'wifi_scan\r')
         elapsedTime, result, _ = self._serial_read(SCAN_TIMEOUT, 'scan finished')
         print(result)
+
         if elapsedTime == TIMEOUT:
             raise AssertionError('Scan timeout')
         print('Scan used time {0}s'.format(elapsedTime))
@@ -58,6 +61,7 @@ class pingtest(object):
         self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
         elapsedTime, result, _ = self._serial_read(CONNECT_TIMEOUT, 'ip configured')
         print(result)
+
         if elapsedTime == TIMEOUT:
             raise AssertionError('Connecting timeout')
         print('Connecting used time {0}s'.format(elapsedTime))
@@ -78,8 +82,9 @@ class pingtest(object):
         else:
             if re.compile(REGEXP_IP).match(target) is None:
                 raise AssertionError("ping destination {0} is not a valid IP".format(target))
+
         self.serialport.write('ping {0} {1}\r'.format(ping_dst, times).encode())
-        elapsedTime, result, groups = self._serial_read(int(times) + 2, r'(\d+) packets transmitted, (\d+) received')
+        elapsedTime, result, groups = self._serial_read(int(times)*2 + 2, r'(\d+) packets transmitted, (\d+) received')
         print(result)
 
         if elapsedTime == TIMEOUT:

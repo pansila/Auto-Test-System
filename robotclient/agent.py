@@ -15,13 +15,15 @@ g_config = {}
 
 class agent(object):
 
-    def __init__(self):
-        if os.path.exists(g_config["test_dir"]):
-            shutil.rmtree(g_config["test_dir"])
-        os.makedirs(g_config["test_dir"])
+    def __init__(self, config):
         self.tests = {}
+        self.config = config
+        if os.path.exists(self.config["test_dir"]):
+            shutil.rmtree(self.config["test_dir"])
+        os.makedirs(self.config["test_dir"])
+        sys.path.insert(0, self.config["test_dir"])
 
-    def start(self, testcase):
+    def start_test(self, testcase):
         if not testcase.endswith(".py"):
             testcase += ".py"
 
@@ -32,19 +34,20 @@ class agent(object):
         self._download(testcase)
         self._verify(testcase)
 
-        importlib.invalidate_caches()
-        testlib = importlib.import_module(".%s" % testcase[0:-3], g_config["test_dir"])
-        server, server_thread = start_server(testlib.pingtest(g_config), port=g_config["port_test"])
+        # importlib.invalidate_caches()
+        testlib = importlib.import_module(testcase[0:-3])
+        importlib.reload(testlib)
+        server, server_thread = start_remote_server(testlib.pingtest(self.config), port=self.config["port_test"])
         if testcase not in self.tests:
             self.tests[testcase] = {"server": server, "thread": server_thread}
         return
         #importlib.invalidate_caches()
-        #testlib = importlib.import_module(".iperftest", g_config["test_dir"])
+        #testlib = importlib.import_module(".iperftest", self.config["test_dir"])
         #libraries = [testlib.iperftest()]
         #HybridCore.__init__(self, libraries)
         #start_server(testlib.iperftest())
 
-    def stop(self, testcase):
+    def stop_test(self, testcase):
         if not testcase.endswith(".py"):
             testcase += ".py"
 
@@ -54,16 +57,22 @@ class agent(object):
             raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
-        # try:
-        #     os.unlink(os.path.join(g_config["test_dir"], testcase))
-        # except FileNotFoundError:
-        #     pass
-        shutil.copy(testcase, g_config["test_dir"])
+        print('Downloading test file {0} ...'.format(testcase))
+        shutil.copy(testcase, self.config["test_dir"])
+        print('Downloading test file {0} succeeded'.format(testcase))
 
     def _verify(self, testcase):
-        testlib = os.path.join(g_config["test_dir"], testcase)
+        testlib = os.path.join(self.config["test_dir"], testcase)
         if not os.path.exists(testlib):
-            raise AssertionError("Downloading file %s failed" % testcase)
+            raise AssertionError("Verify downloaded file %s failed" % testcase)
+    
+    def start(self):
+        """ start the agent """
+        pass
+
+    def stop(self):
+        """ stop the agent """
+        pass
 
     def clear_log(self):
         pass
@@ -71,14 +80,15 @@ class agent(object):
     def upload_log(self):
         pass
 
-def start_server(testlib, port=8270):
+def start_remote_server(testlib, port=8270):
     server = RobotRemoteServer(testlib, host=g_config["host"], serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()
     return server, server_thread
 
-if __name__ == '__main__':
-    with open('config.yml') as f:
+def start_agent(config_file = "config.yml"):
+    global g_config
+    with open(config_file) as f:
         g_config = yaml.load(f)
 
     if "test_dir" not in g_config:
@@ -90,9 +100,9 @@ if __name__ == '__main__':
     if "host" not in g_config:
         g_config["host"] = "127.0.0.1"
 
-    server, server_thread = start_server(agent(), port=g_config["port_agent"])
+    server, server_thread = start_remote_server(agent(g_config), port=g_config["port_agent"])
     #signal.signal(signal.SIGHUG, lambda signum, frame: server.stop())
     server_thread.join()
-    #while server_thread.is_alive():
-    #    server_thread.join(0.1)
 
+if __name__ == '__main__':
+    start_agent()
