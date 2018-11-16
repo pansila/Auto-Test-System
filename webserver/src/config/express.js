@@ -46,6 +46,10 @@ passport.use('google', strategies.google);
 // mount api v1 routes
 app.use('/v1', routes);
 
+app.use('/', express.static('../../auto-test-dashboard/dist'));
+app.use('/scripts', express.static('../robotserver/scripts'));
+app.get('/test', (req, res) => res.send('Hello World!'));
+
 // if error is not an instanceOf APIError, convert it.
 app.use(error.converter);
 

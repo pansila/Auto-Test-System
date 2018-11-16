@@ -1,2 +1,0 @@
-Robot Framework remote server at 127.0.0.1:8271 started.
-Robot Framework remote server at 127.0.0.1:8271 stopped.
