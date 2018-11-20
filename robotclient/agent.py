@@ -112,7 +112,7 @@ def start_agent(config_file = "config.yml"):
             g_config['server_url'] = g_config['server_url'][0:-1]
 
     server, server_thread = start_remote_server(agent(g_config), port=g_config["port_agent"])
-    #signal.signal(signal.SIGHUG, lambda signum, frame: server.stop())
+    signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
     server_thread.join()
 
 if __name__ == '__main__':

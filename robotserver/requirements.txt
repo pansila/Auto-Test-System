@@ -1,3 +1,4 @@
+mistune==0.8.4
 prompt-toolkit==1.0.15
 Pygments==2.2.0
 robotframework==3.0.4
