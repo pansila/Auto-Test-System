@@ -8,6 +8,7 @@ import signal
 import yaml
 import requests
 from robotremoteserver import RobotRemoteServer
+import tarfile
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
@@ -23,17 +24,18 @@ class agent(object):
             shutil.rmtree(self.config["test_dir"])
         os.makedirs(self.config["test_dir"])
         sys.path.insert(0, self.config["test_dir"])
+        sys.path.insert(0, os.path.join(self.config["test_dir"], "temp"))
 
     def start_test(self, testcase):
+        self._download(testcase)
+        # self._verify(testcase)
+
         if not testcase.endswith(".py"):
             testcase += ".py"
 
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
             del self.tests[testcase]
-
-        self._download(testcase)
-        self._verify(testcase)
 
         # importlib.invalidate_caches()
         testlib = importlib.import_module(testcase[0:-3])
@@ -58,12 +60,22 @@ class agent(object):
             raise AssertionError("test {0} is not running".format(testcase))
 
     def _download(self, testcase):
+        if testcase.endswith(".py"):
+            testcase = testcase[0:-3]
+
+        tarball = '{0}.tgz'.format(testcase)
         url = "{0}:{1}/scripts/{2}".format(self.config["server_url"], self.config["server_port"], testcase)
-        print('Downloading test file {0} from {1}'.format(testcase, url))
+        print('Downloading test file {0} from {1}'.format(tarball, url))
+
         r = requests.get(url)
-        with open('{0}\\{1}'.format(self.config['test_dir'], testcase), 'wb') as f:
+
+        output = '{0}\\{1}'.format(self.config['test_dir'], tarball)
+        with open(output, 'wb') as f:
             f.write(r.content)
-        print('Downloading test file {0} succeeded'.format(testcase))
+        print('Downloading test file {0} succeeded'.format(tarball))
+
+        with tarfile.open(tarball) as tarFile:
+            tarFile.extractall(self.config["test_dir"])
 
     def _verify(self, testcase):
         testlib = os.path.join(self.config["test_dir"], testcase)

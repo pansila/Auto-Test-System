@@ -72,6 +72,7 @@
     "dotenv-safe": "^6.0.0",
     "express": "^4.15.2",
     "express-validation": "^1.0.2",
+    "fs-extra": "^7.0.1",
     "helmet": "^3.5.0",
     "http-status": "^1.0.1",
     "joi": "^10.4.1",
@@ -85,6 +86,7 @@
     "passport-http-bearer": "^1.0.1",
     "passport-jwt": "4.0.0",
     "pm2": "^3.0.0",
+    "tar": "^4.4.8",
     "uuid": "^3.1.0"
   },
   "devDependencies": {

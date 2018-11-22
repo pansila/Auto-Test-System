@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const passport = require('passport');
 const routes = require('../api/routes/v1');
+const scripts = require('../api/routes/scripts');
 const { logs } = require('./vars');
 const strategies = require('./passport');
 const error = require('../api/middlewares/error');
@@ -46,9 +47,9 @@ passport.use('google', strategies.google);
 // mount api v1 routes
 app.use('/v1', routes);
 
+app.use('/scripts', scripts);
+
 app.use('/', express.static('../../auto-test-dashboard/dist'));
-app.use('/scripts', express.static('../robotserver/scripts'));
-app.get('/test', (req, res) => res.send('Hello World!'));
 
 // if error is not an instanceOf APIError, convert it.
 app.use(error.converter);
