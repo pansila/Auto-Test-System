@@ -3,29 +3,32 @@ const { omit } = require('lodash');
 const User = require('../models/user.model');
 // const { handler: errorHandler } = require('../middlewares/error');
 const tar = require('tar');
-// const path = require('path');
+const path = require('path');
 const fs = require('fs-extra');
 
-// const scriptRoot = path.resolve('../robotserver/scripts');
 const scriptRoot = '../robotserver/scripts';
-// const tarballTemp = path.resolve('.temp');
 const tarballTemp = 'temp';
-// const dependency = ['customtestlibs'];
+const dependency = [/customtestlibs[/\\]?.*/];
 
 async function makeTarballContent(script) {
-  console.log(scriptRoot, tarballTemp, script);
+  if (!fs.existsSync(path.join(scriptRoot, `${script}.py`))) {
+    throw new Error(`${script}.py doesn't exist`);
+  }
   try {
     await fs.copy(scriptRoot, tarballTemp, {
-      // filter: (file) => {
-      //   console.log(file);
-      //   for (let i = 0; i < dependency.length; i += 1) {
-      //     if (file.endsWith(dependency[i])) return true;
-      //   }
-      //   if (file.endsWith(`${script}.py`)) {
-      //     return true;
-      //   }
-      //   return false;
-      // },
+      filter: (file) => {
+        // console.log(file);
+        if (file.endsWith(scriptRoot)) {
+          return true;
+        }
+        for (let i = 0; i < dependency.length; i += 1) {
+          if (dependency[i].test(file)) return true;
+        }
+        if (file.endsWith(`${script}.py`)) {
+          return true;
+        }
+        return false;
+      },
       preserveTimestamps: true,
     });
   } catch (error) {
@@ -54,12 +57,18 @@ exports.get = async (req, res) => {
   if (script.endsWith('.py')) {
     script = script.slice(0, -3);
   }
-  const scriptTar = await packScript(script);
-  return res.sendFile(scriptTar, {
-    root: process.cwd(),
-  }, (err) => {
-    if (err) console.error(err);
-  });
+  try {
+    const scriptTar = await packScript(script);
+    return res.sendFile(scriptTar, {
+      root: process.cwd(),
+    }, (err) => {
+      if (err) console.error(err);
+    });
+  } catch (err) {
+    console.error(err);
+    res.send(404);
+  }
+  return undefined; // make eslint happy
 };
 
 /**

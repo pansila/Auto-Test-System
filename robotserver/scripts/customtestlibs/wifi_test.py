@@ -11,7 +11,6 @@ class wifi_basic_test(object):
     TIMEOUT = -1
     SCAN_TIMEOUT = 5        # seconds
     CONNECT_TIMEOUT = 10    # seconds
-    PING_TIMEOUT = 10    # seconds
 
     REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
 
@@ -48,23 +47,23 @@ class wifi_basic_test(object):
 
     def scan_networks(self, deviceName):
         self.serialport.write(b'wifi_scan\r')
-        elapsedTime, result, _ = self._serial_read(SCAN_TIMEOUT, 'scan finished')
+        elapsedTime, result, _ = self._serial_read(self.SCAN_TIMEOUT, 'scan finished')
         print(result)
 
-        if elapsedTime == TIMEOUT:
+        if elapsedTime == self.TIMEOUT:
             raise AssertionError('Scan timeout')
         print('Scan used time {0}s'.format(elapsedTime))
 
     def connect_to_network(self, deviceName, ssid, password):
         self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
-        elapsedTime, result, _ = self._serial_read(CONNECT_TIMEOUT, 'ip configured')
+        elapsedTime, result, _ = self._serial_read(self.CONNECT_TIMEOUT, 'ip configured')
         print(result)
 
-        if elapsedTime == TIMEOUT:
+        if elapsedTime == self.TIMEOUT:
             raise AssertionError('Connecting timeout')
         print('Connecting used time {0}s'.format(elapsedTime))
 
-        ret = re.compile('IP: {0}'.format(REGEXP_IP)).search(result)
+        ret = re.compile('IP: {0}'.format(self.REGEXP_IP)).search(result)
         if ret and ret.groups():
             ip = ret.groups()[0].split('.')
             ip.pop()
@@ -102,6 +101,6 @@ class wifi_basic_test(object):
                 break
             buff = self.serialport.readline()
         else:
-            return TIMEOUT, ret.decode(), None
+            return self.TIMEOUT, ret.decode(), None
 
         return time.time() - tic, ret.decode(), match.groups() if match else None

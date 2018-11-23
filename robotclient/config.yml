@@ -5,25 +5,28 @@ name: Test Box 1
 group: Room 703
 description: A test box in the room 703
 
+host_agent: 127.0.0.1
 port_agent: 8270
 port_test: 8271
-test_dir: testlibs
-host: 127.0.0.1
 server_url: http://127.0.0.1
 server_port: 3000
+test_dir: testlibs
 
-# DUTs
+# Device under test
 DUT:
   - name: STA1
     com: COM9
     baudrate: 115200
+    download:
+      - keil
+      - ISP
   - name: STA2
     com: COM11
     baudrate: 115200
 
-# Control AP
-## a AP with fixed configuration or a device running openWRT
+# AP under test
 AP:
+  # a AP with fixed configuration or a device running openWRT
   - name: TL-WR886N
     mode: fixed
     configuration:

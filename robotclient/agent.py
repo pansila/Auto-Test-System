@@ -9,9 +9,11 @@ import yaml
 import requests
 from robotremoteserver import RobotRemoteServer
 import tarfile
+from distutils import dir_util
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
+TEMP_LIB = "temp"
 
 g_config = {}
 
@@ -23,12 +25,11 @@ class agent(object):
         if os.path.exists(self.config["test_dir"]):
             shutil.rmtree(self.config["test_dir"])
         os.makedirs(self.config["test_dir"])
-        sys.path.insert(0, self.config["test_dir"])
-        sys.path.insert(0, os.path.join(self.config["test_dir"], "temp"))
+        sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
     def start_test(self, testcase):
         self._download(testcase)
-        # self._verify(testcase)
+        self._verify(testcase)
 
         if not testcase.endswith(".py"):
             testcase += ".py"
@@ -40,9 +41,10 @@ class agent(object):
         # importlib.invalidate_caches()
         testlib = importlib.import_module(testcase[0:-3])
         importlib.reload(testlib)
-        server, server_thread = start_remote_server(testlib.pingtest(self.config), port=self.config["port_test"])
-        if testcase not in self.tests:
-            self.tests[testcase] = {"server": server, "thread": server_thread}
+        server, server_thread = start_remote_server(testlib.pingtest(self.config),
+                                    host=self.config["host_agent"],
+                                    port=self.config["port_test"])
+        self.tests[testcase] = {"server": server, "thread": server_thread}
         return
         #importlib.invalidate_caches()
         #testlib = importlib.import_module(".iperftest", self.config["test_dir"])
@@ -57,27 +59,36 @@ class agent(object):
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
         else:
-            raise AssertionError("test {0} is not running".format(testcase))
+            raise AssertionError("test {} is not running".format(testcase))
 
     def _download(self, testcase):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
 
-        tarball = '{0}.tgz'.format(testcase)
-        url = "{0}:{1}/scripts/{2}".format(self.config["server_url"], self.config["server_port"], testcase)
-        print('Downloading test file {0} from {1}'.format(tarball, url))
+        tarball = '{}.tgz'.format(testcase)
+        url = "{}:{}/scripts/{}".format(self.config["server_url"], self.config["server_port"], testcase)
+        print('Downloading test file {} from {}'.format(tarball, url))
 
         r = requests.get(url)
+        if r.status_code == 404:
+            raise AssertionError('Downloading test file {} failed'.format(tarball))
 
-        output = '{0}\\{1}'.format(self.config['test_dir'], tarball)
+        output = '{}\\{}'.format(self.config['test_dir'], tarball)
         with open(output, 'wb') as f:
             f.write(r.content)
-        print('Downloading test file {0} succeeded'.format(tarball))
+        print('Downloading test file {} succeeded'.format(tarball))
 
-        with tarfile.open(tarball) as tarFile:
+        with tarfile.open(output) as tarFile:
             tarFile.extractall(self.config["test_dir"])
 
+        temp_dir = os.path.join(self.config['test_dir'], TEMP_LIB)
+        dir_util.copy_tree(temp_dir, self.config['test_dir'])
+        shutil.rmtree(temp_dir)
+
     def _verify(self, testcase):
+        if not testcase.endswith(".py"):
+            testcase += ".py"
+
         testlib = os.path.join(self.config["test_dir"], testcase)
         if not os.path.exists(testlib):
             raise AssertionError("Verify downloaded file %s failed" % testcase)
@@ -96,8 +107,8 @@ class agent(object):
     def upload_log(self):
         pass
 
-def start_remote_server(testlib, port=8270):
-    server = RobotRemoteServer(testlib, host=g_config["host"], serve=False, port=port)
+def start_remote_server(testlib, host, port=8270):
+    server = RobotRemoteServer(testlib, host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.start()
     return server, server_thread
@@ -113,19 +124,23 @@ def start_agent(config_file = "config.yml"):
         g_config["port_agent"] = 8270
     if "port_test" not in g_config:
         g_config["port_test"] = 8271
-    if "host" not in g_config:
-        g_config["host"] = "127.0.0.1"
+    if "host_agent" not in g_config:
+        g_config["host_agent"] = "127.0.0.1"
     if "server_url" not in g_config:
-        raise AssertionError('Server is not set in the config file')
+        raise AssertionError('server is not set in the config file')
     else:
         if not g_config['server_url'].startswith('http://'):
             g_config['server_url'] += 'http://'
         if g_config['server_url'][-1] == '/':
             g_config['server_url'] = g_config['server_url'][0:-1]
 
-    server, server_thread = start_remote_server(agent(g_config), port=g_config["port_agent"])
+    server, server_thread = start_remote_server(agent(g_config), host=g_config["host_agent"], port=g_config["port_agent"])
     signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
     server_thread.join()
 
 if __name__ == '__main__':
-    start_agent()
+    try:
+        start_agent()
+    except OSError as err:
+        print(err)
+        print("Please check IP {} is configured correctly".format(g_config["host_agent"]))
