@@ -59,13 +59,13 @@ class iperftest(wifi_basic_test):
         if type.lower() == 'udp':
             arguments.append('-u')
 
-        if (length is not None):
+        if length is not None:
             arguments.extend(['-l', length])
-        if (bandwidth is not None):
+        if bandwidth is not None:
             arguments.extend(['-b', bandwidth])
-        if (time is not None):
+        if time is not None:
             arguments.extend(['-t', time])
-        if (interval is not None):
+        if interval is not None:
             arguments.extend(['-i', interval])
 
         p = subprocess.Popen(arguments, stdout=PIPE, stderr=PIPE)
@@ -149,11 +149,18 @@ class iperftest(wifi_basic_test):
 
         return self._get_local_host_ip()
 
-    def iperf3_stop_tx_server(self):
+    def iperf_stop_tx_server(self):
         if self.iperf_process is not None:
+            print('stopping iperf, pid {}'.format(self.iperf_process.pid))
             self.iperf_process.kill()
         else:
             print('iperf is not running')
+
+    def iperf3_stop_tx_server(self):
+        self.iperf_stop_tx_server()
+
+    def iperf2_stop_tx_server(self):
+        self.iperf_stop_tx_server()
 
     def iperf3_start_tx_server(self, deviceName):
         return self.iperf_start_tx_server(deviceName, 'iperf3')
@@ -183,13 +190,14 @@ class iperftest(wifi_basic_test):
         else:
             raise AssertionError('Argument iperf is not correct, got {}'.format(iperf))
 
-        if (length is not None):
+        # looks like a robot bug that non-assigned argument is given a string 'None'
+        if length is not None and length != 'None':
             arguments.extend(['-l', length])
-        if (bandwidth is not None):
+        if bandwidth is not None and bandwidth != 'None':
             arguments.extend(['-b', bandwidth])
-        if (time is not None):
+        if time is not None and time != 'None':
             arguments.extend(['-t', time])
-        if (interval is not None):
+        if interval is not None and interval != 'None':
             arguments.extend(['-i', interval])
         arguments.append('\r')
 

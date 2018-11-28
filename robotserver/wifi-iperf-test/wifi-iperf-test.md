@@ -1,28 +1,15 @@
-# Notes of Writing A Test Script
-There are two ways to support a test suite in the markdown file.
-1. Write the robot test case in the markdown code block.
-   
-   \``` robotframework
-
-   \```
-2. Write the robot test case in the markdown table.
-
-   We use the second way to write our test cases as it's more legible for test writer
-
-Because it's a distributed test system compared to a local standalone test system, some essential configurations need to be included at the beginning of the test script as follows.
-* Include "Resource config.robot" to load the test related configuration
-* Include "Library Remote <address:port>" to connect to an endpoint
-* Include the dynamic "Import Library <address:port>" to connect to the test library for the downloaded test case
-
 ## Test Plans
-1. [Ping Test](#Ping_Test)
-2. [WiFi Enable/Disable Test](#WiFi_Enable/Disable_Test)
-3. [Connect/Disconnect Test](#Connect/Disconnect_Test)
-4. [WiFi Password Test](#WiFi_Password_Test)
-5. [iperf TCP TX test](#iperf_TCP_TX_test)
-6. [iperf TCP RX test](#iperf_TCP_RX_test)
-7. [iperf UDP TX test](#iperf_UDP_TX_test)
-8. [iperf UDP RX test](#iperf_UDP_RX_test)
+- [Test Plans](#test-plans)
+	- [Setup for all test cases](#setup-for-all-test-cases)
+	- [Ping Test](#ping-test)
+	- [iperf3 UDP RX test](#iperf3-udp-rx-test)
+	- [iperf3 TCP RX test](#iperf3-tcp-rx-test)
+	- [iperf3 UDP TX test](#iperf3-udp-tx-test)
+	- [iperf3 TCP TX test](#iperf3-tcp-tx-test)
+	- [iperf2 UDP RX test](#iperf2-udp-rx-test)
+	- [iperf2 TCP RX test](#iperf2-tcp-rx-test)
+	- [iperf2 UDP TX test](#iperf2-udp-tx-test)
+	- [iperf2 TCP TX test](#iperf2-tcp-tx-test)
 
 ### Setup for all test cases
 | Settings | Value | Value | Value | Value | Value |
@@ -62,50 +49,96 @@ Because it's a distributed test system compared to a local standalone test syste
 | | ${ret} = | Run Keyword | pingtestlib.ping | ${dut1} | AP | 5 |
 | | Should Be Equal | ${ret} | 5 |
 
-### iperf UDP RX test
+### iperf3 UDP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
-| iperf UDP RX test |
+| iperf3 UDP RX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | Run Keyword | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${ret} = | Run Keyword | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
 
-### iperf TCP RX test
+### iperf3 TCP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
-| iperf TCP RX test |
+| iperf3 TCP RX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | Run Keyword | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${ret} = | Run Keyword | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
 
-### iperf UDP TX test
+### iperf3 UDP TX test
 | Keywords | Value | Value | Value | Value | Value |
 |---|
-| Teardown Iperf TX Server |
+| Teardown Iperf3 TX Server |
 | | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.iperf3 stop tx server |
 | | Teardown Remote | ${endpoint_agent} | ${testcase} | ${testlib} | ${dut} |
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
-| iperf UDP TX test |
+| iperf3 UDP TX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Iperf3 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | Run Keyword | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${ret} = | Run Keyword | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
-| | Run Keyword | iperftestlib.iperf3 stop tx server |
 
-### iperf TCP TX test
+### iperf3 TCP TX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
-| iperf TCP TX test |
+| iperf3 TCP TX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Iperf3 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | Run Keyword | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${ret} = | Run Keyword | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+
+### iperf2 UDP RX test
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+|---|
+| iperf2 UDP RX test |
+| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | Run Keyword | iperftestlib.iperf2 start udp rx server | ${dut1} |
+| | ${ret} = | Run Keyword | iperftestlib.iperf2 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
+
+### iperf2 TCP RX test
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+|---|
+| iperf2 TCP RX test |
+| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | Run Keyword | iperftestlib.iperf2 start tcp rx server | ${dut1} |
+| | ${ret} = | Run Keyword | iperftestlib.iperf2 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
+
+### iperf2 UDP TX test
+| Keywords | Value | Value | Value | Value | Value |
+|---|
+| Teardown Iperf2 TX Server |
+| | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
+| | Run Keyword | ${testlib}.iperf2 stop tx server |
+| | Teardown Remote | ${endpoint_agent} | ${testcase} | ${testlib} | ${dut} |
+
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+|---|
+| iperf2 UDP TX test |
+| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Iperf2 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | ${dut_ip} = | Run Keyword | iperftestlib.iperf2 start udp tx server | ${dut1} |
+| | ${ret} = | Run Keyword | iperftestlib.iperf2 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+
+### iperf2 TCP TX test
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+|---|
+| iperf2 TCP TX test |
+| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Iperf2 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | ${dut_ip} = | Run Keyword | iperftestlib.iperf2 start tcp tx server | ${dut1} |
+| | ${ret} = | Run Keyword | iperftestlib.iperf2 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
