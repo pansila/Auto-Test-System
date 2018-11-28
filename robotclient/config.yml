@@ -11,6 +11,8 @@ port_test: 8271
 server_url: http://127.0.0.1
 server_port: 3000
 test_dir: testlibs
+iperf2: d:\\bin\\iperf-2.0.9-win64\\iperf2
+iperf3: d:\\bin\\iperf3
 
 # Device under test
 DUT:

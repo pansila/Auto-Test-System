@@ -8,7 +8,8 @@ import yaml
 #from robotlibcore import keyword
 
 class wifi_basic_test(object):
-    TIMEOUT = -1
+    TIMEOUT_ERR = -1
+    TIMEOUT = 1
     SCAN_TIMEOUT = 5        # seconds
     CONNECT_TIMEOUT = 10    # seconds
 
@@ -19,7 +20,8 @@ class wifi_basic_test(object):
                                       '..', 'sut', 'login.py')
         self._status = ''
         self.serialport = None
-        self.IP_AP = None
+        self.ip_AP = None
+        self.ip_DUT = None
         self.config = config
 
     def __del__(self):
@@ -32,12 +34,17 @@ class wifi_basic_test(object):
             if deviceName != dut['name']:
                 continue
             self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
+            print('Serial port {} opened successfully'.format(dut['com']))
             break
+        else:
+            raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
 
     def disconnect_dut(self, deviceName):
         if self.serialport is not None:
             self.serialport.close()
             self.serialport = None
+        else:
+            print('Serial port is not open')
 
     def open_wifi(self, deviceName):
         pass
@@ -46,31 +53,35 @@ class wifi_basic_test(object):
         pass
 
     def scan_networks(self, deviceName):
+        self._flush_serial_output()
         self.serialport.write(b'wifi_scan\r')
         elapsedTime, result, _ = self._serial_read(self.SCAN_TIMEOUT, 'scan finished')
         print(result)
 
-        if elapsedTime == self.TIMEOUT:
+        if elapsedTime == self.TIMEOUT_ERR:
             raise AssertionError('Scan timeout')
         print('Scan used time {0}s'.format(elapsedTime))
 
     def connect_to_network(self, deviceName, ssid, password):
+        self._flush_serial_output()
         self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
         elapsedTime, result, _ = self._serial_read(self.CONNECT_TIMEOUT, 'ip configured')
         print(result)
 
-        if elapsedTime == self.TIMEOUT:
+        if elapsedTime == self.TIMEOUT_ERR:
             raise AssertionError('Connecting timeout')
         print('Connecting used time {0}s'.format(elapsedTime))
 
         ret = re.compile('IP: {0}'.format(self.REGEXP_IP)).search(result)
         if ret and ret.groups():
-            ip = ret.groups()[0].split('.')
+            self.ip_DUT = ret.groups()[0]
+            ip = self.ip_DUT.split('.')
             ip.pop()
             ip.append('1')
             self.IP_AP = '.'.join(ip)
         else:
             raise AssertionError("Can't get device's IP")
+        return self.ip_DUT
     
     def change_password(self, username, old_pwd, new_pwd):
         self._run_command('change-password', username, old_pwd, new_pwd)
@@ -91,16 +102,22 @@ class wifi_basic_test(object):
         if term is not None:
             matcher = re.compile(term)
         tic = time.time()
-        ret = b""
         buff = self.serialport.readline()
+        ret = buff
 
         while (time.time() - tic) < timeout:
-            ret += buff
-            match = matcher.search(buff.decode())
-            if match:
-                break
+            if term:
+                match = matcher.search(buff.decode())
+                if match:
+                    break
             buff = self.serialport.readline()
+            ret += buff
         else:
-            return self.TIMEOUT, ret.decode(), None
+            return self.TIMEOUT_ERR, ret.decode(), None
 
         return time.time() - tic, ret.decode(), match.groups() if match else None
+
+    def _flush_serial_output(self, wait_time=1):
+        _, result, _ = self._serial_read(wait_time)
+        # print(result)
+        return result

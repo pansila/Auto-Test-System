@@ -28,20 +28,21 @@ class agent(object):
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
     def start_test(self, testcase):
+        if testcase.endswith(".py"):
+            testcase = testcase[0:-3]
+
         self._download(testcase)
         self._verify(testcase)
-
-        if not testcase.endswith(".py"):
-            testcase += ".py"
 
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
             del self.tests[testcase]
 
         # importlib.invalidate_caches()
-        testlib = importlib.import_module(testcase[0:-3])
+        testlib = importlib.import_module(testcase)
         importlib.reload(testlib)
-        server, server_thread = start_remote_server(testlib.pingtest(self.config),
+        test = getattr(testlib, testcase)
+        server, server_thread = start_remote_server(test(self.config),
                                     host=self.config["host_agent"],
                                     port=self.config["port_test"])
         self.tests[testcase] = {"server": server, "thread": server_thread}
@@ -53,9 +54,6 @@ class agent(object):
         #start_server(testlib.iperftest())
 
     def stop_test(self, testcase):
-        if not testcase.endswith(".py"):
-            testcase += ".py"
-
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
         else:

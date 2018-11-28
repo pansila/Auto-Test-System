@@ -1,6 +1,7 @@
 certifi==2018.10.15
 chardet==3.0.4
 idna==2.7
+netifaces==0.10.7
 pyserial==3.4
 PyYAML==3.13
 requests==2.20.1
