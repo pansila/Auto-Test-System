@@ -12,7 +12,7 @@ class pingtest(wifi_basic_test):
                 raise AssertionError("ping destination {0} is not a valid IP".format(target))
 
         self.serialport.write('ping {0} {1}\r'.format(ping_dst, times).encode())
-        elapsedTime, result, groups = self._serial_read(int(times)*2 + 2, r'(\d+) packets transmitted, (\d+) received')
+        result, elapsedTime, groups = self._serial_read(int(times)*2 + 2, r'(\d+) packets transmitted, (\d+) received')
         print(result)
 
         if elapsedTime == self.TIMEOUT:

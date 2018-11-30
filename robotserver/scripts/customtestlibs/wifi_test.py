@@ -1,50 +1,20 @@
 import os.path
-import subprocess
-import sys
-import serial
 import re
-import time
-import yaml
+from .device_test import device_test
 #from robotlibcore import keyword
 
-class wifi_basic_test(object):
-    TIMEOUT_ERR = -1
-    TIMEOUT = 1
+class wifi_basic_test(device_test):
     SCAN_TIMEOUT = 5        # seconds
     CONNECT_TIMEOUT = 10    # seconds
 
     REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
 
     def __init__(self, config):
+        super().__init__(config)
         self._iperf_path = os.path.join(os.path.dirname(__file__),
                                       '..', 'sut', 'login.py')
-        self._status = ''
-        self.serialport = None
         self.ip_AP = None
         self.ip_DUT = None
-        self.config = config
-
-    def __del__(self):
-        if self.serialport is not None:
-            self.serialport.close()
-
-    #@keyword
-    def connect_dut(self, deviceName):
-        for dut in self.config['DUT']:
-            if deviceName != dut['name']:
-                continue
-            self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
-            print('Serial port {} opened successfully'.format(dut['com']))
-            break
-        else:
-            raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
-
-    def disconnect_dut(self, deviceName):
-        if self.serialport is not None:
-            self.serialport.close()
-            self.serialport = None
-        else:
-            print('Serial port is not open')
 
     def open_wifi(self, deviceName):
         pass
@@ -55,7 +25,7 @@ class wifi_basic_test(object):
     def scan_networks(self, deviceName):
         self._flush_serial_output()
         self.serialport.write(b'wifi_scan\r')
-        elapsedTime, result, _ = self._serial_read(self.SCAN_TIMEOUT, 'scan finished')
+        result, elapsedTime, _ = self._serial_read(self.SCAN_TIMEOUT, 'scan finished')
         print(result)
 
         if elapsedTime == self.TIMEOUT_ERR:
@@ -65,7 +35,7 @@ class wifi_basic_test(object):
     def connect_to_network(self, deviceName, ssid, password):
         self._flush_serial_output()
         self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
-        elapsedTime, result, _ = self._serial_read(self.CONNECT_TIMEOUT, 'ip configured')
+        result, elapsedTime, _ = self._serial_read(self.CONNECT_TIMEOUT, 'ip configured')
         print(result)
 
         if elapsedTime == self.TIMEOUT_ERR:
@@ -82,42 +52,3 @@ class wifi_basic_test(object):
         else:
             raise AssertionError("Can't get device's IP")
         return self.ip_DUT
-    
-    def change_password(self, username, old_pwd, new_pwd):
-        self._run_command('change-password', username, old_pwd, new_pwd)
-
-    def status_should_be(self, expected_status):
-        if expected_status != self._status:
-            raise AssertionError("Expected status to be '%s' but was '%s'."
-                                 % (expected_status, self._status))
-
-    def _run_command(self, command, *args):
-        command = [sys.executable, self._iperf_path, command] + list(args)
-        process = subprocess.Popen(command, universal_newlines=True, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT)
-        self._status = process.communicate()[0].strip()
-
-    def _serial_read(self, timeout, term=None):
-        match = None
-        if term is not None:
-            matcher = re.compile(term)
-        tic = time.time()
-        buff = self.serialport.readline()
-        ret = buff
-
-        while (time.time() - tic) < timeout:
-            if term:
-                match = matcher.search(buff.decode())
-                if match:
-                    break
-            buff = self.serialport.readline()
-            ret += buff
-        else:
-            return self.TIMEOUT_ERR, ret.decode(), None
-
-        return time.time() - tic, ret.decode(), match.groups() if match else None
-
-    def _flush_serial_output(self, wait_time=1):
-        _, result, _ = self._serial_read(wait_time)
-        # print(result)
-        return result

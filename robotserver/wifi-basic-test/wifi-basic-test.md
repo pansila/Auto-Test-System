@@ -57,32 +57,34 @@ Because it's a distributed test system compared to a local standalone test syste
 | Ping test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | pingtest | pingtestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | pingtest | pingtestlib | ${dut1} |
-| | Run Keyword | pingtestlib.scan networks | ${dut1} |
-| | Run Keyword | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
-| | ${ret} = | Run Keyword | pingtestlib.ping | ${dut1} | AP | 5 |
+| | pingtestlib.scan networks | ${dut1} |
+| | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | ${ret} = | pingtestlib.ping | ${dut1} | AP | 5 |
 | | Should Be Equal | ${ret} | 5 |
 
 ### iperf UDP RX test
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf UDP RX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
-| | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
-| | Run Keyword | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | Run Keyword | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
+| | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | iperftestlib.iperf3 start rx server | ${dut1} |
+| | ${ret} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
 
 ### iperf TCP RX test
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP RX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
-| | ${dut_ip} = | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
-| | Run Keyword | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | Run Keyword | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
+| | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | iperftestlib.iperf3 start rx server | ${dut1} |
+| | ${ret} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
 
 ### iperf UDP TX test
+Reboot the device after previous iperf3 RX test due to a bug.
+
 | Keywords | Value | Value | Value | Value | Value |
 |---|
 | Teardown Iperf TX Server |
@@ -90,22 +92,23 @@ Because it's a distributed test system compared to a local standalone test syste
 | | Run Keyword | ${testlib}.iperf3 stop tx server |
 | | Teardown Remote | ${endpoint_agent} | ${testcase} | ${testlib} | ${dut} |
 
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf UDP TX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
-| | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
-| | ${dut_ip} = | Run Keyword | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | Run Keyword | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
-| | Run Keyword | iperftestlib.iperf3 stop tx server |
+| | iperftestlib.reboot | ${dut1} |
+| | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
+| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+| | iperftestlib.iperf3 stop tx server |
 
 ### iperf TCP TX test
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP TX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
-| | Run Keyword | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
-| | ${dut_ip} = | Run Keyword | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | Run Keyword | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+| | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
+| | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
+| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
