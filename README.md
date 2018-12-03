@@ -29,22 +29,40 @@ Need a picture here!!!
 pip install -U virtualenv
 ```
 
-2. Set up client environment
+2. Set up test client environment
 ```dos
 cd robotclient
 virtualenv --no-site-packages venv
 venv\scripts\active.bat
 pip install -r requirements.txt
 ```
-3. Set up server environment
+3. Set up test server environment
 ```dos
 cd robotserver
 virtualenv --no-site-packages venv
 venv\scripts\active.bat
 pip install -r requirements.txt
 ```
+4. Set up web server environment
+Web server is running by express. Need to install [node.js](https://nodejs.org/en/) first.
+Then:
+```dos
+cd webserver
+npm install -g yarn
+yarn global add yrm
+yrm use cnpm
+yarn
+```
+All project dependent packages will be installed in this step. We use `cnpm` to speed up the package downloading.
+
 ### Run the test
-1. Run the agent of a client
+1. Run the web server
+```dos
+cd webserver
+yarn dev
+```
+
+2. Run the agent of a client
 ```dos
 cd robotclient
 venv\scripts\active.bat
@@ -52,7 +70,7 @@ python agent.py
 ```
 robot remote server starts to listen now.
 
-2. Run a test from the server
+3. Run a test from the server
 ```dos
 cd robotserver
 venv\scripts\active.bat
@@ -85,4 +103,4 @@ robot wifi-basic-test.md
 An example to start with is wifi-basic-test.md in the wifi-basic-test folder.
 
 ### Hacks to the robot
-1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in importer.py to support reloading test libraries in order to get the latest test library downloaded by [test agent]()
+1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by [test agent]()
