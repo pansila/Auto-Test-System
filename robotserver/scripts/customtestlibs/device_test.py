@@ -10,34 +10,34 @@ class device_test(object):
 
     def __init__(self, config):
         self.config = config
-        self.serialport = None
         self.configDut = {}
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut
 
     def __del__(self):
-        if self.serialport is not None:
-            self.serialport.close()
+        for dut in self.config['DUT']:
+            self.disconnect_dut(dut['name'])
 
     def connect_dut(self, deviceName):
         if deviceName not in self.configDut:
             raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
 
         dut = self.configDut[deviceName]
-        self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
-        dut['serialport'] = self.serialport
+        dut['serialport'] = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
         print('Serial port {} opened successfully'.format(dut['com']))
 
     def disconnect_dut(self, deviceName):
-        if self.serialport is not None:
-            self.serialport.close()
-            self.serialport = None
+        dut = self.configDut[deviceName]
+        if dut['serialport'] is not None:
+            dut['serialport'].close()
+            dut['serialport'] = None
         else:
             print('Serial port is not open')
     
     def reboot(self, deviceName):
-        self.serialport.write(b'reboot\r')
-        result, _, _ = self._serial_read(self.TIMEOUT, 'device opened')
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(b'reboot\r')
+        result = self._serial_read(deviceName, self.TIMEOUT, 'device opened')[0]
         print(result)
 
     def download(self, deviceName, target=None):
@@ -56,7 +56,7 @@ class device_test(object):
         else: 
             raise AssertionError('Downloading firmware for {} failed'.format(deviceName))
 
-    def _serial_read(self, timeout, term=None):
+    def _serial_read(self, deviceName, timeout, term=None):
         '''
         Read the output of serial port.
         
@@ -64,16 +64,18 @@ class device_test(object):
             timeout (int): the time to wait for before the read ends or term is found.
             term (str): a regexp to specify strings of interest to search in the output and early return if found (default None).
 
-        Returns:
+        Return a tuple consisting of:
             result (str): the output string of serial port
             elapsedTime (int): the time used by the read operation. TIMEOUT_ERR if timeout expires.
             groups (str): the captured groups by the regexp term
         '''
+        dut = self.configDut[deviceName]
+
         match = None
         if term is not None:
             matcher = re.compile(term)
         tic = time.time()
-        buff = self.serialport.readline()
+        buff = dut['serialport'].readline()
         ret = buff
 
         while (time.time() - tic) < timeout:
@@ -81,14 +83,14 @@ class device_test(object):
                 match = matcher.search(buff.decode())
                 if match:
                     break
-            buff = self.serialport.readline()
+            buff = dut['serialport'].readline()
             ret += buff
         else:
-            return ret.decode(), self.TIMEOUT_ERR, None
+            return (ret.decode(), self.TIMEOUT_ERR, None)
 
-        return ret.decode(), time.time() - tic, match.groups() if match else None
+        return (ret.decode(), time.time() - tic, match.groups() if match else None)
 
-    def _flush_serial_output(self, wait_time=1):
+    def _flush_serial_output(self, deviceName, wait_time=1):
         '''
         Flush the output of serial port remained.
 
@@ -99,6 +101,6 @@ class device_test(object):
             result (str): the flushed output of serial port.
         '''
         
-        result, _, _ = self._serial_read(wait_time)
+        result = self._serial_read(deviceName, wait_time)[0]
         # print(result)
         return result

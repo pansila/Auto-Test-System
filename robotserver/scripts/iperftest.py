@@ -31,25 +31,34 @@ class iperftest(wifi_basic_test):
     #################### RX test ####################
     ## RX server
     def iperf3_start_rx_server(self, deviceName):
-        self._flush_serial_output()
-        self.serialport.write('iperf -s\r'.encode())
-        result, _, _ = self._serial_read(self.TIMEOUT, 'Server listening')
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('iperf -s\r'.encode())
+        result = self._serial_read(deviceName, self.TIMEOUT, 'Server listening')[0]
         print(result)
         if 'error' in result or 'ERROR' in result:
             raise AssertionError('Starting iperf RX server on the DUT failed')
 
+    def iperf3_stop_rx_server(self, deviceName):
+        pass
+
     def iperf2_start_tcp_rx_server(self, deviceName):
-        self._flush_serial_output()
-        self.serialport.write('tcp -s -i 1\r'.encode())
-        result, _, _ = self._serial_read(self.TIMEOUT)
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('tcp -s -i 1\r'.encode())
+        result = self._serial_read(deviceName, self.TIMEOUT)[0]
         print(result)
         if 'error' in result or 'ERROR' in result:
             raise AssertionError('Starting iperf TCP RX server on the DUT failed')
 
     def iperf2_start_udp_rx_server(self, deviceName):
-        self._flush_serial_output()
-        self.serialport.write('udp -s -i 1\r'.encode())
-        result, _, _ = self._serial_read(self.TIMEOUT)
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('udp -s -i 1\r'.encode())
+        result = self._serial_read(deviceName, self.TIMEOUT)[0]
         print(result)
         if 'error' in result or 'ERROR' in result:
             raise AssertionError('Starting iperf UDP RX server on the DUT failed')
@@ -101,7 +110,7 @@ class iperftest(wifi_basic_test):
         print(tx_log)
 
         # get the console log generated during the test
-        rx_log, _, _ = self._serial_read(self.TIMEOUT)
+        rx_log = self._serial_read(deviceName, self.TIMEOUT)[0]
         print('==== Receiver log ====')
         print(rx_log)
 
@@ -292,15 +301,16 @@ class iperftest(wifi_basic_test):
             arguments.extend(['-i', interval])
         arguments.append('\r')
 
-        self._flush_serial_output()
-        self.serialport.write(' '.join(arguments).encode())
-        tx_log, _, _ = self._serial_read(self.TIMEOUT)
+        self._flush_serial_output(deviceName)
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(' '.join(arguments).encode())
+        tx_log = self._serial_read(deviceName, self.TIMEOUT)[0]
         print(tx_log)
         if 'error' in tx_log.lower():
             raise AssertionError('Starting iperf TX client on the DUT failed')
 
         # read the remained console log by the test
-        tx_log, _, _ = self._serial_read(int(time) + 10)
+        tx_log = self._serial_read(deviceName, int(time) + 10)[0]
         print('==== Transmitter log ====')
         print(tx_log)
 

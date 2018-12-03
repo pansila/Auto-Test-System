@@ -23,9 +23,11 @@ class wifi_basic_test(device_test):
         pass
 
     def scan_networks(self, deviceName):
-        self._flush_serial_output()
-        self.serialport.write(b'wifi_scan\r')
-        result, elapsedTime, _ = self._serial_read(self.SCAN_TIMEOUT, 'scan finished')
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(b'wifi_scan\r')
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.SCAN_TIMEOUT, 'scan finished')
         print(result)
 
         if elapsedTime == self.TIMEOUT_ERR:
@@ -33,9 +35,11 @@ class wifi_basic_test(device_test):
         print('Scan used time {0}s'.format(elapsedTime))
 
     def connect_to_network(self, deviceName, ssid, password):
-        self._flush_serial_output()
-        self.serialport.write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
-        result, elapsedTime, _ = self._serial_read(self.CONNECT_TIMEOUT, 'ip configured')
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('wifi_connect {0} {1}\r'.format(ssid, password).encode())
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.CONNECT_TIMEOUT, 'ip configured')
         print(result)
 
         if elapsedTime == self.TIMEOUT_ERR:
