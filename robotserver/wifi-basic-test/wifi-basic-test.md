@@ -57,6 +57,7 @@ Because it's a distributed test system compared to a local standalone test syste
 | Ping test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | pingtest | pingtestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | pingtest | pingtestlib | ${dut1} |
+| | pingtestlib.download | ${dut1} |
 | | pingtestlib.scan networks | ${dut1} |
 | | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${ret} = | pingtestlib.ping | ${dut1} | AP | 5 |

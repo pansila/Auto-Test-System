@@ -25,7 +25,7 @@ class device_test(object):
 
         dut = self.configDut[deviceName]
         self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
-        dut.serialport = self.serialport
+        dut['serialport'] = self.serialport
         print('Serial port {} opened successfully'.format(dut['com']))
 
     def disconnect_dut(self, deviceName):
@@ -47,7 +47,7 @@ class device_test(object):
 
         for d in dut['download']:
             if d['tool'].upper() == 'MDK':
-                cmd = [d['path'], '-f', path.join(d['workdir'], d['project']), '-t', dut['target']]
+                cmd = [d['path'], '-f', path.join(d['workdir'], d['project']), '-t', d['target']]
                 ret = subprocess.call(cmd)
                 if ret == 0:
                     break
