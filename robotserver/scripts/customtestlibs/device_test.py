@@ -1,6 +1,8 @@
 import serial
 import re
 import time
+import subprocess
+from os import path
 
 class device_test(object):
     TIMEOUT_ERR = -1
@@ -9,20 +11,22 @@ class device_test(object):
     def __init__(self, config):
         self.config = config
         self.serialport = None
+        self.configDut = {}
+        for dut in self.config['DUT']:
+            self.configDut[dut['name']] = dut
 
     def __del__(self):
         if self.serialport is not None:
             self.serialport.close()
 
     def connect_dut(self, deviceName):
-        for dut in self.config['DUT']:
-            if deviceName != dut['name']:
-                continue
-            self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
-            print('Serial port {} opened successfully'.format(dut['com']))
-            break
-        else:
+        if deviceName not in self.configDut:
             raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
+
+        dut = self.configDut[deviceName]
+        self.serialport = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
+        dut.serialport = self.serialport
+        print('Serial port {} opened successfully'.format(dut['com']))
 
     def disconnect_dut(self, deviceName):
         if self.serialport is not None:
@@ -35,6 +39,22 @@ class device_test(object):
         self.serialport.write(b'reboot\r')
         result, _, _ = self._serial_read(self.TIMEOUT, 'device opened')
         print(result)
+
+    def download(self, deviceName, target=None):
+        dut = self.configDut[deviceName]
+        if 'download' not in dut:
+            raise AssertionError('Download method is not configured for {}'.format(deviceName))
+
+        for d in dut['download']:
+            if d['tool'].upper() == 'MDK':
+                cmd = [d['path'], '-f', path.join(d['workdir'], d['project']), '-t', dut['target']]
+                ret = subprocess.call(cmd)
+                if ret == 0:
+                    break
+            elif d['tool'].upper() == 'ISP':
+                raise AssertionError('ISP is not supported yet')
+        else: 
+            raise AssertionError('Downloading firmware for {} failed'.format(deviceName))
 
     def _serial_read(self, timeout, term=None):
         '''

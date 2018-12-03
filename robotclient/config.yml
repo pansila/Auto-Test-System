@@ -19,9 +19,15 @@ DUT:
   - name: STA1
     com: COM9
     baudrate: 115200
+    # multiple download methods can be configured here, they will be tried one by one if previous one failed
     download:
-      - keil
-      - ISP
+      # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
+      - tool: MDK
+        path: C:\\Keil_v5\\UV4\\UV4.exe
+        workdir: D:\\jenkins\\workspace\\software-verification\\
+        project: Project.uvproj
+        target: freertos
+      - tool: ISP
   - name: STA2
     com: COM11
     baudrate: 115200
