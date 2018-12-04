@@ -39,12 +39,15 @@
 | | Run Keyword | ${agent}.stop test | ${testcase} |
 
 ### Ping Test
+There is no need to open WiFi here as it has been opened at boot-up time, we do it here to warm up the serial port ISR code to work around the character missing issue.
+
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
 | Ping test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | pingtest | pingtestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | pingtest | pingtestlib | ${dut1} |
 | | pingtestlib.download | ${dut1} |
+| | pingtestlib.open wifi | ${dut1} |
 | | pingtestlib.scan networks | ${dut1} |
 | | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${ret} = | pingtestlib.ping | ${dut1} | AP | 5 |

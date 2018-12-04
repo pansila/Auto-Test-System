@@ -17,10 +17,16 @@ class wifi_basic_test(device_test):
         self.ip_DUT = None
 
     def open_wifi(self, deviceName):
-        pass
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(b'wifi_open\r')
+        result = self._serial_read(deviceName, self.TIMEOUT)[0]
+        print(result)
 
     def close_wifi(self, deviceName):
-        pass
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(b'wifi_close\r')
+        result = self._serial_read(deviceName, self.TIMEOUT)[0]
+        print(result)
 
     def scan_networks(self, deviceName):
         self._flush_serial_output(deviceName)
