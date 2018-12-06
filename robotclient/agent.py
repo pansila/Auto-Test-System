@@ -35,10 +35,13 @@ class agent(object):
         self._verify(testcase)
 
         if testcase in self.tests:
-            self.tests[testcase]["server"].stop()
+            if 'server' in self.tests[testcase] and self.tests[testcase]["server"] is not None:
+                print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["server"])))
+                self.tests[testcase]["server"].stop()
+            print('Found remnant test case {}, stop it {}'.format(testcase, id(self.tests[testcase])))
             del self.tests[testcase]
 
-        # importlib.invalidate_caches()
+        importlib.invalidate_caches()
         testlib = importlib.import_module(testcase)
         importlib.reload(testlib)
         test = getattr(testlib, testcase)
@@ -56,6 +59,8 @@ class agent(object):
     def stop_test(self, testcase):
         if testcase in self.tests:
             self.tests[testcase]["server"].stop()
+            del self.tests[testcase]["server"]
+            del self.tests[testcase]
         else:
             raise AssertionError("test {} is not running".format(testcase))
 

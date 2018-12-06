@@ -64,7 +64,7 @@ There is no need to open WiFi here as it has been opened at boot-up time, we do 
 | | pingtestlib.scan networks | ${dut1} |
 | | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${ret} = | pingtestlib.ping | ${dut1} | AP | 5 |
-| | Should Be Equal | ${ret} | 5 |
+| | Should Be True | ${ret} >= 4 |
 
 ### iperf UDP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
