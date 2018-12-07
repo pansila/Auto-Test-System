@@ -63,7 +63,7 @@ Notes:
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=40 | interval=1 |
+| | ${tp} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=40 | interval=1 |
 
 ### iperf3 TCP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
@@ -73,7 +73,7 @@ Notes:
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
+| | ${tp} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
 
 ### iperf3 UDP TX test
 Reboot the device after previous iperf3 RX test due to a bug.
@@ -93,7 +93,7 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | iperftestlib.reboot | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
+| | ${tp} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
 
 ### iperf3 TCP TX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
@@ -103,7 +103,7 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | [Teardown] | Teardown Iperf3 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
+| | ${tp} = | iperftestlib.iperf3 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
 
 ### iperf2 UDP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
@@ -113,7 +113,7 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf2 start udp rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf2 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
+| | ${tp} = | iperftestlib.iperf2 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
 
 ### iperf2 TCP RX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
@@ -123,7 +123,7 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf2 start tcp rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf2 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
+| | ${tp} = | iperftestlib.iperf2 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
 
 ### iperf2 UDP TX test
 | Keywords | Value | Value | Value | Value | Value |
@@ -140,7 +140,7 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | [Teardown] | Teardown Iperf2 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf2 start udp tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf2 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
+| | ${tp} = | iperftestlib.iperf2 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
 
 ### iperf2 TCP TX test
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
@@ -150,4 +150,4 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | [Teardown] | Teardown Iperf2 TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf2 start tcp tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf2 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
+| | ${tp} = | iperftestlib.iperf2 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |

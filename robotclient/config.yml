@@ -13,6 +13,8 @@ server_port: 3000
 test_dir: testlibs
 iperf2: d:\\bin\\iperf-2.0.9-win64\\iperf2
 iperf3: d:\\bin\\iperf3
+mongodb_url: 127.0.0.1
+mongodb_port: 27017
 
 # Device under test
 DUT:
@@ -35,12 +37,13 @@ DUT:
 # AP under test
 AP:
   # a AP with fixed configuration or a device running openWRT
-  - name: TL-WR886N
+  - name: HUAWEI
+    type: huawei851
     mode: fixed
     configuration:
-      ssid: tplink886-wpa2
+      ssid: huawei851
       bssid:
-      key_mgmt: WPA-PSK
+      key_mgmt: WPA2-PSK
       psk: 12345678
   # raspberry pi running OpenWRT firmware
   - name: raspberry pi 1

@@ -7,6 +7,7 @@ import ipaddress
 import netifaces
 import time
 import re
+from pymongo import MongoClient
 
 class iperftest(wifi_basic_test):
     unit_conversion = {
@@ -19,6 +20,9 @@ class iperftest(wifi_basic_test):
         super().__init__(config)
         self.iperf_process = None
         self.iperf_queue = None
+        self.conn = MongoClient(self.config['mongodb_uri'], self.config['mongodb_port'])
+        self.db = self.conn.testdb
+        self.test_set = self.db.test_set
 
     def _unit_convert(self, input):
         input = input.strip()
@@ -27,7 +31,7 @@ class iperftest(wifi_basic_test):
         if input[-1] in self.unit_conversion:
             return float(input[0:-1]) * self.unit_conversion[input[-1]]
         raise AssertionError('Unknown digit format {}'.format(input))
-
+    
     #################### RX test ####################
     ## RX server
     def iperf3_start_rx_server(self, deviceName):
@@ -127,14 +131,27 @@ class iperftest(wifi_basic_test):
         p = re.compile(r'sec\s+(\d+\.*\d*\s+\w?)Bytes\s+(\d+\.*\d*\s+\w?)bits/sec\s+receiver')
         m = p.search(rx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
             rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            rx_bandwidth = self._unit_convert(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        self.test_set.insert({
+            'test case': 'throughput test',
+            'version': 123,
+            'test site': 'ROOM 703 lab',
+            'tool': 'iperf3',
+            'type': 'UDP',
+            'direction': 'RX',
+            'throughput': rx_bandwidth,
+            'duration': time,
+            'bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth,
+        })
         return rx_bandwidth
 
     def iperf3_tcp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
