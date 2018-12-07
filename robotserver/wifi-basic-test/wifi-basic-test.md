@@ -35,7 +35,7 @@ Because it's a distributed test system compared to a local standalone test syste
 | ${dut1} | STA1 |
 | ${dut2} | STA2 |
 | ${endpoint_agent} | EndpointAgent1 |
-| ${ap_ssid} | huawei851 |
+| ${ap_ssid} | totolink_n150 |
 | ${ap_password} | 12345678 |
 
 | Keywords | Value | Value | Value | Value | Value |
@@ -52,7 +52,10 @@ Because it's a distributed test system compared to a local standalone test syste
 | | Run Keyword | ${agent}.stop test | ${testcase} |
 
 ### Ping Test
-There is no need to open WiFi here as it has been opened at boot-up time, we do it here to warm up the serial port ISR code to work around the character missing issue.
+Notes:
+
+1. There is no need to open WiFi here as it has been opened at boot-up time, we do it here to warm up the serial port ISR code to work around the character missing issue.
+2. There might be a ping timeout error for the first request due to too long ARP handshake process, thus we require pass times one less than requests times at least to pass the test.
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
@@ -74,17 +77,17 @@ There is no need to open WiFi here as it has been opened at boot-up time, we do 
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
+| | ${ret} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
 
 ### iperf TCP RX test
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP RX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 | interval=1 |
+| | ${ret} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
 
 ### iperf UDP TX test
 Reboot the device after previous iperf3 RX test due to a bug.
@@ -104,15 +107,15 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | | iperftestlib.reboot | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
 | | iperftestlib.iperf3 stop tx server |
 
 ### iperf TCP TX test
-| Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
+| Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP TX test |
 | | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
 | | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
-| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=10M | time=10 |
+| | ${ret} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
