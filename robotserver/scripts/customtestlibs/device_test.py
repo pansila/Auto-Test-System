@@ -3,8 +3,9 @@ import re
 import time
 import subprocess
 from os import path
+import sys
 
-class device_test(object):
+class device_test():
     TIMEOUT_ERR = -1
     TIMEOUT = 1
 
@@ -13,10 +14,6 @@ class device_test(object):
         self.configDut = {}
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut
-
-    def __del__(self):
-        for dut in self.config['DUT']:
-            self.disconnect_dut(dut['name'])
 
     def connect_dut(self, deviceName):
         if deviceName not in self.configDut:

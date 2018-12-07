@@ -35,7 +35,6 @@
 | Teardown Remote |
 | | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.Disconnect Dut | ${dut} |
-| | Run Keyword | ${testlib}.Stop Remote Server |
 | | Run Keyword | ${agent}.stop test | ${testcase} |
 
 ### Ping Test

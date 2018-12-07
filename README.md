@@ -5,6 +5,7 @@
 - [Configuration of the test system](#configuration-of-the-test-system)
 - [How to write a robot test case](#how-to-write-a-robot-test-case)
 - [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file)
+- [How to modify router configurations](#how-to-modify-router-configurations)
 - [Hacks to the robot](#hacks-to-the-robot)
 
 ### Introduction
@@ -36,6 +37,8 @@ virtualenv --no-site-packages venv
 venv\scripts\active.bat
 pip install -r requirements.txt
 ```
+After that, we need to install webdriver for selenium, please download [geckodriver](https://github.com/mozilla/geckodriver/releases) and put it in the `venv\scripts`.
+
 3. Set up test server environment
 ```dos
 cd robotserver
@@ -101,6 +104,11 @@ robot wifi-basic-test.md
 ```
 
 An example to start with is wifi-basic-test.md in the wifi-basic-test folder.
+
+### How to modify router configurations
+We can use some crawler techniques here, that's why we installed [selenium](http://docs.seleniumhq.org/) in the setup step above.
+These router manipulation scripts are product dependent. At present, we only support a small portion of routers, but they can be easily extended to suit your case.
+Especially, we can use a firefox add-on, Katalon Recorder, which could record your operations on the web page and produce corresponding python code, we can in turn adapt the resultant code into our test scripts.
 
 ### Hacks to the robot
 1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by [test agent]()

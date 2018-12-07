@@ -48,7 +48,6 @@ Because it's a distributed test system compared to a local standalone test syste
 | Teardown Remote |
 | | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.Disconnect Dut | ${dut} |
-| | Run Keyword | ${testlib}.Stop Remote Server |
 | | Run Keyword | ${agent}.stop test | ${testcase} |
 
 ### Ping Test
