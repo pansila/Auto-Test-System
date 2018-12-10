@@ -7,7 +7,17 @@ import ipaddress
 import netifaces
 import time
 import re
-from pymongo import MongoClient
+from mongoengine import EmbeddedDocument
+from customtestlibs.database_client import TestResult
+import datetime
+
+class IperfTestResult(TestResult):
+    test_tool = StringField(max_length=50)
+    test_type = StringField(max_length=10)
+    direction = StringField(max_length=10)
+    throughput = StringField(max_length=10)
+    total_bytes = NumberField(max_length=10)
+    throughput_hum = StringField(max_length=10)
 
 class iperftest(wifi_basic_test):
     unit_conversion = {
@@ -21,7 +31,7 @@ class iperftest(wifi_basic_test):
         self.iperf_process = None
         self.iperf_queue = None
         self.conn = MongoClient(self.config['mongodb_uri'], self.config['mongodb_port'])
-        self.db = self.conn.testdb
+        self.db = self.conn.autotest
         self.test_set = self.db.test_set
 
     def _unit_convert(self, input):
@@ -140,18 +150,23 @@ class iperftest(wifi_basic_test):
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
 
-        self.test_set.insert({
-            'test case': 'throughput test',
-            'version': 123,
-            'test site': 'ROOM 703 lab',
-            'tool': 'iperf3',
-            'type': 'UDP',
-            'direction': 'RX',
-            'throughput': rx_bandwidth,
-            'duration': time,
-            'bytes': rx_bytes,
-            'throughput_hum': rx_bandwidth,
-        })
+        test_result = IperfTestResult(schema_version=1)
+        test_result.test_case = 'throughput test'
+        test_result.test_site = 'Lab 01 ROOM 703'
+        test_result.tester = 'John'
+        test_result.tester_email = 'John@123.com'
+        test_result.test_date = datetime.datetime.utcnow()
+        test_result.status = 'failed'
+        test_result.duration = time
+        test_result.tool = 'iperf3'
+        test_result.test_type = 'UDP'
+        test_result.direction = 'RX'
+        test_result.throughput = rx_bandwidth
+        test_result.total_bytes = rx_bytes
+        test_result.throughput_hum = rx_bandwidth_hum
+
+        test_result.save()
+
         return rx_bandwidth
 
     def iperf3_tcp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):

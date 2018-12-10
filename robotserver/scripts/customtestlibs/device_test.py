@@ -4,8 +4,9 @@ import time
 import subprocess
 from os import path
 import sys
+from .database_client import MongoDBClient
 
-class device_test():
+class device_test(MongoDBClient):
     TIMEOUT_ERR = -1
     TIMEOUT = 1
 
