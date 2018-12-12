@@ -11,6 +11,7 @@ class device_test(MongoDBClient):
     TIMEOUT = 1
 
     def __init__(self, config):
+        super().__init__(config)
         self.config = config
         self.configDut = {}
         for dut in self.config['DUT']:

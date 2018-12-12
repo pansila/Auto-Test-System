@@ -35,11 +35,8 @@ class agent(object):
         self._verify(testcase)
 
         if testcase in self.tests:
-            if 'server' in self.tests[testcase] and self.tests[testcase]["server"] is not None:
-                print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["server"])))
-                self.tests[testcase]["server"].stop()
-            print('Found remnant test case {}, stop it {}'.format(testcase, id(self.tests[testcase])))
-            del self.tests[testcase]
+            print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["server"])))
+        self.stop_test(testcase)
 
         importlib.invalidate_caches()
         testlib = importlib.import_module(testcase)
@@ -58,7 +55,9 @@ class agent(object):
 
     def stop_test(self, testcase):
         if testcase in self.tests:
-            self.tests[testcase]["server"].stop()
+            # self.tests[testcase]["server"].stop()
+            # shutdown socket server directly since stop is an async operation, otherwise there could be out of order start/stop
+            self.tests[testcase]["server"]._server.shutdown()
             del self.tests[testcase]["server"]
             del self.tests[testcase]
         else:

@@ -1,4 +1,5 @@
 from mongoengine import *
+from mongoengine.connection import disconnect
 
 class TestResult(Document):
     schema_version = StringField(max_length=10, default='1')
@@ -7,13 +8,16 @@ class TestResult(Document):
     tester = StringField(max_length=20)
     tester_email = EmailField()
     test_date = DateTimeField()
-    test_report = StringField(max_length=200)
-    status = StringField(max_length=10)
     duration = IntField()
+    summary = StringField(max_length=200)
+    status = StringField(max_length=10, default='Fail')
 
     meta = {'allow_inheritance': True}
 
 class MongoDBClient():
 
     def __init__(self, config):
-        connect('autotest', host=self.config['mongodb_uri'], port=self.config['mongodb_port'])
+        connect('autotest', host=config['mongodb_uri'], port=config['mongodb_port'], connect=False)
+    
+    def __del__(self):
+        disconnect()

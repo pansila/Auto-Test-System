@@ -7,7 +7,7 @@ import ipaddress
 import netifaces
 import time
 import re
-from mongoengine import EmbeddedDocument
+from mongoengine import *
 from customtestlibs.database_client import TestResult
 import datetime
 
@@ -15,12 +15,13 @@ class IperfTestResult(TestResult):
     test_tool = StringField(max_length=50)
     test_type = StringField(max_length=10)
     direction = StringField(max_length=10)
-    throughput = StringField(max_length=10)
-    total_bytes = NumberField(max_length=10)
-    throughput_hum = StringField(max_length=10)
+    throughput = IntField()
+    total_bytes = IntField()
+    throughput_hum = StringField(max_length=50)
 
 class iperftest(wifi_basic_test):
     unit_conversion = {
+        '': 1,
         'K': 1024,
         'M': 1024*1024,
         'G': 1024*1024*1024,
@@ -30,17 +31,38 @@ class iperftest(wifi_basic_test):
         super().__init__(config)
         self.iperf_process = None
         self.iperf_queue = None
-        self.conn = MongoClient(self.config['mongodb_uri'], self.config['mongodb_port'])
-        self.db = self.conn.autotest
-        self.test_set = self.db.test_set
+        test_result = IperfTestResult()
+        test_result.test_case = 'Throughput Test'
+        test_result.test_site = '@'.join((self.config['name'], self.config['location']))
+        test_result.tester = 'John'
+        test_result.tester_email = 'John@123.com'
+        test_result.save()
+        self.test_result_id = test_result.pk
 
-    def _unit_convert(self, input):
+    def _unit_convert_to_digit(self, input):
         input = input.strip()
+        if input.endswith('bits/sec'):
+            input = input[0:-8]
+        if input.endswith('Bytes'):
+            input = input[0:-5]
         if input[-1].isdigit():
             return float(input)
         if input[-1] in self.unit_conversion:
             return float(input[0:-1]) * self.unit_conversion[input[-1]]
         raise AssertionError('Unknown digit format {}'.format(input))
+    
+    def _unit_convert_to_string(self, input):
+        tmp = input
+        rest = 0
+        unit = None
+        for u in self.unit_conversion.keys():
+            unit = u
+            if tmp >= 1024:
+                rest = tmp % 1024
+                tmp = tmp // 1024
+            else:
+                break
+        return '{:d}.{:d} {}bits/sec'.format(tmp, rest, unit)
     
     #################### RX test ####################
     ## RX server
@@ -135,89 +157,143 @@ class iperftest(wifi_basic_test):
 
     # python is capable of overloading but we still provide different interfaces for convenience of use in the test table
     def iperf3_udp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf3',
+            'test_type': 'UDP',
+            'direction': 'RX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
 
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
-        p = re.compile(r'sec\s+(\d+\.*\d*\s+\w?)Bytes\s+(\d+\.*\d*\s+\w?)bits/sec\s+receiver')
+        p = re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         m = p.search(rx_log)
         if m and m.groups():
             (rx_bytes, rx_bandwidth_hum) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth_hum)
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
 
-        test_result = IperfTestResult(schema_version=1)
-        test_result.test_case = 'throughput test'
-        test_result.test_site = 'Lab 01 ROOM 703'
-        test_result.tester = 'John'
-        test_result.tester_email = 'John@123.com'
-        test_result.test_date = datetime.datetime.utcnow()
-        test_result.status = 'failed'
-        test_result.duration = time
-        test_result.tool = 'iperf3'
-        test_result.test_type = 'UDP'
-        test_result.direction = 'RX'
-        test_result.throughput = rx_bandwidth
-        test_result.total_bytes = rx_bytes
-        test_result.throughput_hum = rx_bandwidth_hum
-
-        test_result.save()
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
 
         return rx_bandwidth
 
     def iperf3_tcp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf3',
+            'test_type': 'TCP',
+            'direction': 'RX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         _, tx_log = self.iperf_rx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
 
         # [  4]   0.00-10.00  sec  5.14 MBytes  4.31 Mbits/sec                  receiver
-        p = re.compile(r'sec\s+(\d+\.*\d*\s+\w?)Bytes\s+(\d+\.*\d*\s+\w?)bits/sec\s+receiver')
+        p = re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         m = p.search(tx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
 
     def iperf2_udp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf2',
+            'test_type': 'UDP',
+            'direction': 'RX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf2', 'UDP', length, bandwidth, time, interval)
 
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
         p = re.compile(r'Recv\s+0\s+-\s+(?!1\s+)\d+\s+sec\s+(\d+\s+\w?)Bytes\s+(\d+\s+\w?)bps')
         m = p.search(rx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
 
     def iperf2_tcp_rx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf2',
+            'test_type': 'TCP',
+            'direction': 'RX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         _, tx_log = self.iperf_rx(deviceName, host, 'iperf2', 'TCP', length, bandwidth, time, interval)
 
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
-        p = re.compile(r'\s+0\.0\s*-\s*(?!1\.0\s+)\d+\.\d+\s+sec\s+(\d+\.\d+\s+\w?)Bytes\s+(\d+\.\d+\s+\w?)bits/sec')
+        p = re.compile(r'\s+0\.0\s*-\s*(?!1\.?0\s+)\d+\.?\d+\s+sec\s+(\d+\.?\d+\s+\w?)Bytes\s+(\d+\.?\d+\s+\w?bits/sec)')
         m = p.search(tx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
 
     #################### TX test ####################
@@ -277,6 +353,7 @@ class iperftest(wifi_basic_test):
         if self.iperf_process is not None:
             print('stopping iperf, pid {}'.format(self.iperf_process.pid))
             self.iperf_process.kill()
+            self.iperf_process = None
         else:
             print('iperf is not running')
 
@@ -363,42 +440,87 @@ class iperftest(wifi_basic_test):
         return rx_log, tx_log
 
     def iperf3_udp_tx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf3',
+            'test_type': 'UDP',
+            'direction': 'TX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         _, tx_log = self.iperf_tx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
 
         # there is a bug in iperf3 PC server statistics for UDP, we use iperf3 client's report instead
         # [  1]   0.00-10.00  sec  11.0 MBytes  9.20 Mbits/sec                  receiver
-        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.\d+\s+sec\s+(\d+\.\d+\s+\w?)Bytes\s+(\d+\.\d+\s+\w?)bits/sec\s+receiver')
+        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         m = p.search(tx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
 
     def iperf3_tcp_tx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf3',
+            'test_type': 'TCP',
+            'direction': 'TX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
 
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
         # [  5]   0.00-10.03  sec  2.64 MBytes  2.21 Mbits/sec                  receiver
-        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.\d+\s+sec\s+(\d+\.\d+\s+\w?)Bytes\s+(\d+\.\d+\s+\w?)bits/sec\s+receiver')
+        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         m = p.search(rx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
 
     def iperf2_udp_tx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf2',
+            'test_type': 'UDP',
+            'direction': 'TX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf2', 'UDP', length, bandwidth, time, interval)
 
         # since no iperf acknowledge packet to iperf2 server from the DUT side, we have to count the result by hand.
@@ -408,7 +530,7 @@ class iperftest(wifi_basic_test):
         rx_time = 0.
         rx_interval = 0. if interval == None or interval == 'None' else int(interval)
         # [  3]  0.0- 1.0 sec   644 KBytes  5.27 Mbits/sec   0.456 ms    0/    0 (nan%)
-        p = re.compile(r'\s+\d+\.\d+\s*-\s*(\d+\.\d+)\s+sec\s+(\d+\.\d+\s+\w?)Bytes\s+(\d+\.\d+\s+\w?)bits/sec')
+        p = re.compile(r'\s+\d+\.?\d*\s*-\s*(\d+\.?\d*)\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)')
 
         # search and extract test data every line
         for l in lines:
@@ -420,8 +542,8 @@ class iperftest(wifi_basic_test):
                 if rx_time == 0. and rx_interval == 0.:
                     rx_interval = _time
                 rx_time = _time
-                rx_bytes = self._unit_convert(rx_bytes)
-                rx_bandwidth = self._unit_convert(rx_bandwidth)
+                rx_bytes = self._unit_convert_to_digit(rx_bytes)
+                rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth)
             else:
                 continue
             rx_total_bytes += rx_bytes
@@ -433,21 +555,50 @@ class iperftest(wifi_basic_test):
             raise AssertionError("Can't find enough test results in the iperf test, expect {} lines, got {} lines".format(samples, cnt))
 
         print('Received bytes {} in the {}s'.format(rx_total_bytes, rx_time))
-        return rx_total_bytes * 8 // int(rx_time)
+
+        rx_bandwidth = rx_total_bytes * 8 // int(rx_time)
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_total_bytes,
+            'throughput_hum': self._unit_convert_to_string(rx_bandwidth),
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
+        return rx_bandwidth
 
     def iperf2_tcp_tx(self, deviceName, host, length=None, bandwidth=None, time=None, interval=None):
+        update = {
+            'test_date': datetime.datetime.utcnow(),
+            'duration': time,
+            'test_tool': 'iperf2',
+            'test_type': 'TCP',
+            'direction': 'TX',
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf2', 'TCP', length, bandwidth, time, interval)
 
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
-        p = re.compile(r'\s+0\.0\s*-\s*(?!1\.0\s+)\d+\.\d+\s+sec\s+(\d+\.\d+\s+\w?)Bytes\s+(\d+\.\d+\s+\w?)bits/sec')
+        p = re.compile(r'\s+0\.0\s*-\s*(?!1\.?0\s+)\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)')
         m = p.search(rx_log)
         if m and m.groups():
-            (rx_bytes, rx_bandwidth) = m.groups()
-            rx_bytes = self._unit_convert(rx_bytes)
-            rx_bandwidth = self._unit_convert(rx_bandwidth)
+            (rx_bytes, rx_bandwidth_hum) = m.groups()
+            rx_bytes = self._unit_convert_to_digit(rx_bytes)
+            rx_bandwidth = self._unit_convert_to_digit(rx_bandwidth_hum)
         else:
             raise AssertionError("Can't find test result in the iperf test")
 
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
+
+        update = {
+            'status': 'Pass',
+            'throughput': rx_bandwidth,
+            'total_bytes': rx_bytes,
+            'throughput_hum': rx_bandwidth_hum,
+        }
+        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+
         return rx_bandwidth
