@@ -61,7 +61,7 @@ class agent(object):
             del self.tests[testcase]["server"]
             del self.tests[testcase]
         else:
-            raise AssertionError("test {} is not running".format(testcase))
+            print("test {} is not running".format(testcase))
 
     def _download(self, testcase):
         if testcase.endswith(".py"):

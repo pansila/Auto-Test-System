@@ -17,7 +17,7 @@ class TestResult(Document):
 class MongoDBClient():
 
     def __init__(self, config):
-        connect('autotest', host=config['mongodb_uri'], port=config['mongodb_port'], connect=False)
+        connect('autotest', host=config['mongodb_uri'], port=config['mongodb_port'])
     
     def __del__(self):
         disconnect()
