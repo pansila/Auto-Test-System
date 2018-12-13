@@ -6,7 +6,7 @@ const tar = require('tar');
 const path = require('path');
 const fs = require('fs-extra');
 
-const scriptRoot = '../robotserver/scripts';
+const scriptRoot = process.env.ROBOT_SCRIPTS_ROOT;
 const tarballTemp = 'temp';
 const dependency = [/customtestlibs[/\\]?.*/];
 

@@ -1,5 +1,5 @@
 *** Variables ***
-${address_agent}            127.0.0.1
+${address_agent}            192.168.3.100
 ${port_agent}               8270
 ${port_test}                8271
 ${remote_agent_address}     http://${address_agent}:${port_agent}
