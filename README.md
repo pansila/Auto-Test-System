@@ -79,22 +79,18 @@ Need a picture here!!!
    cd robotserver
    pipenv run tools\getTest.py robot_scripts
    ```
-   It needs to be done only when new test suite is added.
+   It will search all markdown files under `robot_scripts` and find out all contained robot test suites.
+   It needs to be done only when a test suite is added or modified.
 
 4. Run a test from the server (actually it can be any remote PC)
 
    ```dos
    cd robotserver
-   tools\runTest.py demo-test
-   
-   # or you can do it the vanilla way
-   cd robotserver\robot_scripts\demo
-   pipenv run robot demo-test.robot
+   pipenv run tools\runTest.py demo-test
    
    # or
-   pipenv shell
-   cd robotserver\robot_scripts\demo
-   robot demo-test.robot
+   cd robotserver
+   pipenv run robot robot_scripts\demo\demo-test.robot
    ```
 
    Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
