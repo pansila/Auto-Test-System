@@ -1,12 +1,3 @@
-Note: Install webdriver for selenium before the test, please download [geckodriver](https://github.com/mozilla/geckodriver/releases) and put it in test client's virtual environment executable path.
-
-```
-$ pipenv --env
-# you may get like C:\Users\abc\.virtualenvs\robotclient-x3F7IyUj, replace the following target with it
-cp geckodriver.exe C:\Users\abc\.virtualenvs\robotclient-x3F7IyUj\Scripts
-```
-
-### Setup for all test cases
 | Settings | Value | Value | Value | Value | Value |
 |---|
 | Resource | config.robot |
@@ -25,14 +16,12 @@ cp geckodriver.exe C:\Users\abc\.virtualenvs\robotclient-x3F7IyUj\Scripts
 | | Import Library | Remote | ${remote_test_address} | WITH NAME | ${testlib} |
 | Teardown Remote |
 | | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
-| | Run Keyword | ${testlib}.close |
 | | Run Keyword | ${agent}.stop test | ${testcase} |
-
-### Crawler test
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
-| crawler test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | crawlertest | testlib |
-| | [Teardown] | Teardown Remote | ${endpoint_agent} | crawlertest | testlib | ${dut1} |
-| | testlib.login |
+| demo test |
+| | [Setup] | Setup Remote | ${endpoint_agent} | demotest | testlib |
+| | [Teardown] | Teardown Remote | ${endpoint_agent} | demotest | testlib | ${dut1} |
+| | ${ret} = | testlib.hello world |
+| | Should be equal | ${ret} | hello world |

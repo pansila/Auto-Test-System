@@ -20,7 +20,7 @@ def strip_char(item):
 
 def get_test(scripts_dir):
     test_suites = []
-    for root, dirs, files in os.walk(scripts_dir):
+    for root, _, files in os.walk(scripts_dir):
         for md_file in files:
             if not md_file.endswith('.md'):
                 continue

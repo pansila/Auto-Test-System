@@ -66,7 +66,7 @@ exports.get = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send(404);
+    res.sendStatus(404);
   }
   return undefined; // make eslint happy
 };

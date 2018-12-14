@@ -2,7 +2,7 @@
 - [Test System Architecture](#test-system-architecture)
 - [Set up the test environment](#set-up-the-test-environment)
 - [Run the test](#run-the-test)
-- [Configuration of the test system](#configuration-of-the-test-system)
+- [Configurations of the auto test system](#configurations-of-the-auto-test-system)
 - [How to write a robot test case](#how-to-write-a-robot-test-case)
 - [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file)
 - [How to modify router configurations](#how-to-modify-router-configurations)
@@ -25,69 +25,99 @@ Need a picture here!!!
 
 ### Set up the test environment
 
-1. Install virtualenv
-```dos
-pip install -U virtualenv
-```
+1. Install pipenv
+   ```dos
+   pip install -U pipenv
+   ```
 
 2. Set up test client environment
-```dos
-cd robotclient
-virtualenv --no-site-packages venv
-venv\scripts\active.bat
-pip install -r requirements.txt
-```
-After that, we need to install webdriver for selenium, please download [geckodriver](https://github.com/mozilla/geckodriver/releases) and put it in the `venv\scripts`.
+   ```dos
+   cd robotclient
+   pipenv install
+   ```
 
 3. Set up test server environment
-```dos
-cd robotserver
-virtualenv --no-site-packages venv
-venv\scripts\active.bat
-pip install -r requirements.txt
-```
+   ```dos
+   cd robotserver
+   pipenv install
+   ```
+
 4. Set up web server environment
-Web server is running by express. Need to install [node.js](https://nodejs.org/en/) first.
-Then:
-```dos
-cd webserver
-npm install -g yarn
-yarn global add yrm
-yrm use cnpm
-yarn
-```
-All project dependent packages will be installed in this step. We use `cnpm` to speed up the package downloading.
+
+   Web server is running by express. Need to install [node.js](https://nodejs.org/en/) first. Then:
+   ```dos
+   cd webserver
+   npm install -g yarn
+   yarn global add yrm
+   yrm use cnpm
+   yarn
+   cp .env.example .env
+   ```
+   All project dependent packages will be installed in this step. We use `cnpm` to speed up the package downloading.
+
+5. Set up the MongoDB database
+
+   Install mongodb from the [official website](https://www.mongodb.com/)
+
 
 ### Run the test
 1. Run the web server
-```dos
-cd webserver
-yarn dev
-```
+   ```dos
+   cd webserver
+   yarn dev
+   ```
 
 2. Run the agent of a client
-```dos
-cd robotclient
-venv\scripts\active.bat
-python agent.py
-```
-robot remote server starts to listen now.
+   ```dos
+   cd robotclient
+   pipenv run agent.py
+   ```
+   robot remote server starts to listen now.
 
-3. Run a test from the server
-```dos
-cd robotserver
-venv\scripts\active.bat
-cd iperf-test
-robot wifi-basic-test.robot
-```
+3. Build up the test suite database
+   ```dos
+   cd robotserver
+   pipenv run tools\getTest.py robot_scripts
+   ```
+   It needs to be done only when new test suite is added.
 
-Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
+4. Run a test from the server (actually it can be any remote PC)
 
-The server and client of demo run on the same local PC, if you want to deploy the them on the different PCs, change the IP addresses in the server's robot test script and client's endpoint config file. Don't forget to configure the firewall to let pass the communication on the TCP port 8270/8271.
+   ```dos
+   cd robotserver
+   tools\runTest.py demo-test
+   
+   # or you can do it the vanilla way
+   cd robotserver\robot_scripts\demo
+   pipenv run robot demo-test.robot
+   
+   # or
+   pipenv shell
+   cd robotserver\robot_scripts\demo
+   robot demo-test.robot
+   ```
 
-### Configuration of the test system
-1. On the test server side, we provide a config.robot as a resource file per test suite, supplying desired remote server to execute the test suite, etc.
-2. On the remote server side, we provide a config.yml to describe any SUT dependent details, like serial port interfaces, remote server port, test library serving port, etc.
+   Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
+
+Notice:
+1. If you want to run a robot script file written in markdown, please refer to [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file) at the end of this document.
+
+2. For a test in action, please check out `wifi-basic-test.md` in `the wifi-basic-test` folder.
+
+3. The server and client of demo run on the same PC, if you want to deploy the them on the different PCs respectively, change the IP addresses in the test server's robot test script and test client's endpoint config file. Don't forget to configure the firewall to let pass the communication on the TCP port 8270/8271.
+
+### Configurations of the auto test system
+1. Test Server
+
+   We provide a config.robot as a resource file per test suite, supplying configs like desired remote server to execute the test suite, etc.
+
+2. Test Client
+
+   Ther is a config.yml to describe any SUT dependent details, like serial port interfaces, test server port, test library serving port, etc.
+
+3. Web server
+
+   All configurations are store in the .env file, there are like mongodb URI, robot scripts root directory, etc.
 
 ### How to write a robot test case
 Please check out the [official user manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
@@ -100,15 +130,15 @@ And we go a bit further by [adding support of tables in markdown](https://gist.g
 
 After that, we can execute a test suite in the markdown file as follows.
 ```dos
-robot wifi-basic-test.md
+robot demo-test.md
 ```
 
-An example to start with is wifi-basic-test.md in the wifi-basic-test folder.
-
 ### How to modify router configurations
-We can use some crawler techniques here, that's why we installed [selenium](http://docs.seleniumhq.org/) in the setup step above.
+We can use some crawler techniques here, thus we need to install [selenium](http://docs.seleniumhq.org/).
+
 These router manipulation scripts are product dependent. At present, we only support a small portion of routers, but they can be easily extended to suit your case.
+
 Especially, we can use a firefox add-on, Katalon Recorder, which could record your operations on the web page and produce corresponding python code, we can in turn adapt the resultant code into our test scripts.
 
 ### Hacks to the robot
-1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by [test agent]()
+1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by [test agent]() on test client.
