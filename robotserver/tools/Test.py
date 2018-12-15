@@ -5,7 +5,6 @@ import datetime
 from mongoengine import *
 import argparse
 
-# keywords = ["setting", "settings", "variable", "variables", "test case", "test cases", "keyword", "keywords"]
 
 class Test(Document):
     schema_version = StringField(max_length=10, default='1')
@@ -24,12 +23,9 @@ class Test(Document):
             if item == 'create_date' or item == 'update_date':
                 continue
             if self[item] != other[item]:
-                # print(item, self[item], other[item])
                 return False
         return True
 
-
-_NOTFOUND = object()
 
 def strip_char(item):
     item = item.strip()
@@ -55,11 +51,9 @@ def update_test(scripts_dir):
             test.test_suite = test_suite
             test.author = 'John'
             test.test_cases = []
-            # print(test_suite)
 
             md_file = path.join(root, md_file)
             test.path = md_file
-            # print(md_file)
             with open(md_file) as f:
                 parser = mistune.BlockLexer()
                 text = f.read()
@@ -69,18 +63,13 @@ def update_test(scripts_dir):
                         table_header = t["header"][0].lower()
                         if table_header == 'test case' or table_header == 'test cases':
                             for c in t["cells"]:
-                                # print(c)
                                 if not c[0] == '---':
                                     test.test_cases.append(c[0])
                                     break
                         if table_header == 'variable' or table_header == 'variables':
                             for c in t["cells"]:
-                                # print(c)
                                 if not c[0] == '---':
                                     test.parameters[strip_char(c[0])] = strip_char(c[1])
-                            # print(test.parameters)
-                # print(test.test_cases)
-            # print(old_test, test)
             if len(old_test) == 0:
                 test.create_date = datetime.datetime.utcnow()
                 test.save()
@@ -106,5 +95,5 @@ if __name__ == '__main__':
     if args.action == 'READ':
         test_suites = read_test()
         print(test_suites)
-    elif args.action == 'UPDATE':
+    elif args.action == 'UPDATE' and args.script_folder:
         update_test(args.script_folder)
