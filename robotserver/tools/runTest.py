@@ -9,11 +9,10 @@ import argparse
 # VENV_ROBOT_BIN = "robot.bat"
 
 def run(test):
-	work_dir = os.path.dirname(test.path)
-	# work_dir = os.path.abspath(work_dir)
-	test_suite = os.path.basename(test.path)
-
 	robot.run(test.path, outputdir='work_space')
+	# work_dir = os.path.dirname(test.path)
+	# test_suite = os.path.basename(test.path)
+
 	# command = []
 	# command.extend(['pipenv', 'run', 'robot', test_suite])
 	# p = subprocess.Popen(command, cwd=work_dir)

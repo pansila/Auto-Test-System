@@ -39,8 +39,11 @@ def strip_char(item):
         item = item[0:-1]
     return item
 
+def read_test():
+    test_suites = Test.objects({})
+    return [t.test_suite for t in test_suites]
+
 def update_test(scripts_dir):
-    test_suites = []
     for root, _, files in os.walk(scripts_dir):
         for md_file in files:
             if not md_file.endswith('.md'):
@@ -52,7 +55,6 @@ def update_test(scripts_dir):
             test.test_suite = test_suite
             test.author = 'John'
             test.test_cases = []
-            test_suites.append(test_suite)
             # print(test_suite)
 
             md_file = path.join(root, md_file)
@@ -92,16 +94,17 @@ def update_test(scripts_dir):
                 test.update_date = datetime.datetime.utcnow()
                 old_test[0].delete()
                 test.save()
-    return test_suites
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--action', type=str, help='specify an action to run, [CREATE|READ|UPDATE|DELETE]')
-    parser.add_argument('script_folder', type=str, help='specify the root folder of robot scripts')
+    parser.add_argument('--script_folder', type=str, help='specify the root folder of robot scripts, required if action=UPDATE')
     args = parser.parse_args()
 
     connect('autotest')
 
-    if args.action == 'READ' or args.action == 'UPDATE':
-        test_suites = update_test(args.script_folder)
+    if args.action == 'READ':
+        test_suites = read_test()
         print(test_suites)
+    elif args.action == 'UPDATE':
+        update_test(args.script_folder)
