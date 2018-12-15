@@ -13,7 +13,7 @@ def run(test):
 	# work_dir = os.path.abspath(work_dir)
 	test_suite = os.path.basename(test.path)
 
-	robot.run(test.path)
+	robot.run(test.path, outputdir='work_space')
 	# command = []
 	# command.extend(['pipenv', 'run', 'robot', test_suite])
 	# p = subprocess.Popen(command, cwd=work_dir)
