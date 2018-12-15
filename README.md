@@ -92,12 +92,12 @@ When a test request is sent to the remote server, a corresponding test library w
    
    # or
    cd robotserver
-   pipenv run robot robot_scripts\demo\demo-test.robot
+   pipenv run robot robot_scripts\demo-test.robot
 
    # or
    cd robotserver
    pipenv shell
-   robot robot_scripts\demo\demo-test.md
+   robot robot_scripts\demo-test.md
    ```
 
    Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
