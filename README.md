@@ -64,7 +64,7 @@ When a test request is sent to the remote server, a corresponding test library w
    2. Build up the test suite database
       ```dos
       cd robotserver
-      pipenv run tools\getTest.py robot_scripts
+      pipenv run tools\Test.py --action=UPDATE robot_scripts\
       ```
       It will search all robot scripts under `robot_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.

@@ -4,8 +4,9 @@ import os
 from Test import Test
 from mongoengine import connect
 import robot
+import argparse
 
-VENV_ROBOT_BIN = "robot.bat"
+# VENV_ROBOT_BIN = "robot.bat"
 
 def run(test):
 	work_dir = os.path.dirname(test.path)
@@ -19,16 +20,14 @@ def run(test):
 	# p.communicate()
 
 if __name__ == '__main__':
-	if len(sys.argv) != 2:
-		print('Usage: {} <test suite name>'.format(sys.argv[0]))
-		sys.exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('test_suite', type=str, help='specify the test suite to run')
+    args = parser.parse_args()
 
-	test_suite = sys.argv[1]
+    connect('autotest')
 
-	connect('autotest')
+    test = Test.objects(test_suite=args.test_suite)
+    if len(test) == 0:
+        print('Test suite {} not found in the database'.format(args.test_suite))
 
-	test = Test.objects(test_suite=test_suite)
-	if len(test) == 0:
-		print('Test suite {} not found in the database'.format(test_suite))
-
-	run(test[0])
+    run(test[0])
