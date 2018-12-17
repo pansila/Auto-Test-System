@@ -86,13 +86,19 @@ def update_test(scripts_dir):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--action', type=str, help='specify an action to run, [CREATE|READ|UPDATE|DELETE]')
-    parser.add_argument('--script_folder', type=str, help='specify the root folder of robot scripts, required if action=UPDATE')
+    parser.add_argument('--action', type=str, required=True,
+                    help='specify an action to run',
+                    choices=['CREATE', 'READ', 'UPDATE', 'DELETE'])
+    parser.add_argument('--script_folder', type=str,
+                    help='specify the root folder of robot scripts, required if action=UPDATE')
     args = parser.parse_args()
 
     connect('autotest')
 
     if args.action == 'READ':
         print(Test.get_list())
-    elif args.action == 'UPDATE' and args.script_folder:
-        update_test(args.script_folder)
+    elif args.action == 'UPDATE':
+        if args.script_folder:
+            update_test(args.script_folder)
+        else:
+            print('Need to specify --script_folder')
