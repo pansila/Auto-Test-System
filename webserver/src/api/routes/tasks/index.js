@@ -7,8 +7,8 @@ router
   .route('/')
   .get(controller.get);
 
-// router
-//   .route('/task?run=param')
-//   .post(controller.run);
+router
+  .route('/run/:task')
+  .post(controller.run);
 
 module.exports = router;

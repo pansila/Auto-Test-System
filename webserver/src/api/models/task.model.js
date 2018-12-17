@@ -33,10 +33,8 @@ taskSchema.statics = {
   async get_list() {
     try {
       const result = await this.find({}).exec();
-      console.log(result);
       return result.map(test => test.test_suite);
     } catch (error) {
-      console.log(error);
       return [];
     }
   },
