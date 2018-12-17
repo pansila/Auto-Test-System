@@ -8,8 +8,8 @@ import argparse
 
 # VENV_ROBOT_BIN = "robot.bat"
 
-def run(test):
-	robot.run(test.path, outputdir='work_space')
+def run(test, args):
+	robot.run(test.path, *args, outputdir='work_space')
 	# work_dir = os.path.dirname(test.path)
 	# test_suite = os.path.basename(test.path)
 
@@ -19,14 +19,22 @@ def run(test):
 	# p.communicate()
 
 if __name__ == '__main__':
+    notFound = False
     parser = argparse.ArgumentParser()
-    parser.add_argument('test_suite', type=str, help='specify the test suite to run')
+    parser.add_argument('test_suite', nargs='+', type=str, help='specify the test suite to run')
     args = parser.parse_args()
 
     connect('autotest')
 
-    test = Test.objects(test_suite=args.test_suite)
-    if len(test) == 0:
-        print('Test suite {} not found in the database'.format(args.test_suite))
+    [test_suite, *robot_args] = args.test_suite
 
-    run(test[0])
+    try:
+        test = Test.objects(test_suite=test_suite)
+    except IndexError:
+        notFound = True
+
+    if notFound or len(test) == 0:
+        print('Test suite {} not found in the database'.format(test_suite))
+        sys.exit(1)
+
+    run(test[0], robot_args)
