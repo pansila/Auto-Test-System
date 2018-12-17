@@ -2,7 +2,7 @@ const httpStatus = require('http-status');
 const { omit } = require('lodash');
 const Task = require('../models/task.model');
 // const { handler: errorHandler } = require('../middlewares/error');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 
 exports.get = async (_, res) => {
   const ret = await Task.get_list();
@@ -12,13 +12,17 @@ exports.get = async (_, res) => {
 
 exports.run = async (req, res) => {
   if (req.params.task) {
-    exec(`pipenv run tools\\runTest.py ${req.params.task}`, { cwd: process.env.ROBOT_SERVER_ROOT }, (err, stdout) => {
-      if (err) {
-        console.error(err);
-        return res.sendStatus(404);
-      }
-      return console.log(stdout);
-    });
+    execFile(
+      'pipenv', ['run', 'tools\\runTest.py', req.params.task],
+      { cwd: process.env.ROBOT_SERVER_ROOT },
+      (err, stdout) => {
+        if (err) {
+          console.error(err);
+          return res.sendStatus(404);
+        }
+        return console.log(stdout);
+      },
+    );
     return res.sendStatus(200);
   }
   return res.sendStatus(404);
