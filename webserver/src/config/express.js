@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const passport = require('passport');
 const routes = require('../api/routes/v1');
 const scripts = require('../api/routes/scripts');
+const tasks = require('../api/routes/tasks');
 const { logs } = require('./vars');
 const strategies = require('./passport');
 const error = require('../api/middlewares/error');
@@ -48,8 +49,9 @@ passport.use('google', strategies.google);
 app.use('/v1', routes);
 
 app.use('/scripts', scripts);
+app.use('/task', tasks);
 
-app.use('/', express.static('../../auto-test-dashboard/dist'));
+app.use('/', express.static(process.env.AUTO_TEST_WEB_UI));
 
 // if error is not an instanceOf APIError, convert it.
 app.use(error.converter);

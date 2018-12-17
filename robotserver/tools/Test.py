@@ -26,6 +26,10 @@ class Test(Document):
                 return False
         return True
 
+    @classmethod
+    def get_list(cls):
+        test_suites = cls.objects({})
+        return [t.test_suite for t in test_suites]
 
 def strip_char(item):
     item = item.strip()
@@ -34,10 +38,6 @@ def strip_char(item):
     if item.endswith('}'):
         item = item[0:-1]
     return item
-
-def read_test():
-    test_suites = Test.objects({})
-    return [t.test_suite for t in test_suites]
 
 def update_test(scripts_dir):
     for root, _, files in os.walk(scripts_dir):
@@ -93,7 +93,6 @@ if __name__ == '__main__':
     connect('autotest')
 
     if args.action == 'READ':
-        test_suites = read_test()
-        print(test_suites)
+        print(Test.get_list())
     elif args.action == 'UPDATE' and args.script_folder:
         update_test(args.script_folder)

@@ -17,7 +17,7 @@ TEMP_LIB = "temp"
 
 g_config = {}
 
-class agent(object):
+class daemon(object):
 
     def __init__(self, config):
         self.tests = {}
@@ -43,7 +43,7 @@ class agent(object):
         importlib.reload(testlib)
         test = getattr(testlib, testcase)
         server, server_thread = start_remote_server(test(self.config),
-                                    host=self.config["host_agent"],
+                                    host=self.config["host_daemon"],
                                     port=self.config["port_test"])
         self.tests[testcase] = {"server": server, "thread": server_thread}
         return
@@ -96,11 +96,11 @@ class agent(object):
             raise AssertionError("Verify downloaded file %s failed" % testcase)
     
     def start(self):
-        """ start the agent """
+        """ start the daemon """
         pass
 
     def stop(self):
-        """ stop the agent """
+        """ stop the daemon """
         pass
 
     def clear_log(self):
@@ -115,19 +115,19 @@ def start_remote_server(testlib, host, port=8270):
     server_thread.start()
     return server, server_thread
 
-def start_agent(config_file = "config.yml"):
+def start_daemon(config_file = "config.yml"):
     global g_config
     with open(config_file) as f:
         g_config = yaml.load(f)
 
     if "test_dir" not in g_config:
         g_config["test_dir"] = DOWNLOAD_LIB
-    if "port_agent" not in g_config:
-        g_config["port_agent"] = 8270
+    if "port_daemon" not in g_config:
+        g_config["port_daemon"] = 8270
     if "port_test" not in g_config:
         g_config["port_test"] = 8271
-    if "host_agent" not in g_config:
-        g_config["host_agent"] = "127.0.0.1"
+    if "host_daemon" not in g_config:
+        g_config["host_daemon"] = "127.0.0.1"
     if "server_url" not in g_config:
         raise AssertionError('server is not set in the config file')
     else:
@@ -136,7 +136,7 @@ def start_agent(config_file = "config.yml"):
         if g_config['server_url'][-1] == '/':
             g_config['server_url'] = g_config['server_url'][0:-1]
 
-    server, server_thread = start_remote_server(agent(g_config), host=g_config["host_agent"], port=g_config["port_agent"])
+    server, server_thread = start_remote_server(daemon(g_config), host=g_config["host_daemon"], port=g_config["port_daemon"])
     signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
     # signal.signal(signal.SIGINT, lambda signum, frame: server.stop())
     while server_thread.is_alive():
@@ -145,7 +145,7 @@ def start_agent(config_file = "config.yml"):
 
 if __name__ == '__main__':
     try:
-        start_agent()
+        start_daemon()
     except OSError as err:
         print(err)
-        print("Please check IP {} is configured correctly".format(g_config["host_agent"]))
+        print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))

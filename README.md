@@ -17,32 +17,34 @@ This is the typical architecture for a remote server use case.
 
 ![](https://i.loli.net/2018/11/28/5bfe0be78657f.jpg)
 
-We improved it by adding a daemon process on the remote server. The daemon, which is a special test library, will listen on the remote server so that it can accept any new test request from the test server without needing to run an according test library every time as we usually do in robot remote server tutorial.
+We improved it by adding a daemon process on the remote server. The daemon, which is a special test library, will listen on the remote server so that it can accept any new test request from the test server without needing to run a corresponding test library every time as we usually do in robot remote server tutorial.
 
-When a test request is sent to the remote server, a corresponding test library will be downloaded by the daemon process from the test server which is also hosted as a web server. The downloaded test library will be served in the same address as where a test library served before, namely we always serve the test libraries at a fixed address.
+When a test request is sent to the remote server, a corresponding test library will be downloaded by the daemon process from the test server which is also hosted as a web server. The downloaded test library will be served in the same address where a test library did before, namely we always serve the test libraries at a fixed address.
 
 ![Here need a picture for the improved system]()
 
 ### Set up the test environment
 
-1. Install pipenv
+1. Install python 3.6.x and pip.
+
+2. Install pipenv
    ```dos
    pip install -U pipenv
    ```
 
-2. Set up test client environment
+3. Set up test client environment
    ```dos
    cd robotclient
    pipenv install
    ```
 
-3. Set up test server environment
+4. Set up test server environment
    ```dos
    cd robotserver
    pipenv install
    ```
 
-4. Set up Web server environment
+5. Set up Web server environment
 
    Web server is running by express. Please install [node.js](https://nodejs.org/en/) first. After that, type following commands:
    ```dos
@@ -57,7 +59,7 @@ When a test request is sent to the remote server, a corresponding test library w
    1. All project dependencies will be installed in this step. We use `cnpm` to speed up the package downloading for Chinese user, skip it if you are not.
    2. Please modify .env according to your case. No changes needed if you are running all of them in a local PC.
 
-5. Set up the MongoDB database
+6. Set up the MongoDB database
 
    1. Install MongoDB from the [official website](https://www.mongodb.com/), choose the community version.
 
