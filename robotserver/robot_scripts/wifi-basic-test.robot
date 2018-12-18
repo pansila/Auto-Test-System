@@ -1,20 +1,20 @@
 *** Settings ***
 Resource                    config.robot
 Library                     DebugLibrary
-Library                     Remote          ${remote_agent_address}   10    WITH NAME   ${endpoint_agent}
+Library                     Remote          ${remote_daemon_address}   10    WITH NAME   ${endpoint_daemon}
 
 *** Variables ***
 ${dut1}                     STA1
 ${dut2}                     STA2
-${endpoint_agent}           EndpointAgent1
+${endpoint_daemon}          EndpointDaemon1
 ${endpoint}                 Endpoint1
 ${ap_ssid}                  tplink886
 ${ap_password}              12345678
 
 *** Test Cases ***
 Ping test
-    [Setup]                 Setup Remote        ${endpoint_agent}       pingtest
-    [Teardown]              Teardown Remote     ${endpoint_agent}       pingtest    ${endpoint}  ${dut1}
+    [Setup]                 Setup Remote        ${endpoint_daemon}       pingtest
+    [Teardown]              Teardown Remote     ${endpoint_daemon}       pingtest    ${endpoint}  ${dut1}
     Import Library          Remote              ${remote_test_address}  WITH NAME   ${endpoint}
     Run Keyword             ${endpoint}.download                        ${dut1}
     Run Keyword             ${endpoint}.Connect Dut                     ${dut1}
@@ -26,11 +26,11 @@ Ping test
 
 *** Keywords ***
 Setup Remote
-    [Arguments]             ${agent}                ${testcase}
-    Run Keyword             ${agent}.start test     ${testcase}
+    [Arguments]             ${daemon}                ${testcase}
+    Run Keyword             ${daemon}.start test     ${testcase}
 
 Teardown Remote
-    [Arguments]             ${agent}                ${testcase}         ${endpoint}     ${dut}
+    [Arguments]             ${daemon}                ${testcase}         ${endpoint}     ${dut}
     Run Keyword             ${endpoint}.Disconnect Dut                  ${dut}
-    Run Keyword             ${agent}.stop test                          ${testcase}
+    Run Keyword             ${daemon}.stop test                          ${testcase}
 ***

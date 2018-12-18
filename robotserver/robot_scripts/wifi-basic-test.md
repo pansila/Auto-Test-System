@@ -28,27 +28,27 @@ Because it's a distributed test system compared to a local standalone test syste
 | Settings | Value | Value | Value | Value | Value |
 |---|
 | Resource | config.robot |
-| Library | Remote | ${remote_agent_address} | 10 | WITH NAME | ${endpoint_agent} |
+| Library | Remote | ${remote_daemon_address} | 10 | WITH NAME | ${endpoint_daemon} |
 
 | Variables | Value |
 |---|
 | ${dut1} | STA1 |
 | ${dut2} | STA2 |
-| ${endpoint_agent} | EndpointAgent1 |
+| ${endpoint_daemon} | EndpointDaemon1 |
 | ${ap_ssid} | totolink_n150 |
 | ${ap_password} | 12345678 |
 
 | Keywords | Value | Value | Value | Value | Value |
 |---|
 | Setup Remote |
-| | [Arguments] | ${agent} | ${testcase} | ${testlib} |
-| | Run Keyword | ${agent}.start test | ${testcase} |
+| | [Arguments] | ${daemon} | ${testcase} | ${testlib} |
+| | Run Keyword | ${daemon}.start test | ${testcase} |
 | | Import Library | Remote | ${remote_test_address} | WITH NAME | ${testlib} |
 | | Run Keyword | ${testlib}.Connect Dut | ${dut1} |
 | Teardown Remote |
-| | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
+| | [Arguments] | ${daemon} | ${testcase} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.Disconnect Dut | ${dut} |
-| | Run Keyword | ${agent}.stop test | ${testcase} |
+| | Run Keyword | ${daemon}.stop test | ${testcase} |
 
 ### Ping Test
 Notes:
@@ -59,8 +59,8 @@ Notes:
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
 | Ping test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | pingtest | pingtestlib |
-| | [Teardown] | Teardown Remote | ${endpoint_agent} | pingtest | pingtestlib | ${dut1} |
+| | [Setup] | Setup Remote | ${endpoint_daemon} | pingtest | pingtestlib |
+| | [Teardown] | Teardown Remote | ${endpoint_daemon} | pingtest | pingtestlib | ${dut1} |
 | | pingtestlib.download | ${dut1} |
 | | pingtestlib.open wifi | ${dut1} |
 | | pingtestlib.scan networks | ${dut1} |
@@ -74,8 +74,8 @@ We only check whether a traffic is running successfully and throughput is not ze
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf UDP RX test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | ${endpoint_daemon} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Remote | ${endpoint_daemon} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
@@ -84,8 +84,8 @@ We only check whether a traffic is running successfully and throughput is not ze
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP RX test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Remote | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | ${endpoint_daemon} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Remote | ${endpoint_daemon} | iperftest | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
@@ -96,15 +96,15 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | Keywords | Value | Value | Value | Value | Value |
 |---|
 | Teardown Iperf TX Server |
-| | [Arguments] | ${agent} | ${testcase} | ${testlib} | ${dut} |
+| | [Arguments] | ${daemon} | ${testcase} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.iperf3 stop tx server |
-| | Teardown Remote | ${endpoint_agent} | ${testcase} | ${testlib} | ${dut} |
+| | Teardown Remote | ${endpoint_daemon} | ${testcase} | ${testlib} | ${dut} |
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf UDP TX test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | ${endpoint_daemon} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Iperf TX Server | ${endpoint_daemon} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.reboot | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
@@ -114,8 +114,8 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|
 | iperf TCP TX test |
-| | [Setup] | Setup Remote | ${endpoint_agent} | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | ${endpoint_agent} | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | ${endpoint_daemon} | iperftest | iperftestlib |
+| | [Teardown] | Teardown Iperf TX Server | ${endpoint_daemon} | iperftest | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |
