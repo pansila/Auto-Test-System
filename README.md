@@ -104,6 +104,17 @@ When a test request is sent to the remote server, a corresponding test library w
 
    Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
 
+4. (Optional) Run a test by the web server API
+
+   To integrate with Web UI, we provide Web API to run the tests. You can call it from any PC that can access web server.
+   ```
+   http POST http://127.0.0.1/task/run/demo-test
+
+   # or
+   curl -d "" http://127.0.0.1/task/run/demo-test
+   ```
+   Note: `http` is a python http client tool, "pip install httpie".
+
 Notice:
 1. If you want to run a robot script file written in markdown, please refer to [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file) at the end of this document.
 

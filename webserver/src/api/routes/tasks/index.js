@@ -11,4 +11,8 @@ router
   .route('/run/:task')
   .post(controller.run);
 
+router
+  .route('/run/:task')
+  .get(controller.polling);
+
 module.exports = router;

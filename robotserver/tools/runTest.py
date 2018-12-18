@@ -6,35 +6,31 @@ from mongoengine import connect
 import robot
 import argparse
 
-# VENV_ROBOT_BIN = "robot.bat"
-
-def run(test, args):
-	robot.run(test.path, *args, outputdir='work_space')
-	# work_dir = os.path.dirname(test.path)
-	# test_suite = os.path.basename(test.path)
-
-	# command = []
-	# command.extend(['pipenv', 'run', 'robot', test_suite])
-	# p = subprocess.Popen(command, cwd=work_dir)
-	# p.communicate()
+sys.path.append('robot_python_scripts')
+from customtestlibs.database_client import Test
 
 if __name__ == '__main__':
-    notFound = False
-    parser = argparse.ArgumentParser()
-    parser.add_argument('test_suite', nargs='+', type=str, help='specify the test suite to run')
-    args = parser.parse_args()
+    if len(sys.argv) < 2:
+        print('Need to specify a test suite to run')
+        sys.exit(1)
+    # if len(os.getcwd().split(os.path.sep)) < 2:
+    #     print('Please run it in the server root directory')
+    #     sys.exit(1)
 
     connect('autotest')
 
-    [test_suite, *robot_args] = args.test_suite
+    test_suite = sys.argv[1]
 
     try:
-        test = Test.objects(test_suite=test_suite)
-    except IndexError:
-        notFound = True
-
-    if notFound or len(test) == 0:
+        test = Test.objects(test_suite=test_suite).get()
+    except Test.DoesNotExist as err:
         print('Test suite {} not found in the database'.format(test_suite))
+        print('Usage: {} <test_suite> [options]'.format(sys.argv[0]))
+        sys.exit(1)
+    except Test.MultipleObjectsReturned as err:
+        print('Multiple Test suite {} found in the database'.format(test_suite))
         sys.exit(1)
 
-    run(test[0], robot_args)
+    args = ['--outputdir', 'work_space', *sys.argv[2:], test.path]
+    ret = robot.run_cli(args)
+    sys.exit(ret)

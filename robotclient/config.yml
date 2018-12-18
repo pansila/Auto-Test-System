@@ -2,8 +2,8 @@
 
 ## Test setup information
 name: Test Box 1
-location: Room 703
-description: A test box in the room 703
+location: Room 101
+description: A test box in the room 101
 
 ## Common configurations
 host_daemon: 127.0.0.1
