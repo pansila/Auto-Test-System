@@ -20,3 +20,7 @@ class demotest(device_test):
         }
         TestResult.objects(pk=self.test_result_id).update(**update)
         return 'hello world'
+    def echo(self, echo):
+        return echo
+    def add(self, a, b):
+        return a + b

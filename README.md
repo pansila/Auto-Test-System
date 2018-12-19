@@ -57,7 +57,8 @@ When a test request is sent to the remote server, a corresponding test library w
    ```
    Notice:
    1. All project dependencies will be installed in this step. We use `cnpm` to speed up the package downloading for Chinese user, skip it if you are not.
-   2. Please modify .env according to your case. No changes needed if you are running all of them in a local PC.
+   2. Please modify .env according to your case. you need to change the MONGO_URI "mongodb:to "127.0.0.1" or "localhost" if you are running all of them in a local PC.
+   3. Please add yarn to system path after you installed yarn
 
 6. Set up the MongoDB database
 
@@ -91,7 +92,7 @@ When a test request is sent to the remote server, a corresponding test library w
    ```dos
    cd robotserver
    pipenv run tools\runTest.py demo-test
-   
+
    # or
    cd robotserver
    pipenv run robot robot_scripts\demo-test.robot
@@ -140,7 +141,7 @@ Please check out the [official user manuel](http://robotframework.org/robotframe
 
 ### How to write a robot test case in the markdown file
 We patched an unofficial work from [here](https://gist.github.com/Tset-Noitamotua/75d15a2beb9ab6f1931d3871172ebbbf) to make robot support markdown.
-After that, robot will read all code blocks in a markdown file with robotframework keyword and execute them. 
+After that, robot will read all code blocks in a markdown file with robotframework keyword and execute them.
 
 And we go a bit further by [adding support of tables in markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
 
