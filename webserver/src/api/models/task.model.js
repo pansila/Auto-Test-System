@@ -1,44 +1,24 @@
 const mongoose = require('mongoose');
+const { TestSchema } = require('./test.model');
+require('mongoose-schema-extend');
 
-const taskSchema = new mongoose.Schema({
-  schema_version: {
+const TaskSchema = TestSchema.extend({
+  start_date: {
+    type: Date,
+    default: Date.now,
+  },
+  status: {
     type: String,
-    default: '1',
+    default: 'Pending',
   },
-  test_suite: {
-    type: 'String',
-    required: true,
-    index: true,
-    unique: true,
-    trim: true,
+  endpoint_list: [String],
+  priority: {
+    type: Number,
+    default: 2,
+    max: 3,
+    min: 1,
   },
-  test_cases: [String],
-  parameters: {
-    type: Map,
-    of: String,
-  },
-  path: {
-    type: String,
-    maxlength: 300,
-  },
-  author: {
-    type: String,
-    maxlength: 50,
-  },
-  create_date: { type: Date },
-  update_date: { type: Date },
-}, { collection: 'test' });
+});
 
-taskSchema.statics = {
-  async get_list() {
-    try {
-      const result = await this.find({}).exec();
-      return result.map(test => test.test_suite);
-    } catch (error) {
-      return [];
-    }
-  },
-};
-
-const Task = mongoose.model('test', taskSchema);
+const Task = mongoose.model('Task', TaskSchema);
 module.exports = Task;

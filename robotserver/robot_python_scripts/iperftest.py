@@ -8,10 +8,11 @@ import netifaces
 import time
 import re
 from mongoengine import *
-from customtestlibs.database_client import TestResult, Test
+from customtestlibs.database import TestResult, Test
 import datetime
 
 class IperfTestResult(TestResult):
+    firmware_revision = StringField(max_length=100)
     test_tool = StringField(max_length=50)
     test_type = StringField(max_length=10)
     direction = StringField(max_length=10)

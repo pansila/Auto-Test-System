@@ -1,18 +1,18 @@
 const express = require('express');
-const controller = require('../../controllers/task.controller');
+const taskController = require('../../controllers/task.controller');
 
 const router = express.Router();
 
 router
   .route('/')
-  .get(controller.get);
+  .get(taskController.get);
 
 router
   .route('/run/:task')
-  .post(controller.run);
+  .post(taskController.run);
 
 router
   .route('/run/:task')
-  .get(controller.polling);
+  .get(taskController.polling);
 
 module.exports = router;

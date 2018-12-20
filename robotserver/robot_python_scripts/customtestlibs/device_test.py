@@ -4,7 +4,7 @@ import time
 import subprocess
 from os import path
 import sys
-from .database_client import MongoDBClient
+from .database import MongoDBClient
 
 class device_test(MongoDBClient):
     TIMEOUT_ERR = -1
@@ -51,7 +51,9 @@ class device_test(MongoDBClient):
                 if ret == 0:
                     break
             elif d['tool'].upper() == 'ISP':
-                raise AssertionError('ISP is not supported yet')
+                print('Firmware ISP is not supported yet')
+                # break
+            print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
         else: 
             raise AssertionError('Downloading firmware for {} failed'.format(deviceName))
 

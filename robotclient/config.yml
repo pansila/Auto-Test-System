@@ -12,14 +12,16 @@ port_test: 8271
 server_url: http://127.0.0.1
 server_port: 3000
 test_dir: testlibs
-iperf2: d:\\bin\\iperf-2.0.9-win64\\iperf2
-iperf3: d:\\bin\\iperf3
 mongodb_uri: 127.0.0.1
 mongodb_port: 27017
 
 ## Windows dependent configurations
 
 ## Linux dependent configurations
+
+## Test Suite dependent configurations
+iperf2: d:\bin\iperf-2.0.9-win64\iperf2
+iperf3: d:\bin\iperf3
 
 ## SUT configurations
 # Device under test
@@ -31,10 +33,10 @@ DUT:
     download:
       # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
       - tool: MDK
-        path: C:\\Keil_v5\\UV4\\UV4.exe
-        workdir: D:\\jenkins\\workspace\\software-verification\\
-        project: Project.uvproj
-        target: freertos
+        path: C:\Keil_v5\UV4\UV4.exe
+        workdir: D:\demo-project\
+        project: demo.uvproj
+        target: demo-target
       - tool: ISP
   - name: STA2
     com: COM11

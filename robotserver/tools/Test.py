@@ -6,7 +6,7 @@ from mongoengine import *
 import argparse
 
 sys.path.append('robot_python_scripts')
-from customtestlibs.database_client import Test
+from customtestlibs.database import Test
 
 def strip_char(item):
     item = item.strip()
@@ -23,7 +23,6 @@ def update_test(scripts_dir):
                 continue
 
             test_suite = md_file.split('.')[0]
-            old_test = Test.objects(test_suite=test_suite)
             test = Test()
             test.test_suite = test_suite
             test.author = 'John'
@@ -47,26 +46,31 @@ def update_test(scripts_dir):
                             for c in t["cells"]:
                                 if not c[0] == '---':
                                     test.parameters[strip_char(c[0])] = strip_char(c[1])
-            if len(old_test) == 0:
+            try:
+                old_test = Test.objects(test_suite=test_suite).get()
+            except Test.DoesNotExist:
                 test.create_date = datetime.datetime.utcnow()
                 test.save()
-                print('Found new test suite {}, added to database'.format(test_suite))
-            elif len(old_test) != 1:
-                print('Found duplicate named test suite in the datebase: {}!!!'.format(test_suite))
-                return
-            elif old_test[0] != test:
+                print('Added new test suite {} to database'.format(test_suite))
+                continue
+            except Test.MultipleObjectsReturned:
+                print('Found duplicate test suite in the datebase: {}, abort'.format(test_suite))
+                return 1
+
+            if old_test != test:
                 print('Update test suite {}'.format(test_suite))
-                test.create_date = old_test[0].create_date
+                test.create_date = old_test.create_date
                 test.update_date = datetime.datetime.utcnow()
-                old_test[0].delete()
+                old_test.delete()
                 test.save()
+    return 0
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--action', type=str, required=True,
                     help='specify an action to run',
                     choices=['CREATE', 'READ', 'UPDATE', 'DELETE'])
-    parser.add_argument('--script_folder', type=str,
+    parser.add_argument('--scripts', type=str,
                     help='specify the root folder of robot scripts, required if action=UPDATE')
     args = parser.parse_args()
 
@@ -75,7 +79,11 @@ if __name__ == '__main__':
     if args.action == 'READ':
         print(Test.get_list())
     elif args.action == 'UPDATE':
-        if args.script_folder:
-            update_test(args.script_folder)
+        if args.scripts:
+            ret = update_test(args.scripts)
+            sys.exit(ret)
         else:
-            print('Need to specify --script_folder')
+            print('Error: Need to specify --scripts as well')
+            sys.exit(1)
+    else:
+        print('Not support yet')

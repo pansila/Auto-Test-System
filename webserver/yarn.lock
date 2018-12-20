@@ -2013,6 +2013,10 @@ har-validator@~5.0.3:
     ajv "^5.1.0"
     har-schema "^2.0.0"
 
+harmony-reflect@^1.4.2:
+  version "1.6.1"
+  resolved "http://r.cnpmjs.org/harmony-reflect/download/harmony-reflect-1.6.1.tgz#c108d4f2bb451efef7a37861fdbdae72c9bdefa9"
+
 has-ansi@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/has-ansi/-/has-ansi-2.0.0.tgz#34f5049ce1ecdf2b0649af3ef24e45ed35416d91"
@@ -3247,6 +3251,13 @@ mongoose-legacy-pluralize@1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/mongoose-legacy-pluralize/-/mongoose-legacy-pluralize-1.0.2.tgz#3ba9f91fa507b5186d399fb40854bff18fb563e4"
 
+mongoose-schema-extend@^0.2.2:
+  version "0.2.2"
+  resolved "http://r.cnpmjs.org/mongoose-schema-extend/download/mongoose-schema-extend-0.2.2.tgz#f63dd313c422a3871f5569e36b0d28ca1a224631"
+  dependencies:
+    harmony-reflect "^1.4.2"
+    owl-deepcopy "~0.0.1"
+
 mongoose@^5.2.17:
   version "5.2.17"
   resolved "https://registry.yarnpkg.com/mongoose/-/mongoose-5.2.17.tgz#8baeb60a675d00da03633d679a72457dbb5b2285"
@@ -3630,6 +3641,10 @@ osenv@^0.1.4:
   dependencies:
     os-homedir "^1.0.0"
     os-tmpdir "^1.0.0"
+
+owl-deepcopy@~0.0.1:
+  version "0.0.6"
+  resolved "http://r.cnpmjs.org/owl-deepcopy/download/owl-deepcopy-0.0.6.tgz#e61c6934af0a38c255be95e5c7ee3fa8facaace3"
 
 p-finally@^1.0.0:
   version "1.0.0"

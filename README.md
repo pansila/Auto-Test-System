@@ -57,7 +57,7 @@ When a test request is sent to the remote server, a corresponding test library w
    ```
    Notice:
    1. All project dependencies will be installed in this step. We use `cnpm` to speed up the package downloading for Chinese user, skip it if you are not.
-   2. Please modify .env according to your case. you need to change the MONGO_URI "mongodb:to "127.0.0.1" or "localhost" if you are running all of them in a local PC.
+   2. Please modify .env according to suit your case. No changes needed if you are running all of them in a local PC.
    3. Please add yarn to system path after you installed yarn
 
 6. Set up the MongoDB database
@@ -67,7 +67,7 @@ When a test request is sent to the remote server, a corresponding test library w
    2. Build up the test suite database
       ```dos
       cd robotserver
-      pipenv run tools\Test.py --action=UPDATE --script_folder=robot_scripts\
+      pipenv run tools\Test.py --action=UPDATE --scripts=robot_scripts\
       ```
       It will search all robot scripts under `robot_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.
