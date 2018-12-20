@@ -45,22 +45,19 @@ class Task(TestABC):
     start_date = DateTimeField(default=datetime.datetime.utcnow)
     status = StringField(max_length=10, default='Pending')
     endpoint_list = ListField(StringField())
+    endpoint_run = StringField()
     priority = IntField(min_value=MIN_PRIORITY, max_value=MAX_PRIORITY, default=DEFAULT_PRIORITY)
 
     meta = {'collection': 'tasks'}
 
-class EndpointTaskQueue(Document):
-    schema_version = StringField(max_length=10, default='1')
-    endpoint = ReferenceField(TaskQueue)
-    priority = IntField(min_value=MIN_PRIORITY, max_value=MAX_PRIORITY, default=DEFAULT_PRIORITY)
-    tasks = ListField(ReferenceField(Task))
-
-    meta = {'collection': 'EndpointTaskQueues'}
-
 class TaskQueue(Document):
+    '''
+    Per endpoint per priority queue
+    '''
     schema_version = StringField(max_length=10, default='1')
     endpoint_address = StringField()
-    priorities = List(ReferenceField(EndpointTaskQueue))
+    priority = IntField(min_value=MIN_PRIORITY, max_value=MAX_PRIORITY, default=DEFAULT_PRIORITY)
+    tasks = ListField(ReferenceField(Task))
 
     meta = {'collection': 'TaskQueues'}
 

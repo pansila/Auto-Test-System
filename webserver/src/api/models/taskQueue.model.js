@@ -1,26 +1,7 @@
 const mongoose = require('mongoose');
 const { TaskSchema } = require('./task.model');
 
-// per endpoint per priority flat queue
-const EndpointTaskQueueSchema = new mongoose.Schema({
-  schema_version: {
-    type: String,
-    default: '1',
-  },
-  endpoint: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'TaskQueue',
-  },
-  priority: {
-    type: Number,
-    default: 2,
-    max: 3,
-    min: 1,
-  },
-  tasks: [TaskSchema],
-});
-
-// per endpoint entry queue
+// per endpoint per priority queue
 const TaskQueueSchema = new mongoose.Schema({
   schema_version: {
     type: String,
@@ -29,11 +10,13 @@ const TaskQueueSchema = new mongoose.Schema({
   endpoint_address: {
     type: String,
   },
-  // array index (0, 1, 2) maps to priority (1, 2, 3).
-  priorities: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'EndpointTaskQueue',
-  }],
+  priority: {
+    type: Number,
+    default: 2,
+    max: 3,
+    min: 1,
+  },
+  tasks: [TaskSchema],
 });
 
 TaskQueueSchema.statics = {
@@ -105,4 +88,3 @@ TaskQueueSchema.statics = {
 };
 
 exports.TaskQueue = mongoose.model('TaskQueue', TaskQueueSchema);
-exports.EndpointTaskQueue = mongoose.model('EndpointTaskQueue', EndpointTaskQueueSchema);
