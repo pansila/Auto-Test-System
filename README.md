@@ -67,7 +67,7 @@ When a test request is sent to the remote server, a corresponding test library w
    2. Build up the test suite database
       ```dos
       cd robotserver
-      pipenv run tools\Test.py --action=UPDATE --scripts=robot_scripts\
+      pipenv run python tools\Test.py --action=UPDATE --scripts=robot_scripts\
       ```
       It will search all robot scripts under `robot_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.
@@ -83,7 +83,7 @@ When a test request is sent to the remote server, a corresponding test library w
 2. Run the daemon process of a client
    ```dos
    cd robotclient
-   pipenv run daemon.py
+   pipenv run python daemon.py
    ```
    It only needs to run only once, following test requests will be intercepted by daemon process to perform the actual tests.
 
@@ -91,7 +91,7 @@ When a test request is sent to the remote server, a corresponding test library w
 
    ```dos
    cd robotserver
-   pipenv run tools\runTest.py demo-test
+   pipenv run python tools\runTest.py demo-test
 
    # or
    cd robotserver
