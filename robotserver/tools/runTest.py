@@ -5,19 +5,32 @@ from Test import Test
 from mongoengine import connect
 import robot
 import argparse
+import time
 
 sys.path.append('robot_python_scripts')
-from customtestlibs.database import Test
+from customtestlibs.database import Test, Task, TaskQueue
+
+def listen_task():
+    print('Start listening tasks from database 127.0.0.1:27017')
+    print(TaskQueue.objects())
+    while True:
+        task = TaskQueue.pop('192.168.3.100:8270')
+        if task != None:
+            args = ['--outputdir', 'work_space', task.path]
+            robot.run_cli(args)
+        print('Task is none')
+        time.sleep(1)
 
 if __name__ == '__main__':
+    connect('autotest')
+
     if len(sys.argv) < 2:
-        print('Need to specify a test suite to run')
-        sys.exit(1)
+        listen_task()
+        sys.exit(0)
+
     # if len(os.getcwd().split(os.path.sep)) < 2:
     #     print('Please run it in the server root directory')
     #     sys.exit(1)
-
-    connect('autotest')
 
     test_suite = sys.argv[1]
 

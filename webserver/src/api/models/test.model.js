@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const testSchema = new mongoose.Schema({
+const TestSchema = new mongoose.Schema({
   schema_version: {
     type: String,
     default: '1',
@@ -29,7 +29,7 @@ const testSchema = new mongoose.Schema({
   update_date: { type: Date },
 });
 
-testSchema.statics = {
+TestSchema.statics = {
   async get_list() {
     try {
       const result = await this.find({}).exec();
@@ -40,7 +40,6 @@ testSchema.statics = {
   },
 };
 
-const Test = mongoose.model('Test', testSchema);
+const Test = mongoose.model('Test', TestSchema);
 
-exports.Test = Test;
-exports.TestSchema = testSchema;
+module.exports = Test;

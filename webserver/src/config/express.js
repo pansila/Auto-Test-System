@@ -9,6 +9,7 @@ const passport = require('passport');
 const routes = require('../api/routes/v1');
 const scripts = require('../api/routes/scripts');
 const tasks = require('../api/routes/tasks');
+const taskQueues = require('../api/routes/taskQueues');
 const { logs } = require('./vars');
 const strategies = require('./passport');
 const error = require('../api/middlewares/error');
@@ -50,6 +51,7 @@ app.use('/v1', routes);
 
 app.use('/scripts', scripts);
 app.use('/task', tasks);
+app.use('/taskQueue', taskQueues);
 
 app.use('/', express.static(process.env.AUTO_TEST_WEB_UI));
 

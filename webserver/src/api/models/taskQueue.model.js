@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
-const { TaskSchema } = require('./task.model');
+
+const QUEUE_PRIORITY_MAX = 3;
+const QUEUE_PRIORITY_MIN = 1;
+const QUEUE_PRIORITY_DEF = 2;
 
 // per endpoint per priority queue
 const TaskQueueSchema = new mongoose.Schema({
@@ -9,82 +12,36 @@ const TaskQueueSchema = new mongoose.Schema({
   },
   endpoint_address: {
     type: String,
+    required: true,
   },
   priority: {
     type: Number,
-    default: 2,
-    max: 3,
-    min: 1,
+    default: QUEUE_PRIORITY_DEF,
+    max: QUEUE_PRIORITY_MAX,
+    min: QUEUE_PRIORITY_MIN,
   },
-  tasks: [TaskSchema],
+  tasks: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Task',
+  }],
 });
 
 TaskQueueSchema.statics = {
-  async push(doc, priority = 2, endpointAddress) {
+  async push(task, endpointAddress, priority = QUEUE_PRIORITY_DEF) {
     try {
-      const queue = await this.findOne({ priority, endpoint_address: endpointAddress }).exec();
-      const result = await queue.findOneAndUpdate(
-        { priority },
-        { $push: { tasks: doc } },
+      const queue = await this.findOneAndUpdate(
+        { priority, endpoint_address: endpointAddress },
+        { $push: { tasks: task } },
+        { new: 1 },
       ).exec();
-      console.log(result);
+      console.log(queue);
     } catch (error) {
       console.error(error);
     }
   },
-  // async pop(priority = 2, endpointAddress) {
-  //   try {
-  //     const queue = await this.findOne({ priority, endpoint_address: endpointAddress }).exec();
-  //     try {
-  //       const task = await queue.findOne(
-  //         {
-  //           priority,
-  //           tasks: {},
-  //         },
-  //         { 'tasks.$': 1 },
-  //       ).exec();
-  //       try {
-  //         const result = await task.findOneAndUpdate(
-  //           { status: 'Pending' },
-  //           { $set: { status: 'Running' } },
-  //         ).exec();
-  //         try {
-  //           const t = await task.findOneAndUpdate(
-  //             { status: 'Pending' },
-  //             { $set: { status: 'Running' } },
-  //           ).exec();
-  //           console.log(result);
-  //           return result;
-  //         } catch (error) {
-  //           console.error(error);
-  //           return undefined;
-  //         }
-  //       } catch (error) {
-  //         console.error(error);
-  //         return undefined;
-  //       }
-  //     } catch (error) {
-  //       console.error(error);
-  //       return undefined;
-  //     }
-  //   } catch (error) {
-  //     console.error(error);
-  //     return undefined;
-  //   }
-  // },
-  // async get() {
-  //   try {
-  //     const result = await this.findOneAndUpdate(
-  //       { priority: 1 },
-  //       { $pop: { tasks: -1 } },
-  //     ).exec();
-  //     console.log(result);
-  //     return result;
-  //   } catch (error) {
-  //     console.error(error);
-  //     return undefined;
-  //   }
-  // },
 };
 
 exports.TaskQueue = mongoose.model('TaskQueue', TaskQueueSchema);
+exports.QUEUE_PRIORITY_DEF = QUEUE_PRIORITY_DEF;
+exports.QUEUE_PRIORITY_MAX = QUEUE_PRIORITY_MAX;
+exports.QUEUE_PRIORITY_MIN = QUEUE_PRIORITY_MIN;

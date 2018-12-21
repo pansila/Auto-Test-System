@@ -1,9 +1,20 @@
 const mongoose = require('mongoose');
-const { TestSchema } = require('./test.model');
-require('mongoose-schema-extend');
+const { QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEF } = require('./taskQueue.model');
 
-const TaskSchema = TestSchema.extend({
+const TaskSchema = new mongoose.Schema({
+  schema_version: {
+    type: String,
+    default: '1',
+  },
+  test: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Test',
+  },
   start_date: {
+    type: Date,
+    default: Date.now,
+  },
+  run_date: {
     type: Date,
     default: Date.now,
   },
@@ -14,9 +25,9 @@ const TaskSchema = TestSchema.extend({
   endpoint_list: [String],
   priority: {
     type: Number,
-    default: 2,
-    max: 3,
-    min: 1,
+    default: QUEUE_PRIORITY_DEF,
+    max: QUEUE_PRIORITY_MAX,
+    min: QUEUE_PRIORITY_MIN,
   },
 });
 
