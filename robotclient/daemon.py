@@ -112,6 +112,7 @@ class daemon(object):
 def start_remote_server(testlib, host, port=8270):
     server = RobotRemoteServer(testlib, host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
+    server_thread.daemon = True
     server_thread.start()
     return server, server_thread
 
