@@ -62,3 +62,45 @@ class wifi_basic_test(device_test):
         else:
             raise AssertionError("Can't get device's IP")
         return self.ip_DUT
+
+    def disconnect_network(self, deviceName):
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write(b'wifi_disconnect\r')
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.CONNECT_TIMEOUT, 'Stop DHCP')
+        print(result)
+
+        if elapsedTime == self.TIMEOUT_ERR:
+            raise AssertionError('Disconnecting timeout')
+        print('Disconnecting used time {0}s'.format(elapsedTime))
+
+    '''
+    def set_tx_rate(self, deviceName, rateIndex):
+        self._flush_serial_output(deviceName)
+        dut = self.configDut[deviceName]
+        ret = re.compile(r'^[0][x][0-9a-fA-F]+$').search(rateIndex)
+        if ret and ret.group():
+            rate_index = int(rateIndex,16)
+        else:
+            ret = re.compile(r'^\d+$').search(rateIndex)
+            if ret and ret.group():
+                rate_index = int(rateIndex)
+            else:
+                raise AssertionError("arguments rate index is invalided")
+
+        dut['serialport'].write('wifi_set_rate {0}'.format(rate_index).encode())
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.CONNECT_TIMEOUT, 'set tx rate')
+        print(result)
+        if elapsedTime == self.TIMEOUT_ERR:
+            raise AssertionError('set tx rate timeout')
+        print('Set tx rate used time {0}s'.format(elapsedTime))
+        ret = re.compile(r'set\s+tx\s+rate\s+(\d+),\s+sgi\s+(\d+)').search(result)
+        if ret and ret.groups():
+            result_index = ret.groups()[0]
+            result_sgi = ret.groups()[1]
+            if int(result_index) != rate_index or (((rate_index & 0x80) >> 7) != int(result_sgi)) :
+                raise AssertionError("set tx rate failed")
+        else:
+            raise AssertionError("set tx rate failed")
+    '''
