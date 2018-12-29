@@ -1,11 +1,14 @@
 import os.path
+import os
+import sys
 import re
 from .device_test import device_test
+from .winwifi import WinWiFi, WinIp
 #from robotlibcore import keyword
 
 class wifi_basic_test(device_test):
     SCAN_TIMEOUT = 5        # seconds
-    CONNECT_TIMEOUT = 10    # seconds
+    CONNECT_TIMEOUT = 25    # seconds
 
     REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
 
@@ -74,8 +77,38 @@ class wifi_basic_test(device_test):
         if elapsedTime == self.TIMEOUT_ERR:
             raise AssertionError('Disconnecting timeout')
         print('Disconnecting used time {0}s'.format(elapsedTime))
+    def sta_connect_network(self, ssid, passwd):
+        '''
+        @brief: Station like PC with Windows 7 or later OS connect wireless network with specific ssid
+        we change stdout encoding to utf-8 since Chinese coding issue
+        @param ssid: the wireless network name
+        @param passwd: the wireless password
+        '''
+        interface = self.config['pc_nic']
+        if os.name == 'nt' and sys.stdout.encoding != 'cp65001':
+            os.system('chcp 65001 >nul 2>&1')
+            WinWiFi.connect(ssid=ssid, passwd=passwd, remember=True, interface=interface)
+        else:
+            raise AssertionError("This os does't support yet!")
+
+
+    def set_sta_static_ip_from_source(self, srcip, subMask='255.255.255.0'):
+        '''
+        @brief: This function allow you set a static ip that change from source ip to a interface that on Windows 7 or later PC
+                And make sure this static ip can ping source ip.
+                This is useful for iperf test.
+        @param srcip: the source ip
+        @param subMask: subnet mask
+        '''
+        s = WinIp()
+        ip = srcip.split('.')
+        interface = self.config['pc_nic']
+        hostid = self.config['pc_host_id']
+        s.set_static_ip(interface, ['{}.{}.{}.{}'.format(ip[0], ip[1], ip[2], hostid)], [subMask])
+        s.ping(srcip)
 
     '''
+    #TODO need to adapter new command
     def set_tx_rate(self, deviceName, rateIndex):
         self._flush_serial_output(deviceName)
         dut = self.configDut[deviceName]

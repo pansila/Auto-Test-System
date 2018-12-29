@@ -94,7 +94,7 @@ class daemon(object):
         testlib = os.path.join(self.config["test_dir"], testcase)
         if not os.path.exists(testlib):
             raise AssertionError("Verify downloaded file %s failed" % testcase)
-    
+
     def start(self):
         """ start the daemon """
         pass
@@ -118,7 +118,7 @@ def start_remote_server(testlib, host, port=8270):
 
 def start_daemon(config_file = "config.yml"):
     global g_config
-    with open(config_file) as f:
+    with open(config_file,'r',encoding='utf-8') as f:
         g_config = yaml.load(f)
 
     if "test_dir" not in g_config:
