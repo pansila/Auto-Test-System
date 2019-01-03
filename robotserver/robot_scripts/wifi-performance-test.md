@@ -92,6 +92,7 @@ This test use iperf test lib.
 | | ${test_result}= | Set Variable | PASS |
 | | :FOR |${ap_ssid} | ${ap_password} | ${ap_vendor} | ${ap_manu} | IN | @{ap_list}
 | | | ${status} | ${ret}= |Run Keyword And Ignore Error | Iperf3 Udp Rx  | ${dut1} | ${ap_ssid} | ${ap_password} | iperftestlib |
+| | | Set Test Documentation | Iperf3 UDP RX Test  for *${ap_manu}* AP *${ap_ssid}* Result *${status}* \n\n| append=True |
 | | | ${test_result}= | Set Variable If | '${status}' == 'FAIL' | FAIL| ${test_result}|
 | | Should Be True| '${test_result}' == 'PASS' |
 
@@ -104,6 +105,7 @@ This test use iperf test lib.
 | | ${test_result}= | Set Variable | PASS |
 | | :FOR |${ap_ssid} | ${ap_password} | ${ap_vendor} | ${ap_manu} | IN | @{ap_list}
 | | | ${status} | ${ret}= |Run Keyword And Ignore Error | Iperf3 Tcp Rx  | ${dut1} | ${ap_ssid} | ${ap_password} | iperftestlib |
+| | | Set Test Documentation | Iperf3 TCP RX Test  for *${ap_manu}* AP *${ap_ssid}* Result *${status}* \n\n| append=True |
 | | | ${test_result}= | Set Variable If | '${status}' == 'FAIL' | FAIL| ${test_result}|
 | | Should Be True| '${test_result}' == 'PASS' |
 
@@ -125,6 +127,7 @@ Reboot the device after previous iperf3 RX test due to a bug. We make sure stop 
 | | ${test_result}= | Set Variable | PASS |
 | | :FOR |${ap_ssid} | ${ap_password} | ${ap_vendor} | ${ap_manu} | IN | @{ap_list}
 | | | ${status} | ${ret}= |Run Keyword And Ignore Error | Iperf3 Udp Tx  | ${dut1} | ${ap_ssid} | ${ap_password} | iperftestlib |
+| | | Set Test Documentation | Iperf3 UDP TX Test  for *${ap_manu}* AP *${ap_ssid}* Result *${status}* \n\n| append=True |
 | | | Run Keyword | iperftestlib.iperf3 stop tx server |
 | | | ${test_result}= | Set Variable If | '${status}' == 'FAIL' | FAIL| ${test_result}|
 | | Should Be True| '${test_result}' == 'PASS' |
@@ -138,6 +141,7 @@ Reboot the device after previous iperf3 RX test due to a bug. We make sure stop 
 | | ${test_result}= | Set Variable | PASS |
 | | :FOR |${ap_ssid} | ${ap_password} | ${ap_vendor} | ${ap_manu} | IN | @{ap_list}
 | | | ${status} | ${ret}= |Run Keyword And Ignore Error | Iperf3 Tcp Tx  | ${dut1} | ${ap_ssid} | ${ap_password} | iperftestlib |
+| | | Set Test Documentation | Iperf3 TCP TX Test  for *${ap_manu}* AP *${ap_ssid}* Result *${status}* \n\n| append=True |
 | | | Run Keyword | iperftestlib.iperf3 stop tx server |
 | | | ${test_result}= | Set Variable If | '${status}' == 'FAIL' | FAIL| ${test_result}|
 | | Should Be True| '${test_result}' == 'PASS' |

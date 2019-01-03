@@ -5,6 +5,7 @@
         <SSID>
             <name>{ssid}</name>
         </SSID>
+        <nonBroadcast>true</nonBroadcast>
     </SSIDConfig>
     <connectionType>ESS</connectionType>
     <connectionMode>{connmode}</connectionMode>

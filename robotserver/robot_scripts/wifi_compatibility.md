@@ -61,5 +61,6 @@ TODO: Wireless mode test and wireless security test
 | | pingtestlib.open wifi | ${dut1} |
 | | :FOR |${ap_ssid} | ${ap_password} | ${ap_vendor} | ${ap_manu} | IN | @{ap_list}
 | | | ${status} | ${ret}= |Run Keyword And Ignore Error | Connect and Ping AP | ${dut1} | ${ap_ssid} | ${ap_password} | pingtestlib |
+| | | Set Test Documentation | Compatibility Test  for *${ap_manu}* AP *${ap_ssid}* Result *${status}* \n\n| append=True |
 | | | ${test_result}= | Set Variable If | '${status}' == 'FAIL' | FAIL| ${test_result}|
 | | Should Be True| '${test_result}' == 'PASS' |

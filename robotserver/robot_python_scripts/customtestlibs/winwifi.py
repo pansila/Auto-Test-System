@@ -6,6 +6,7 @@ import time
 from typing import Callable, List, Optional
 import wmi
 import pythoncom
+import html
 
 
 class WinWiFi:
@@ -45,7 +46,7 @@ class WinWiFi:
             -> str:
         profile: str = cls.get_profile_template()
 
-        profile = profile.replace('{ssid}', ssid)
+        profile = profile.replace('{ssid}', html.escape(ssid))
         profile = profile.replace(
             '{connmode}', 'auto' if remember else 'manual')
 
@@ -54,13 +55,13 @@ class WinWiFi:
                 profile[profile.index('</sharedKey>')+len('</sharedKey>'):]
             profile = profile.replace('{auth}', 'open')
             profile = profile.replace('{encrypt}', 'none')
-        elif passwd.strip():
-            profile = profile.replace('{passwd}', passwd)
+        elif len(passwd) < 8 or len(passwd) > 64:
+            raise AssertionError(
+                'the password length should be 8-64 characters!')
+        else:
+            profile = profile.replace('{passwd}', html.escape(passwd))
             profile = profile.replace('{auth}', auth)
             profile = profile.replace('{encrypt}', encrypt)
-        else:
-            raise AssertionError(
-                "It should input password with security network!!")
         return profile
 
     @classmethod
@@ -89,7 +90,7 @@ class WinWiFi:
         if refresh:
             cls.disable_interface(interface)
             cls.enable_interface(interface)
-            time.sleep(5)
+            time.sleep(10)
         cp: subprocess.CompletedProcess = cls.netsh(
             ['wlan', 'show', 'networks', 'mode=bssid', 'interface={}'.format(interface)])
         callback(cp.stdout)
@@ -113,12 +114,12 @@ class WinWiFi:
     @classmethod
     def disable_interface(cls, interface: str):
         cls.netsh(['interface', 'set', 'interface', 'name={}'.format(
-            interface), 'admin=disabled'], timeout=15)
+            interface), 'admin=disabled'], timeout=20)
 
     @classmethod
     def enable_interface(cls, interface: str):
         cls.netsh(['interface', 'set', 'interface', 'name={}'.format(
-            interface), 'admin=enabled'], timeout=15)
+            interface), 'admin=enabled'], timeout=20)
 
     @classmethod
     def connect(cls, ssid: str, passwd: str = '', remember: bool = True, interface: str = 'Wirless Network Connection'):
@@ -142,6 +143,38 @@ class WinWiFi:
         ap = [ap for ap in aps if ap.ssid == ssid][0]
         cls.add_profile(cls.gen_profile(
             ssid=ssid, auth=ap.auth, encrypt=ap.encrypt, passwd=passwd, remember=remember), interface)
+
+        cls.netsh(['wlan', 'connect', 'name={}'.format(
+            ssid), 'interface={}'.format(interface)])
+
+        for _ in range(30):
+            if list(filter(lambda it: it.ssid == ssid, WinWiFi.get_connected_interfaces())):
+                break
+            time.sleep(1)
+        else:
+            raise RuntimeError('Cannot connect to Wi-Fi AP')
+
+    @classmethod
+    def connect_hidden(cls, ssid: str, passwd: str = '', remember: bool = True, interface: str = 'Wirless Network Connection'):
+        if not cls.is_interfaces_exist(interface):
+            raise AssertionError(
+                'the interface {} does not exist!'.format(interface))
+
+        # make sure the profile sync with AP
+        if ssid in cls.get_profiles(interface):
+            cls.delete_profile(ssid, interface)
+
+        if not passwd:
+            auth = 'Open'
+            encrypt = 'None'
+        elif len(passwd) < 8 or len(passwd) > 64:
+            raise AssertionError(
+                'the password length should be 8-64 characters!')
+        else:
+            auth = 'WPA2PSK'
+            encrypt = 'AES'
+        cls.add_profile(cls.gen_profile(
+            ssid=ssid, auth=auth, encrypt=encrypt, passwd=passwd, remember=remember), interface)
 
         cls.netsh(['wlan', 'connect', 'name={}'.format(
             ssid), 'interface={}'.format(interface)])
@@ -323,7 +356,16 @@ class WinIp:
                         'set static ip failed, return code {}'.format(ret[0]))
                 return
         raise AssertionError(
-                        'set static ip failed, not found interface {}'.format(interface))
+            'set static ip failed, not found interface {}'.format(interface))
+
+    def get_interface_ip(self, interface):
+        interfaceIndex = self.get_interface_index(interface)
+        interfaces = self.svc.Win32_NetworkAdapterConfiguration(IPEnabled=True)
+        for intf in interfaces:
+            if intf.InterfaceIndex == interfaceIndex:
+                return intf.IPAddress
+        raise AssertionError(
+            'get interface ip failed, not found interface {}'.format(interface))
 
     def get_interface_index(self, interface):
         adpts = self.svc.Win32_NetworkAdapter()

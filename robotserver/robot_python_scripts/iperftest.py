@@ -162,23 +162,25 @@ class iperftest(wifi_basic_test):
             arguments.extend(['-i', interval])
 
         p = subprocess.Popen(arguments, stdout=PIPE, stderr=PIPE)
+
+        # First get the console log generated during the test.
+        # windows buffer size is 4k, it may lose log.
+        rx_log = self._serial_read(deviceName, int(time) + 10)[0]
+        print('==== Receiver log ====')
+        print(rx_log)
+
         (tx_log, error) = p.communicate()
         tx_log = tx_log.decode()
         print('==== Transmitter log ====')
         print('Command: {}'.format(' '.join(arguments)))
         print(tx_log)
         if error != b'':
-            if b'error' in error :
+            if b'error' in error:
                 raise AssertionError('iperf test error: {}'.format(error))
-            else :
+            else:
                 print(error)
         if 'error' in tx_log:
             raise AssertionError('iperf test error: {}'.format(tx_log))
-
-        # get the console log generated during the test
-        rx_log = self._serial_read(deviceName, self.TIMEOUT)[0]
-        print('==== Receiver log ====')
-        print(rx_log)
 
         if rx_log == '' or tx_log == '':
             raise AssertionError('Running iperf test failed')
@@ -198,7 +200,7 @@ class iperftest(wifi_basic_test):
 
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
-        p =  re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
+        p = re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         result = self.handle_test_result(p, rx_log)
 
         return result['throughput']
@@ -215,7 +217,7 @@ class iperftest(wifi_basic_test):
 
         _, tx_log = self.iperf_rx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
-        p =  re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
+        p = re.compile(r'sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         result = self.handle_test_result(p, tx_log)
 
         return result['throughput']
@@ -410,7 +412,7 @@ class iperftest(wifi_basic_test):
         _, tx_log = self.iperf_tx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
         # there is a bug in iperf3 PC server statistics for UDP, we use iperf3 client's report instead
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
-        p =  re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
+        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         result = self.handle_test_result(p, tx_log)
 
         return result['throughput']
@@ -427,7 +429,7 @@ class iperftest(wifi_basic_test):
 
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
-        p =  re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
+        p = re.compile(r'\s+0\.0+\s*-\s*\d+\.?\d*\s+sec\s+(\d+\.?\d*\s+\w?)Bytes\s+(\d+\.?\d*\s+\w?bits/sec)\s+receiver')
         result = self.handle_test_result(p, rx_log)
 
         return result['throughput']

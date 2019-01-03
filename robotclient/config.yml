@@ -38,6 +38,19 @@ DUT:
         project: demo.uvproj
         target: demo-target
       - tool: ISP
+  - name: SOFTAP
+    com: COM12
+    baudrate: 115200
+    # multiple download methods can be configured here, they will be tried one by one if previous one failed
+    download:
+      # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
+      - tool: MDK
+        path: C:\\Keil_v5\\UV4\\UV4.exe
+        workdir: E:\\GDM32100_Firmware_Library\\Project\\WIFI_IOT\\MDK-ARM\\
+        project: Project.uvproj
+        target: GD32F4XX_FREERTOS
+      - tool: ISP
+    softap_ip: 192.168.237.1
   - name: STA2
     com: COM11
     baudrate: 115200

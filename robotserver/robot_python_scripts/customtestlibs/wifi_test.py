@@ -77,35 +77,100 @@ class wifi_basic_test(device_test):
         if elapsedTime == self.TIMEOUT_ERR:
             raise AssertionError('Disconnecting timeout')
         print('Disconnecting used time {0}s'.format(elapsedTime))
-    def sta_connect_network(self, ssid, passwd):
+
+
+    def create_softap(self, deviceName, ssid, passwd, channel, hidden):
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('wifi_ap_adv {} {} {} {}\r'.format(ssid, passwd, channel, hidden).encode())
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.CONNECT_TIMEOUT, 'softap {} started!'.format(re.escape(ssid)))
+        print(result)
+
+        if elapsedTime == self.TIMEOUT_ERR:
+            raise AssertionError('Setup softap timeout')
+        print('Setup softap used time {0}s'.format(elapsedTime))
+        # we need return softap ip address
+        self.ip_DUT = dut['softap_ip']
+        return self.ip_DUT
+
+
+    def sta_connect_network(self, ssid, passwd, hidden=0):
         '''
-        @brief: Station like PC with Windows 7 or later OS connect wireless network with specific ssid
+        Station like PC with Windows 7 or later OS connect wireless network with specific ssid
         we change stdout encoding to utf-8 since Chinese coding issue
-        @param ssid: the wireless network name
-        @param passwd: the wireless password
+
+        Arguments:
+            ssid(str): the wireless network name
+            passwd(str): the wireless password
+            hidden(0): the wireless network ssid is hidden. For hidden ssid, we just support Open and WPA2PSK/AES
+
+        Return none
         '''
         interface = self.config['pc_nic']
         if os.name == 'nt' and sys.stdout.encoding != 'cp65001':
             os.system('chcp 65001 >nul 2>&1')
-            WinWiFi.connect(ssid=ssid, passwd=passwd, remember=True, interface=interface)
+            if hidden == 0:
+                WinWiFi.connect(ssid=ssid, passwd=passwd, remember=True, interface=interface)
+            else:
+                WinWiFi.connect_hidden(ssid=ssid, passwd=passwd, remember=True, interface=interface)
         else:
             raise AssertionError("This os does't support yet!")
 
 
     def set_sta_static_ip_from_source(self, srcip, subMask='255.255.255.0'):
         '''
-        @brief: This function allow you set a static ip that change from source ip to a interface that on Windows 7 or later PC
-                And make sure this static ip can ping source ip.
-                This is useful for iperf test.
-        @param srcip: the source ip
-        @param subMask: subnet mask
+        This function allow you set a static ip that change from source ip to a interface that on Windows 7 or later PC
+        And make sure this static ip can ping source ip.
+        This is useful for iperf test.
+
+        Arguments:
+            srcip (str): the source ip.
+            subMask (str): subnet mask.
+
+        Return None
         '''
-        s = WinIp()
-        ip = srcip.split('.')
+        if os.name == 'nt':
+            s = WinIp()
+            ip = srcip.split('.')
+            interface = self.config['pc_nic']
+            hostid = self.config['pc_host_id']
+            s.set_static_ip(interface, ['{}.{}.{}.{}'.format(ip[0], ip[1], ip[2], hostid)], [subMask])
+            s.ping(srcip)
+        else:
+            raise AssertionError("This os does't support yet!")
+
+
+    def sta_scan(self):
+        '''
+        Fresh windows 7 or late PC wireless network.
+        Notice: it would disable and enable the wireless nic
+
+        Return None:
+        '''
         interface = self.config['pc_nic']
-        hostid = self.config['pc_host_id']
-        s.set_static_ip(interface, ['{}.{}.{}.{}'.format(ip[0], ip[1], ip[2], hostid)], [subMask])
-        s.ping(srcip)
+        if os.name == 'nt' and sys.stdout.encoding != 'cp65001':
+            os.system('chcp 65001 >nul 2>&1')
+            WinWiFi.scan(refresh=True, interface=interface, callback=lambda x: print(x))
+        else:
+            raise AssertionError("This os does't support yet!")
+
+
+    def sta_get_ip(self):
+        '''
+        This function allow you get windows 7 or late PC interface ipv4 address
+
+        Return a string:
+            ip(str) : station's ipv4 address
+        '''
+        interface = self.config['pc_nic']
+        if os.name == 'nt':
+            s = WinIp()
+            ip = s.get_interface_ip(interface)
+            return ip[0]
+        else:
+            raise AssertionError("This os does't support yet!")
+
 
     '''
     #TODO need to adapter new command
