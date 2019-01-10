@@ -7,8 +7,7 @@ import robot
 import argparse
 import time
 
-sys.path.append('robot_python_scripts')
-from customtestlibs.database import Test, Task, TaskQueue
+from database import Test, Task, TaskQueue
 
 def listen_task():
     print('Start listening tasks from database 127.0.0.1:27017')

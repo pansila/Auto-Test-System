@@ -1,9 +1,0 @@
-mistune==0.8.4
-mongoengine==0.16.3
-prompt-toolkit==1.0.15
-Pygments==2.2.0
-pymongo==3.7.2
-robotframework==3.0.4
-robotframework-debuglibrary==1.1.4
-six==1.11.0
-wcwidth==0.1.7

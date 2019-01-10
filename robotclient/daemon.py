@@ -60,8 +60,8 @@ class daemon(object):
             self.tests[testcase]["server"]._server.shutdown()
             del self.tests[testcase]["server"]
             del self.tests[testcase]
-        else:
-            print("test {} is not running".format(testcase))
+        # else:
+        #     print("test {} is not running".format(testcase))
 
     def _download(self, testcase):
         if testcase.endswith(".py"):

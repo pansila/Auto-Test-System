@@ -5,8 +5,7 @@ import datetime
 from mongoengine import *
 import argparse
 
-sys.path.append('robot_python_scripts')
-from customtestlibs.database import Test
+from database import Test
 
 def strip_char(item):
     item = item.strip()
