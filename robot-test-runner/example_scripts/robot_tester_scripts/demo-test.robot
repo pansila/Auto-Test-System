@@ -22,18 +22,3 @@ hello world
     [Teardown]    Teardown Remote    ${endpoint_daemon}    demotest    testlib    ${dut1}
     ${ret} =    testlib.hello world
     Should be equal    ${ret}    hello world
-
-echo function
-    [Setup]    Setup Remote    ${endpoint_daemon}    demotest    testlib
-    [Teardown]    Teardown Remote    ${endpoint_daemon}    demotest    testlib    ${dut1}
-    ${ret} =    testlib.echo    hello robot
-    Should be equal    ${ret}    hello robot
-
-add function
-    [Setup]    Setup Remote    ${endpoint_daemon}    demotest    testlib
-    [Teardown]    Teardown Remote    ${endpoint_daemon}    demotest    testlib    ${dut1}
-    ${a}    Evaluate    int(1)
-    ${b}    Evaluate    int(2)
-    ${c}    Evaluate    int(3)
-    ${ret} =    testlib.add    ${a}    ${b}
-    Should be equal    ${ret}    ${c}

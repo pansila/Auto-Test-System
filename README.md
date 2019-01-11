@@ -28,18 +28,18 @@ When a test request is sent to the remote server, a corresponding test library w
 1. Install python 3.6.x and pip.
 
 2. Install pipenv
-   ```dos
+   ```bash
    pip install -U pipenv
    ```
 
 3. Set up test client environment
-   ```dos
+   ```bash
    cd robotclient
    pipenv install
    ```
 
 4. Set up test server environment
-   ```dos
+   ```bash
    cd robotserver
    pipenv install
    ```
@@ -47,7 +47,7 @@ When a test request is sent to the remote server, a corresponding test library w
 5. Set up Web server environment
 
    Web server is running by express. Please install [node.js](https://nodejs.org/en/) first. After that, type following commands:
-   ```dos
+   ```bash
    cd webserver
    npm install -g yarn
    yarn global add yrm
@@ -65,7 +65,7 @@ When a test request is sent to the remote server, a corresponding test library w
    1. Install MongoDB from the [official website](https://www.mongodb.com/), choose the community version.
 
    2. Build up the test suite database
-      ```dos
+      ```bash
       cd robotserver
       pipenv run python tools\Test.py --action=UPDATE --scripts=robot_scripts\
       ```
@@ -74,14 +74,14 @@ When a test request is sent to the remote server, a corresponding test library w
 
 ### Run the test
 1. Run the web server
-   ```dos
+   ```bash
    cd webserver
    yarn dev
    ```
    Web server will serve Web UI for the auto-test tasks, supply robot scripts with backing python scripts to download, visualize the test results, etc.
 
 2. Run the daemon process of a client
-   ```dos
+   ```bash
    cd robotclient
    pipenv run python daemon.py
    ```
@@ -89,7 +89,7 @@ When a test request is sent to the remote server, a corresponding test library w
 
 3. Run a test from the server (It can be any PC actually)
 
-   ```dos
+   ```bash
    cd robotserver
    pipenv run python tools\runTest.py demo-test
 
@@ -146,7 +146,7 @@ After that, robot will read all code blocks in a markdown file with robotframewo
 And we go a bit further by [adding support of tables in markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
 
 After that, we can execute a test suite in the markdown file as follows.
-```dos
+```bash
 robot demo-test.md
 ```
 

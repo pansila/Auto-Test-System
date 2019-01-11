@@ -109,6 +109,6 @@ output.xml
 report.html
 log.html
 .vscode/
-/robotclient/testlibs/
+testlibs/
 *.tgz
 temp/
