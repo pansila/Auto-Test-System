@@ -1,5 +1,6 @@
 - [Introduction](#introduction)
 - [Test System Architecture](#test-system-architecture)
+- [Design of Robot Test Server](#design-of-robot-test-server)
 - [Set up the test environment](#set-up-the-test-environment)
 - [Run the test](#run-the-test)
 - [Configurations of the auto test system](#configurations-of-the-auto-test-system)
@@ -13,15 +14,21 @@ This is a distributed test system powered by [Robot Framework](https://github.co
 We also use express, a nodejs web framework, to serve the test data/scripts and the Web UI.
 
 ### Test System Architecture
-This is the typical architecture for a remote server use case.
+A typical architecture for a Robot Remote Server is described in the official [website](https://github.com/robotframework/RemoteInterface).
 
 ![](https://i.loli.net/2018/11/28/5bfe0be78657f.jpg)
 
-We improved it by adding a daemon process on the remote server. The daemon, which is a special test library, will listen on the remote server so that it can accept any new test request from the test server without needing to run a corresponding test library every time as we usually do in robot remote server tutorial.
+We improves it by adding a daemon process on the Test Endpoint (aka. Robot Remote Server). The daemon, which is a special test library, will listen on the test endpoint so that it can accept any new test request from the Robot Server without needing to run a corresponding test library every time as we usually do in Robot Remote Server tutorial.
 
-When a test request is sent to the remote server, a corresponding test library will be downloaded by the daemon process from the test server which is also hosted as a web server. The downloaded test library will be served in the same address where a test library did before, namely we always serve the test libraries at a fixed address.
+When a test request is sent to the Test Endpoint, a corresponding test library will be downloaded by the daemon process from the Robot Server which is also hosted as a web server. The downloaded test library will be served in the same address where a test library did before, namely we always serve the test libraries at a fixed address.
 
-![Here need a picture for the improved system]()
+![](https://i.loli.net/2019/01/11/5c3824fa8a330.png)
+
+It's recommended to deploy Robot Server and Test Endpoint on the separated machines. For our case, we use Raspberry Pi 3 to reduce the deployment cost, but more performance PC would work as well.
+![](https://i.loli.net/2019/01/11/5c3820cb26a4e.png)
+
+### Design of Robot Test Server
+![](https://i.loli.net/2019/01/11/5c38405f28dea.png)
 
 ### Set up the test environment
 
@@ -32,15 +39,15 @@ When a test request is sent to the remote server, a corresponding test library w
    pip install -U pipenv
    ```
 
-3. Set up test client environment
+3. Set up test endpoint environment
    ```bash
-   cd robotclient
+   cd robot-test-endpoint
    pipenv install
    ```
 
-4. Set up test server environment
+4. Set up test runner environment
    ```bash
-   cd robotserver
+   cd robot-test-runner
    pipenv install
    ```
 
@@ -66,7 +73,7 @@ When a test request is sent to the remote server, a corresponding test library w
 
    2. Build up the test suite database
       ```bash
-      cd robotserver
+      cd robot-test-runner
       pipenv run python tools\Test.py --action=UPDATE --scripts=robot_scripts\
       ```
       It will search all robot scripts under `robot_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
@@ -80,30 +87,28 @@ When a test request is sent to the remote server, a corresponding test library w
    ```
    Web server will serve Web UI for the auto-test tasks, supply robot scripts with backing python scripts to download, visualize the test results, etc.
 
-2. Run the daemon process of a client
+2. Run the daemon process of a test endpoint
    ```bash
-   cd robotclient
+   cd robot-test-endpoint
    pipenv run python daemon.py
    ```
    It only needs to run only once, following test requests will be intercepted by daemon process to perform the actual tests.
 
-3. Run a test from the server (It can be any PC actually)
+3. Run a test from the test runner folder (can from any PC)
 
    ```bash
-   cd robotserver
+   cd robot-test-runner
    pipenv run python tools\runTest.py demo-test
 
    # or
-   cd robotserver
    pipenv run robot robot_scripts\demo-test.robot
 
    # or
-   cd robotserver
    pipenv shell
    robot robot_scripts\demo-test.md
    ```
 
-   Now robot starts to connect to client and run the test on the client, reports will be generated when test finished under the server's test directory
+   Now robot starts to connect to a test endpoint and run the test on that, reports will be generated when test finished under the current directory
 
 4. (Optional) Run a test by the web server API
 
@@ -121,16 +126,16 @@ Notice:
 
 2. For a test in action, please check out `wifi-basic-test.md` in `the wifi-basic-test` folder.
 
-3. The server and client run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the test server's robot test script and test client's endpoint config file. Don't forget to configure the firewall to let through the communication on the TCP port 8270/8271.
+3. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script and test endpoint's config file. Don't forget to configure the firewall to let through the communication on the TCP port 8270/8271.
 
 ### Configurations of the auto test system
-1. Test Server
+1. Test Runner
 
-   We provide a config.robot as a resource file per test suite, supplying configs like desired remote server to execute the test suite, etc.
+   We provide a config.robot as a resource file per test suite, supplying configs like desired test endpoint to run the test suite, etc.
 
-2. Test Client
+2. Test Endpoint
 
-   There is a config.yml to describe any SUT dependent details, like serial port interfaces, test server port, test library serving port, etc.
+   It's as known as the Robot Remote Server. There is a config.yml to describe any SUT dependent details, like serial port interfaces, robot server port, test library serving port, etc.
 
 3. Web server
 
@@ -158,4 +163,4 @@ These router manipulation scripts are product dependent. At present, we only sup
 Especially, we can use a firefox add-on, Katalon Recorder, which could record your operations on the web page and produce corresponding python code, we can in turn adapt the resultant code into our test scripts.
 
 ### Hacks to the robot
-1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by daemon process on test client.
+1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint.
