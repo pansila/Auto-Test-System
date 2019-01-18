@@ -53,7 +53,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
 5. Set up Web server environment
 
-   Web server is running by express. Please install [node.js](https://nodejs.org/en/) first. After that, type following commands:
+   Web server is powered by `express.js`. Please install [node.js](https://nodejs.org/en/) first. After that, type following commands:
    ```bash
    cd webserver
    npm install -g yarn
@@ -64,19 +64,19 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    ```
    Notice:
    1. All project dependencies will be installed in this step. We use `cnpm` to speed up the package downloading for Chinese user, skip it if you are not.
-   2. Please modify .env according to suit your case. No changes needed if you are running all of them in a local PC.
-   3. Please add yarn to system path after you installed yarn
+   2. Please modify `.env` accordingly to suit your case. No changes are needed if you are running all of them in single PC.
+   3. Please add yarn binaries path to your `PATH` environment after you've installed yarn, usually it's a path like `C:\Users\<username>\AppData\Local\Yarn\bin\`.
 
 6. Set up the MongoDB database
 
-   1. Install MongoDB from the [official website](https://www.mongodb.com/), choose the community version.
+   1. Install MongoDB from the [official website](https://www.mongodb.com/), please be noted to choose the community version instead of cloud based version.
 
    2. Build up the test suite database
       ```bash
       cd robot-test-runner
-      pipenv run python tools\Test.py --action=UPDATE --scripts=robot_scripts\
+      pipenv run python tools\Test.py --action=UPDATE --scripts=example_scripts\robot_tester_scripts\
       ```
-      It will search all robot scripts under `robot_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
+      It will search all robot scripts under `robot_tester_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.
 
 ### Run the test
@@ -101,54 +101,54 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    pipenv run python tools\runTest.py demo-test
 
    # or
-   pipenv run robot robot_scripts\demo-test.robot
+   pipenv run robot example_scripts\robot_tester_scripts\demo-test.robot
 
    # or
    pipenv shell
-   robot robot_scripts\demo-test.md
+   robot example_scripts\robot_tester_scripts\demo-test.md
    ```
 
    Now robot starts to connect to a test endpoint and run the test on that, reports will be generated when test finished under the current directory
 
 4. (Optional) Run a test by the web server API
 
-   To integrate with Web UI, we provide Web API to run the tests. You can call it from any PC that can access web server.
+   To integrate with Web UI, we provide Web API to run the tests. Thereby you can run the tests from any PC that can access web server.
    ```
    http POST http://127.0.0.1/task/run/demo-test
 
    # or
    curl -d "" http://127.0.0.1/task/run/demo-test
    ```
-   Note: `http` is a python http client tool, "pip install httpie".
+   Note: `http` is a handy http client tool provided by python, `"pip install httpie"`.
 
 Notice:
 1. If you want to run a robot script file written in markdown, please refer to [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file) at the end of this document.
 
-2. For a test in action, please check out `wifi-basic-test.md` in `the wifi-basic-test` folder.
+2. For a test in action, please check out `wifi-basic-test.md`.
 
-3. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script and test endpoint's config file. Don't forget to configure the firewall to let through the communication on the TCP port 8270/8271.
+3. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script and test endpoint's config file. Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
 
 ### Configurations of the auto test system
 1. Test Runner
 
-   We provide a config.robot as a resource file per test suite, supplying configs like desired test endpoint to run the test suite, etc.
+   We provide a `config.robot` as a resource file per test suite, supplying configs like desired test endpoint to run the test suite, etc.
 
 2. Test Endpoint
 
-   It's as known as the Robot Remote Server. There is a config.yml to describe any SUT dependent details, like serial port interfaces, robot server port, test library serving port, etc.
+   It's as known as the Robot Remote Server. There is a `config.yml` to describe any SUT dependent details, like serial port interfaces, robot server port, test library serving port, etc.
 
 3. Web server
 
-   All configurations are store in the .env file, like mongodb URI, robot scripts root directory, etc.
+   All configurations are store in the `.env` file, like mongodb URI, robot scripts root directory, etc.
 
 ### How to write a robot test case
-Please check out the [official user manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
+Please check out the [Official User Manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
 
 ### How to write a robot test case in the markdown file
 We patched an unofficial work from [here](https://gist.github.com/Tset-Noitamotua/75d15a2beb9ab6f1931d3871172ebbbf) to make robot support markdown.
 After that, robot will read all code blocks in a markdown file with robotframework keyword and execute them.
 
-And we go a bit further by [adding support of tables in markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
+And we go a bit further by [Adding Support of Tables in Markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
 
 After that, we can execute a test suite in the markdown file as follows.
 ```bash
@@ -156,11 +156,13 @@ robot demo-test.md
 ```
 
 ### How to modify a WiFi Router configurations connected to a SUT
-We can use some crawler techniques here, thus we need to install [selenium](http://docs.seleniumhq.org/).
+We can accomplish it by using python library `requests` or `beautifulsoup` if the web page is not using any dynamic Web techniques like `PHP`, `JSP` or `ASP`.
+
+Otherwise we can use some crawler techniques here, to this end we need to install [selenium](http://docs.seleniumhq.org/).
 
 These router manipulation scripts are product dependent. At present, we only support a small portion of routers, but they can be easily extended to suit your case.
 
-Especially, we can use a firefox add-on, Katalon Recorder, which could record your operations on the web page and produce corresponding python code, we can in turn adapt the resultant code into our test scripts.
+Especially, we can use a firefox add-on, `Katalon Recorder`, which could record your operations on the web page and produce corresponding python code, we can in turn adapt the resultant code into our test scripts.
 
 ### Hacks to the robot
 1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint.
