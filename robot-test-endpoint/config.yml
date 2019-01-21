@@ -58,12 +58,14 @@ DUT:
 # AP under test
 AP:
   # a AP with fixed configuration or a device running openWRT
-  - name: HUAWEI
-    vendor: HUAWEI
-    product: huawei851
+  - name: totolink_n150
+    vendor: RealTek
+    product: TOTOLINKN150
+    manufacturer: TOTOLINK
     mode: fixed
+    url: 'http://192.168.1.1/'
     configuration:
-      ssid: huawei851
+      ssid: totolink_n150
       bssid:
       key_mgmt: WPA2-PSK
       psk: 12345678

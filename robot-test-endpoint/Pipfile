@@ -19,6 +19,8 @@ robotremoteserver = "==1.1"
 selenium = "==3.141.0"
 six = "==1.12.0"
 urllib3 = "==1.24.1"
+wmi = "*"
+pypiwin32 = "*"
 
 [requires]
 python_version = "3.6"
