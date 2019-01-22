@@ -5,7 +5,7 @@ import importlib
 import shutil
 import threading
 import signal
-import yaml
+from ruamel import yaml
 import requests
 from robotremoteserver import RobotRemoteServer
 import tarfile
@@ -118,8 +118,8 @@ def start_remote_server(testlib, host, port=8270):
 
 def start_daemon(config_file = "config.yml"):
     global g_config
-    with open(config_file,'r',encoding='utf-8') as f:
-        g_config = yaml.load(f)
+    with open(config_file, 'r', encoding='utf-8') as f:
+        g_config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
     if "test_dir" not in g_config:
         g_config["test_dir"] = DOWNLOAD_LIB
