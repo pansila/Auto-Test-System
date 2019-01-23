@@ -64,6 +64,8 @@ AP:
     manufacturer: TOTOLINK
     mode: fixed
     url: 'http://192.168.1.1/'
+    username: 'admin'
+    password: 'admin'
     configuration:
       ssid: totolink_n150
       bssid:
