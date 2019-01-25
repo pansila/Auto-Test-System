@@ -22,13 +22,13 @@ We improves it by adding a daemon process on the Test Endpoint (aka. Robot Remot
 
 When a test request is sent to the Test Endpoint, a corresponding test library will be downloaded by the daemon process from the Robot Server which is also hosted as a web server. The downloaded test library will be served in the same address where a test library did before, namely we always serve the test libraries at a fixed address.
 
-![](https://i.loli.net/2019/01/11/5c3824fa8a330.png)
+![](https://i.loli.net/2019/01/25/5c4a65f044250.png)
 
 It's recommended to deploy Robot Server and Test Endpoint on the separated machines. For our case, we use Raspberry Pi 3 to reduce the deployment cost, but more performance PC would work as well.
-![](https://i.loli.net/2019/01/11/5c3820cb26a4e.png)
+![](https://i.loli.net/2019/01/24/5c498aa0a7354.png)
 
 ### Design of Robot Test Server
-![](https://i.loli.net/2019/01/11/5c38405f28dea.png)
+![](https://i.loli.net/2019/01/25/5c4a64c32ae53.png)
 
 ### Set up the test environment
 
