@@ -4,7 +4,6 @@ const fs = require('fs-extra');
 
 const scriptRoot = process.env.ROBOT_SCRIPTS_ROOT;
 const tarballTemp = 'temp';
-const dependency = [/customtestlibs[/\\]?.*/];
 
 async function makeTarballContent(script) {
   if (!fs.existsSync(path.join(scriptRoot, `${script}.py`))) {
@@ -12,19 +11,6 @@ async function makeTarballContent(script) {
   }
   try {
     await fs.copy(scriptRoot, tarballTemp, {
-      filter: (file) => {
-        // console.log(file);
-        if (file.endsWith(scriptRoot)) {
-          return true;
-        }
-        for (let i = 0; i < dependency.length; i += 1) {
-          if (dependency[i].test(file)) return true;
-        }
-        if (file.endsWith(`${script}.py`)) {
-          return true;
-        }
-        return false;
-      },
       preserveTimestamps: true,
     });
   } catch (error) {
