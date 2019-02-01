@@ -10,6 +10,7 @@ import requests
 from robotremoteserver import RobotRemoteServer
 import tarfile
 from distutils import dir_util
+from pathlib import Path
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
@@ -83,7 +84,7 @@ class daemon(object):
         with tarfile.open(output) as tarFile:
             tarFile.extractall(self.config["test_dir"])
 
-        temp_dir = os.path.join(self.config['test_dir'], TEMP_LIB)
+        temp_dir = Path(self.config['test_dir']) / TEMP_LIB
         dir_util.copy_tree(temp_dir, self.config['test_dir'])
         shutil.rmtree(temp_dir)
 
@@ -91,7 +92,7 @@ class daemon(object):
         if not testcase.endswith(".py"):
             testcase += ".py"
 
-        testlib = os.path.join(self.config["test_dir"], testcase)
+        testlib = Path(self.config["test_dir"]) / testcase
         if not os.path.exists(testlib):
             raise AssertionError("Verify downloaded file %s failed" % testcase)
 

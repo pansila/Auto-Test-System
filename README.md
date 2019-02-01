@@ -79,6 +79,10 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
       It will search all robot scripts under `robot_tester_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.
 
+7. The `example_scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify environment variables in the `.env` to point to the right places after setting up your test asset repository.
+
+   By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
+
 ### Run the test
 1. Run the web server
    ```bash
@@ -126,7 +130,7 @@ Notice:
 
 2. For a test in action, please check out `wifi-basic-test.md`.
 
-3. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script and test endpoint's config file. Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
+3. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script (`.env`) and test endpoint's config file (`config.yml`). Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
 
 ### Configurations of the auto test system
 1. Test Runner
@@ -142,13 +146,13 @@ Notice:
    All configurations are store in the `.env` file, like mongodb URI, robot scripts root directory, etc.
 
 ### How to write a robot test case
-Please check out the [Official User Manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
+Please check out the official [Quick Start Tutorial](https://github.com/robotframework/QuickStartGuide/blob/master/QuickStart.rst) and [User Manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
 
 ### How to write a robot test case in the markdown file
 We patched an unofficial work from [here](https://gist.github.com/Tset-Noitamotua/75d15a2beb9ab6f1931d3871172ebbbf) to make robot support markdown.
 After that, robot will read all code blocks in a markdown file with robotframework keyword and execute them.
 
-And we go a bit further by [Adding Support of Tables in Markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
+While we go a bit further by [Adding Support of Tables in Markdown](https://gist.github.com/pansila/8d4f2869ccae891326959c947571ea67). Robot will also read all tables that starts with any robot keyword in a markdown file.
 
 After that, we can execute a test suite in the markdown file as follows.
 ```bash
