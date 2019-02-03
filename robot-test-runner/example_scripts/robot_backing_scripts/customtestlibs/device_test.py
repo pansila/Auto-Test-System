@@ -62,27 +62,33 @@ class device_test(MongoDBClient):
             if d['tool'].upper() == 'JLINK':
                 cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1']
                 if os.name == 'nt':
-                    a = pexpect.popen_spawn.PopenSpawn(' '.join(cmd), encoding='utf-8')
+                    from pexpect import popen_spawn
+                    a = popen_spawn.PopenSpawn(' '.join(cmd), encoding='utf-8')
                 elif os.name == 'posix':
                     a = pexpect.spawn(' '.join(cmd), encoding='utf-8')
                 else:
                     raise AssertionError('Not supported OS {}'.format(os.name))
-                a.expect_exact('J-Link>')
+
+                try:
+                    a.expect_exact('J-Link>', timeout=5)
+                except:
+                    a.kill(9)
+                    raise AssertionError('J-Link running failed')
 
                 cmds = ['r', 'exec EnableEraseAllFlashBanks', 'erase', 'loadbin {} {:x} SWDSelect'.format(Path(d['datafile']).expanduser(), d['flash_addr']),
                         'verifybin {} {:x}'.format(Path(d['datafile']).expanduser(), d['flash_addr']), 'r', 'g']
                 for c in cmds:
                     a.sendline(c)
-                    idx = a.expect_list([re.compile('J-Link>'), re.compile('failed')], timeout=120, searchwindowsize=10)
-                    if idx == 1:
-                        a.kill(0)
-                        raise AssertionError('JLink command {} failed:\n{}\n{}'.format(c, a.before, a.after))
+                    idx = a.expect_list([re.compile('J-Link>'), re.compile('failed'), pexpect.TIMEOUT], timeout=120, searchwindowsize=10)
+                    if idx != 0:
+                        a.kill(9)
+                        raise AssertionError('JLink command "{}" failed:\n{}\n{}'.format(c, a.before, a.after))
                     # print(a.before)
                 a.sendline('qc')
                 a.expect(pexpect.EOF)
                 break
             print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
-        else: 
+        else:
             raise AssertionError('Downloading firmware for {} failed'.format(deviceName))
 
     def _serial_read(self, deviceName, timeout, term=None):
