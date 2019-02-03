@@ -2,9 +2,11 @@ import serial
 import re
 import time
 import subprocess
-from os import path
+import os
+from pathlib import Path
 import sys
 from .database import MongoDBClient
+import pexpect
 
 class device_test(MongoDBClient):
     TIMEOUT_ERR = -1
@@ -45,14 +47,40 @@ class device_test(MongoDBClient):
             raise AssertionError('Download method is not configured for {}'.format(deviceName))
 
         for d in dut['download']:
+            if len(d) <= 1:
+                print('download tool {} is not supported yet'.format(d['tool'] if 'tool' in d else d))
+                continue
+
             if d['tool'].upper() == 'MDK':
-                cmd = [d['path'], '-f', path.join(d['workdir'], d['project']), '-t', d['target']]
-                ret = subprocess.call(cmd)
-                if ret == 0:
-                    break
-            elif d['tool'].upper() == 'ISP':
-                print('Firmware ISP is not supported yet')
-                # break
+                if os.name != 'nt':
+                    print('MDK is only supported on Windows')
+                    continue
+                cmd = [d['path'], '-f', Path(d['workdir']) / d['project'], '-t', d['target']]
+                subprocess.run(cmd, check=True)
+                break
+
+            if d['tool'].upper() == 'JLINK':
+                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1']
+                if os.name == 'nt':
+                    a = pexpect.popen_spawn.PopenSpawn(' '.join(cmd), encoding='utf-8')
+                elif os.name == 'posix':
+                    a = pexpect.spawn(' '.join(cmd), encoding='utf-8')
+                else:
+                    raise AssertionError('Not supported OS {}'.format(os.name))
+                a.expect_exact('J-Link>')
+
+                cmds = ['r', 'exec EnableEraseAllFlashBanks', 'erase', 'loadbin {} {:x} SWDSelect'.format(Path(d['datafile']).expanduser(), d['flash_addr']),
+                        'verifybin {} {:x}'.format(Path(d['datafile']).expanduser(), d['flash_addr']), 'r', 'g']
+                for c in cmds:
+                    a.sendline(c)
+                    idx = a.expect_list([re.compile('J-Link>'), re.compile('failed')], timeout=120, searchwindowsize=10)
+                    if idx == 1:
+                        a.kill(0)
+                        raise AssertionError('JLink command {} failed:\n{}\n{}'.format(c, a.before, a.after))
+                    # print(a.before)
+                a.sendline('qc')
+                a.expect(pexpect.EOF)
+                break
             print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
         else: 
             raise AssertionError('Downloading firmware for {} failed'.format(deviceName))

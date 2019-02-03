@@ -39,9 +39,11 @@ DUT:
         target: demo-target
       - tool: ISP
       - tool: JLink
+        path: C:\Program Files (x86)\SEGGER\JLink_V640b\JLink.exe
         interface: SWD
-        target: STM32F103C8
+        device: STM32F103C8
         datafile: d:\demo.bin
+        speed: 4000
         flash_addr: 0x08000000
 
 # AP under test
