@@ -74,7 +74,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    2. Build up the test suite database
       ```bash
       cd robot-test-runner
-      pipenv run python tools\Test.py --action=UPDATE --scripts=example_scripts\robot_tester_scripts\
+      pipenv run python tools\Test.py --action=UPDATE --scripts=example_scripts\robot_tester_scripts
       ```
       It will search all robot scripts under `robot_tester_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.

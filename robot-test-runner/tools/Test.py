@@ -7,7 +7,7 @@ import argparse
 
 from database import Test
 
-def strip_char(item):
+def filter_kw(item):
     item = item.strip()
     if item.startswith('${'):
         item = item[2:]
@@ -44,7 +44,7 @@ def update_test(scripts_dir):
                         if table_header == 'variable' or table_header == 'variables':
                             for c in t["cells"]:
                                 if not c[0] == '---':
-                                    test.parameters[strip_char(c[0])] = strip_char(c[1])
+                                    test.parameters[filter_kw(c[0])] = filter_kw(c[1])
             try:
                 old_test = Test.objects(test_suite=test_suite).get()
             except Test.DoesNotExist:

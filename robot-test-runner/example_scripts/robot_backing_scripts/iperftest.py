@@ -264,12 +264,11 @@ class iperftest(wifi_basic_test):
         cnt = 0
         while True:
             output = p.stdout.readline()
-            if output == '' and p.poll() is not None:
+            if not output and p.poll() is not None:
                 break
             if output:
                 queue.put(output.decode())
-                # print(output.decode())
-            if (cnt & 0xF) == 0:
+            if (cnt & 0xF) == 0:    # to ease the cpu usage
                 time.sleep(0.5)
             cnt += 1
         rc = p.poll()

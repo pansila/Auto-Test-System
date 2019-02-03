@@ -11,6 +11,7 @@ from robotremoteserver import RobotRemoteServer
 import tarfile
 from distutils import dir_util
 from pathlib import Path
+import argparse
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
@@ -117,19 +118,27 @@ def start_remote_server(testlib, host, port=8270):
     server_thread.start()
     return server, server_thread
 
-def start_daemon(config_file = "config.yml"):
+def start_daemon(config_file = "config.yml", host=None, port=None):
     global g_config
     with open(config_file, 'r', encoding='utf-8') as f:
         g_config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
+    if host:
+        g_config["host_daemon"] = host
+    elif "host_daemon" not in g_config:
+        g_config["host_daemon"] = '127.0.0.1'
+
+    if port:
+        g_config["port_daemon"] = port
+        g_config["port_test"] = port + 1
+    else:
+        if "port_daemon" not in g_config:
+            g_config["port_daemon"] = 8270
+        if "port_test" not in g_config:
+            g_config["port_test"] = 8271
+
     if "test_dir" not in g_config:
         g_config["test_dir"] = DOWNLOAD_LIB
-    if "port_daemon" not in g_config:
-        g_config["port_daemon"] = 8270
-    if "port_test" not in g_config:
-        g_config["port_test"] = 8271
-    if "host_daemon" not in g_config:
-        g_config["host_daemon"] = "127.0.0.1"
     if "server_url" not in g_config:
         raise AssertionError('server is not set in the config file')
     else:
@@ -139,15 +148,29 @@ def start_daemon(config_file = "config.yml"):
             g_config['server_url'] = g_config['server_url'][0:-1]
 
     server, server_thread = start_remote_server(daemon(g_config), host=g_config["host_daemon"], port=g_config["port_daemon"])
-    signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
-    # signal.signal(signal.SIGINT, lambda signum, frame: server.stop())
+    if os.name == 'nt':
+        signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
+    elif os.name == 'posix':
+        signal.signal(signal.SIGINT, lambda signum, frame: server.stop())
+    else:
+        print('No signal terminating support for OS {}'.format(os.name))
     while server_thread.is_alive():
         server_thread.join(1)
-    # server_thread.join()
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--host', type=str,
+                        help='the network interface for daemon to listen',
+                        default='127.0.0.1')
+    parser.add_argument('--port', type=int,
+                        help='the port for daemon to listen, the test port will be next it',
+                        default=8270)
+    args = parser.parse_args()
+
+    host, port = args.host, args.port
+
     try:
-        start_daemon()
+        start_daemon(host=host, port=port)
     except OSError as err:
         print(err)
         print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
