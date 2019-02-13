@@ -42,14 +42,16 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 3. Set up test endpoint environment
    ```bash
    cd robot-test-endpoint
-   pipenv install
+   pipenv sync
    ```
 
 4. Set up test runner environment
    ```bash
    cd robot-test-runner
-   pipenv install
+   pipenv sync
+   pipenv run patch
    ```
+   The last step  is to patch robot, details please see sections [How to write a robot test case in the markdown file](#how-to-write-a-robot-test-case-in-the-markdown-file) and [Hacks to the robot](#hacks-to-the-robot).
 
 5. Set up Web server environment
 
