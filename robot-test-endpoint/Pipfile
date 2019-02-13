@@ -23,3 +23,6 @@ pexpect = "*"
 
 [requires]
 python_version = "3.6"
+
+[scripts]
+daemon = "python daemon.py"

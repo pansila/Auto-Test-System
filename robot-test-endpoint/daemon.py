@@ -1,21 +1,26 @@
+import argparse
+import importlib
+import multiprocessing
 import os.path
+import shutil
+import signal
 import subprocess
 import sys
-import importlib
-import shutil
+import tarfile
 import threading
-import signal
-from ruamel import yaml
+from distutils import dir_util
+from multiprocessing import Queue
+from pathlib import Path
+
 import requests
 from robotremoteserver import RobotRemoteServer
-import tarfile
-from distutils import dir_util
-from pathlib import Path
-import argparse
+from ruamel import yaml
+
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
 TEMP_LIB = "temp"
+TERMINATE = 1
 
 g_config = {}
 
@@ -37,30 +42,22 @@ class daemon(object):
         self._verify(testcase)
 
         if testcase in self.tests:
-            print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["server"])))
+            print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["queue"])))
         self.stop_test(testcase)
 
-        importlib.invalidate_caches()
-        testlib = importlib.import_module(testcase)
-        importlib.reload(testlib)
-        test = getattr(testlib, testcase)
-        server, server_thread = start_remote_server(test(self.config),
+        server_queue, server_process = start_remote_server(testcase,
+                                    self.config,
                                     host=self.config["host_daemon"],
                                     port=self.config["port_test"])
-        self.tests[testcase] = {"server": server, "thread": server_thread}
+        self.tests[testcase] = {"queue": server_queue, "process": server_process}
         return
-        #importlib.invalidate_caches()
-        #testlib = importlib.import_module(".iperftest", self.config["test_dir"])
-        #libraries = [testlib.iperftest()]
-        #HybridCore.__init__(self, libraries)
-        #start_server(testlib.iperftest())
 
     def stop_test(self, testcase):
         if testcase in self.tests:
-            # self.tests[testcase]["server"].stop()
+            # self.tests[testcase]["queue"].stop()
             # shutdown socket server directly since stop is an async operation, otherwise there could be out of order start/stop
-            self.tests[testcase]["server"]._server.shutdown()
-            del self.tests[testcase]["server"]
+            self.tests[testcase]["queue"].put(TERMINATE)
+            del self.tests[testcase]["queue"]
             del self.tests[testcase]
         # else:
         #     print("test {} is not running".format(testcase))
@@ -111,12 +108,37 @@ class daemon(object):
     def upload_log(self):
         pass
 
-def start_remote_server(testlib, host, port=8270):
-    server = RobotRemoteServer(testlib, host=host, serve=False, port=port)
+# Don't run RobotRemoteServer directly as there is a thread.lock pickling issue
+def start_test_library(queue, testcase, config, host, port):
+    # importlib.invalidate_caches()
+    testlib = importlib.import_module(testcase)
+    # importlib.reload(testlib)
+    test = getattr(testlib, testcase)
+
+    server = RobotRemoteServer(test(config), host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.daemon = True
     server_thread.start()
-    return server, server_thread
+
+    while True:
+        try:
+            item = queue.get()
+        except KeyboardInterrupt:
+            server._server.shutdown()
+            break
+        else:
+            if item == TERMINATE:
+                server._server.shutdown()
+                break
+
+    while server_thread.is_alive():
+        server_thread.join(0.1)
+
+def start_remote_server(testcase, config, host, port=8270):
+    q = Queue()
+    server_process = multiprocessing.Process(target=start_test_library, args=(q, testcase, config, host, port))
+    server_process.start()
+    return q, server_process
 
 def start_daemon(config_file = "config.yml", host=None, port=None):
     global g_config
@@ -147,15 +169,12 @@ def start_daemon(config_file = "config.yml", host=None, port=None):
         if g_config['server_url'][-1] == '/':
             g_config['server_url'] = g_config['server_url'][0:-1]
 
-    server, server_thread = start_remote_server(daemon(g_config), host=g_config["host_daemon"], port=g_config["port_daemon"])
-    if os.name == 'nt':
-        signal.signal(signal.SIGBREAK, lambda signum, frame: server.stop())
-    elif os.name == 'posix':
-        signal.signal(signal.SIGINT, lambda signum, frame: server.stop())
-    else:
-        print('No signal terminating support for OS {}'.format(os.name))
-    while server_thread.is_alive():
-        server_thread.join(1)
+    server_queue, server_process = start_remote_server('daemon', g_config, host=g_config["host_daemon"], port=g_config["port_daemon"])
+    while server_process.is_alive():
+        try:
+            server_process.join(1)
+        except KeyboardInterrupt:
+            break
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

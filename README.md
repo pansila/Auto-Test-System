@@ -96,7 +96,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 2. Run the daemon process of a test endpoint
    ```bash
    cd robot-test-endpoint
-   pipenv run python daemon.py
+   pipenv run daemon
    ```
    It only needs to run only once, following test requests will be intercepted by daemon process to perform the actual tests.
 
