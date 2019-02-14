@@ -76,12 +76,12 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    2. Build up the test suite database
       ```bash
       cd robot-test-runner
-      pipenv run python tools\Test.py --action=UPDATE --scripts=example_scripts\robot_tester_scripts
+      pipenv run update-db ..\example-test-scripts\robot_tester_scripts
       ```
       It will search all robot scripts under `robot_tester_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
       It needs to be done only when a test suite is added or modified.
 
-7. The `example_scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify environment variables in the `.env` to point to the right places after setting up your test asset repository.
+7. The `example-test-scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify environment variables in the `.env` to point to the right places after setting up your test asset repository.
 
    By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
 
@@ -104,14 +104,10 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
    ```bash
    cd robot-test-runner
-   pipenv run python tools\runTest.py demo-test
+   pipenv run start demo-test  # need database updated to work
 
    # or
-   pipenv run robot example_scripts\robot_tester_scripts\demo-test.robot
-
-   # or
-   pipenv shell
-   robot example_scripts\robot_tester_scripts\demo-test.md
+   pipenv run robot ..\example-test-scripts\robot_tester_scripts\demo-test.robot
    ```
 
    Now robot starts to connect to a test endpoint and run the test on that, reports will be generated when test finished under the current directory

@@ -21,3 +21,5 @@ python_version = "3.6"
 
 [scripts]
 patch = "python -c \"import os, subprocess\nos.chdir('patch')\nsubprocess.run(['python', 'apply.py'])\""
+start = "python tools/runTest.py"
+update-db = "python tools/Test.py --action=UPDATE --scripts"

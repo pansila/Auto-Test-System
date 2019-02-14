@@ -28,7 +28,7 @@ exports.run = async (req, res) => {
     }
     // execFile(
     //   'pipenv', ['run', 'tools\\runTest.py', req.params.task],
-    //   { cwd: process.env.ROBOT_SERVER_ROOT },
+    //   { cwd: process.env.ROBOT_RUNNER_ROOT },
     //   (err, stdout) => {
     //     if (err) {
     //       // console.error(err);
