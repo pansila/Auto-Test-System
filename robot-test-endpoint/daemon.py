@@ -41,10 +41,6 @@ class daemon(object):
         self._download(testcase)
         self._verify(testcase)
 
-        if testcase in self.tests:
-            print('Found remnant test case {}, stop the server {}.'.format(testcase, id(self.tests[testcase]["queue"])))
-        self.stop_test(testcase)
-
         server_queue, server_process = start_remote_server(testcase,
                                     self.config,
                                     host=self.config["host_daemon"],
@@ -54,8 +50,6 @@ class daemon(object):
 
     def stop_test(self, testcase):
         if testcase in self.tests:
-            # self.tests[testcase]["queue"].stop()
-            # shutdown socket server directly since stop is an async operation, otherwise there could be out of order start/stop
             self.tests[testcase]["queue"].put(TERMINATE)
             del self.tests[testcase]["queue"]
             del self.tests[testcase]
@@ -74,7 +68,7 @@ class daemon(object):
         if r.status_code == 404:
             raise AssertionError('Downloading test file {} failed'.format(tarball))
 
-        output = '{}\\{}'.format(self.config['test_dir'], tarball)
+        output = Path(self.config['test_dir']) / tarball
         with open(output, 'wb') as f:
             f.write(r.content)
         print('Downloading test file {} succeeded'.format(tarball))
@@ -92,7 +86,7 @@ class daemon(object):
 
         testlib = Path(self.config["test_dir"]) / testcase
         if not os.path.exists(testlib):
-            raise AssertionError("Verify downloaded file %s failed" % testcase)
+            raise AssertionError("Verifying downloaded file %s failed" % testcase)
 
     def start(self):
         """ start the daemon """
