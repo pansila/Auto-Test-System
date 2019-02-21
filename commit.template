@@ -1,0 +1,24 @@
+<type>: <subject>
+
+Modifications:
+1. Elaborate the root cause
+
+Tests:
+1. 
+
+Reviewers:
+
+Integration:
+1. <hash> from <some branch>
+
+Related Bugs:
+<bug id> bug title
+
+# where type could be:
+# feat: new features
+# fix: bug fixes
+# docs: documentation
+# style: formatting, missing semi colons, ...
+# refactor: code refactor, fearture rework
+# test: add test code/docs
+# chore: misc changes
