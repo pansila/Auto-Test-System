@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tarfile
 import threading
+import time
 from distutils import dir_util
 from multiprocessing import Queue
 from pathlib import Path
@@ -53,6 +54,7 @@ class daemon(object):
             self.tests[testcase]["queue"].put(TERMINATE)
             del self.tests[testcase]["queue"]
             del self.tests[testcase]
+            time.sleep(0.5)
         # else:
         #     print("test {} is not running".format(testcase))
 
