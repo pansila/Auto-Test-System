@@ -17,3 +17,9 @@ class AuthDto:
         'email': fields.String(required=True, description='The email address'),
         'password': fields.String(required=True, description='The user password '),
     })
+
+class ScriptDto:
+    api = Namespace('scripts', description='script download interface')
+    user = api.model('scripts', {
+        'path': fields.String(required=True, description='script path'),
+    })
