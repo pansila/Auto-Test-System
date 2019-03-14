@@ -20,7 +20,7 @@ from ruamel import yaml
 #from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
-TEMP_LIB = "temp"
+TEMP_LIB = "files"
 TERMINATE = 1
 
 g_config = {}
@@ -62,7 +62,7 @@ class daemon(object):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
 
-        tarball = '{}.tgz'.format(testcase)
+        tarball = '{}.tar.gz'.format(testcase)
         url = "{}:{}/scripts/{}".format(self.config["server_url"], self.config["server_port"], testcase)
         print('Downloading test file {} from {}'.format(tarball, url))
 
