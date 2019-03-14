@@ -7,6 +7,8 @@ from flask_script import Manager
 from app import blueprint
 from app.main import create_app, db
 from app.main.model import user, blacklist
+from mongoengine import connect
+from app.main.config import get_config
 
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
 app.register_blueprint(blueprint)
@@ -22,6 +24,7 @@ manager.add_command('db', MigrateCommand)
 
 @manager.command
 def run():
+    connect(get_config().MONGODB_DATABASE)
     app.run()
 
 

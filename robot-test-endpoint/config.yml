@@ -10,7 +10,7 @@ host_daemon: 127.0.0.1
 port_daemon: 8270
 port_test: 8271
 server_url: http://127.0.0.1
-server_port: 3000
+server_port: 5000
 test_dir: testlibs
 mongodb_uri: 127.0.0.1
 mongodb_port: 27017
@@ -27,7 +27,7 @@ iperf3: d:\bin\iperf3
 # Device under test
 DUT:
   - name: STA1
-    com: COM9
+    com: COM19
     baudrate: 115200
     # multiple download methods can be configured here, they will be tried one by one if previous one failed
     download:

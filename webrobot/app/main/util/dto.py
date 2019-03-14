@@ -21,5 +21,17 @@ class AuthDto:
 class ScriptDto:
     api = Namespace('scripts', description='script download interface')
     user = api.model('scripts', {
-        'path': fields.String(required=True, description='script path'),
+        'test': fields.String(required=True, description='test'),
+    })
+
+class TaskDto:
+    api = Namespace('task', description='task management operations')
+    user = api.model('task', {
+        'test': fields.String(required=True, description='test'),
+    })
+
+class TaskQueueDto:
+    api = Namespace('taskqueue', description='task management operations')
+    user = api.model('taskqueue', {
+        'test': fields.String(required=True, description='test'),
     })

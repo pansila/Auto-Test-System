@@ -114,3 +114,4 @@ testlibs/
 temp/
 .mypy_cache/
 /migrations
+results/

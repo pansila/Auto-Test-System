@@ -49,100 +49,76 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    pipenv sync
    ```
 
-4. Set up test runner environment
+4. Set up Web server and test runner environment
    ```bash
-   cd robot-test-runner
+   cd webrobot
    pipenv sync
    pipenv run patch
    ```
-   The last step  is to patch robot, details please see sections [Support the robot test cases in markdown](#support-the-robot-test-cases-in-markdown) and [Hacks to the robot](#hacks-to-the-robot).
+   The last step is to patch installed robot framework package, details please see sections [Support the robot test cases in markdown](#support-the-robot-test-cases-in-markdown) and [Hacks to the robot](#hacks-to-the-robot).
 
-5. Set up Web server environment
-
-   Web server is powered by `express.js`. Please install [node.js](https://nodejs.org/en/) first. After that, type following commands:
-   ```bash
-   cd webserver
-   npm install -g yarn
-   yarn global add yrm
-   yrm use cnpm
-   yarn
-   cp .env.example .env
-   ```
-   Notice:
-   1. All project dependencies will be installed in this step. We use `cnpm` to speed up the package downloading for Chinese user, skip it if you are not.
-   2. Please modify `.env` accordingly to suit your case. No changes are needed if you are running all of them in single PC.
-   3. Please add yarn binaries path to your `PATH` environment after you've installed yarn, usually it's a path like `C:\Users\<username>\AppData\Local\Yarn\bin\` on Windows.
-
-6. Set up the MongoDB database
+5. Set up the MongoDB database
 
    1. Install MongoDB from the [official website](https://www.mongodb.com/), please be noted to choose the community version instead of cloud based version.
 
    2. Build up the test suite database
       ```bash
-      cd robot-test-runner
+      cd webrobot
       pipenv run update-db ../example-test-scripts/robot_tester_scripts
       ```
-      It will search all robot scripts under `robot_tester_scripts` and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
-      It needs to be done only when a test suite is added or modified.
+      1. It needs to be done every time when a test suite is added or modified.
+      2. It will search all robot scripts under the specified directory and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
 
-7. The `example-test-scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify environment variables in the `.env` to point to the right places after setting up your test asset repository.
+6. The `example-test-scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify configuration variables in the `config.py` to point to the right places after setting up your test asset repository.
 
    By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
 
 ### Run the tests
 1. Run the web server
    ```bash
-   cd webserver
-   yarn dev
+   cd webrobot
+   pipenv run server
    ```
-   Web server will serve Web UI for the auto-test tasks, supply robot scripts with backing python scripts to download, visualize the test results, etc.
 
 2. Run the daemon process of a test endpoint
    ```bash
    cd robot-test-endpoint
    pipenv run daemon
    ```
-   It only needs to run only once, following test requests will be intercepted by daemon process to perform the actual tests.
 
-3. Run a test from the test runner folder (can from any PC)
-
-   ```bash
-   cd robot-test-runner
-   pipenv run start demo-test  # need database updated to work
-
-   # or
-   pipenv run robot --loglevel=DEBUG ../example-test-scripts/robot_tester_scripts/demo-test.robot
+3. Run a test by using the restful API
    ```
-
-   Now robot starts to connect to a test endpoint and run the test on that, reports will be generated when test finished under the current directory
-
-4. (Optional) Run a test by the web server API
-
-   To integrate with Web UI, we provide Web API to run the tests. Thereby you can run the tests from any PC that can access web server.
-   ```
-   http POST http://127.0.0.1/task/run/demo-test
+   http POST http://127.0.0.1/task/run/demo-test endpoint_list:=[\"127.0.0.1:8370\"] variables:={\"echo_message\":\"hello\"}
 
    # or
    curl -d "" http://127.0.0.1/task/run/demo-test
    ```
    Note: `http` is a handy http client tool provided by python, `"pip install httpie"`.
 
+4. (Optional) Run a test from the command line
+
+   ```bash
+   cd webrobot
+   pipenv run start demo-test  # need database updated to work
+
+   # or
+   pipenv run robot --loglevel=DEBUG ../example-test-scripts/robot_tester_scripts/demo-test.robot
+   ```
+
+   Test reports will be generated when test finished under the current directory
+
 Notice:
 1. For a test in action, please check out `wifi-basic-test.md`.
-2. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script (`.env`) and test endpoint's config file (`config.yml`). Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
+2. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script (`config.py`) and test endpoint's config file (`config.yml`). Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
 
 ### Configurations of the auto test system
-1. Test Runner
-
-   We provide a `config.robot` as a resource file per test suite, supplying configs such as desired test endpoint to run the test suite, etc.
-
-2. Test Endpoint
+1. Test Endpoint
 
    It's as known as the `Robot Remote Server`. There is a `config.yml` to describe any SUT dependent details, such as serial port interfaces, robot server port, test library serving port, etc.
 
-3. Web server
+2. Web server and test runner
 
-   All configurations are store in the `.env` file, such as mongodb URI, robot scripts root directory, etc.
+   All configurations are store in the `config.py` file, such as mongodb URI, robot scripts root directory, etc.
 
 ### Support the robot test cases in markdown
 For how to write a robot test case, please check out the official [Quick Start Tutorial](https://github.com/robotframework/QuickStartGuide/blob/master/QuickStart.rst) and [User Manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
@@ -157,4 +133,4 @@ robot demo-test.md
 ```
 
 ### Hacks to the robot
-1. robot will cache test libraries if they have been imported before, we disabled it in _import_library in venv/lib/site-packages/robot/running/importer.py to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint.
+1. robot will cache test libraries if they have been imported before, we disabled it in `_import_library` in `importer.py` to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint. Change details please see `patch/robot.diff`.

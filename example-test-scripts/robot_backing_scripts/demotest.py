@@ -14,9 +14,9 @@ class demotest(device_test):
         test_result.save()
         self.test_result_id = test_result.pk
 
-    def hello_world(self):
+    def hello_world(self, message):
         update = {
             'status': 'Pass',
         }
         TestResult.objects(pk=self.test_result_id).update(**update)
-        return 'hello world'
+        return message

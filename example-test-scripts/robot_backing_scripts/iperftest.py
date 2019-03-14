@@ -34,7 +34,7 @@ class iperftest(wifi_basic_test):
         self.iperf_queue = None
         test_result = IperfTestResult()
         test_result.test_case = 'Throughput Test'
-        test_result.test_suite = Test.objects(test_suite='wifi-iperf-test').get()
+        test_result.test_suite = Test.objects(test_suite='wifi-basic-test').get()
         test_result.test_site = '@'.join((self.config['name'], self.config['location']))
         test_result.tester = 'John'
         test_result.tester_email = 'John@123.com'

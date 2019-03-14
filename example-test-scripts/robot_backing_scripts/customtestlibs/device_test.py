@@ -55,7 +55,7 @@ class device_test(MongoDBClient):
                 if os.name != 'nt':
                     print('MDK is only supported on Windows')
                     continue
-                cmd = [d['path'], '-f', Path(d['workdir']) / d['project'], '-t', d['target']]
+                cmd = [d['path'], '-f', str(Path(d['workdir']) / d['project']), '-t', d['target']]
                 subprocess.run(cmd, check=True)
                 break
 
