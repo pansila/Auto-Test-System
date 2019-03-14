@@ -2,4 +2,4 @@
 
 By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
 
-Notice: please modify environment variables in the `.env` to point to the right places after setting up your test asset repository.
+Notice: please modify environment variables in the `config.py` to point to the right places after setting up your test asset repository.

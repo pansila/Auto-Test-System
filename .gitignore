@@ -115,3 +115,4 @@ temp/
 .mypy_cache/
 /migrations
 .gitreview
+results/

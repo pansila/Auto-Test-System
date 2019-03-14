@@ -31,7 +31,7 @@ class daemon(object):
         self.tests = {}
         self.config = config
         if os.path.exists(self.config["test_dir"]):
-            shutil.rmtree(self.config["test_dir"])
+            dir_util.remove_tree(self.config["test_dir"])
         os.makedirs(self.config["test_dir"])
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 

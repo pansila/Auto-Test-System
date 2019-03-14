@@ -24,8 +24,8 @@ def make_tarfile(output_filename, source_dir):
     return output_filename
 
 def pack_script(test_suite):
-    if not os.path.isfile(SCRIPT_ROOT / (test_suite + '.py')):
-        print("file {}.py does not exist".format(test_suite))
+    if not os.path.exists(SCRIPT_ROOT / (test_suite + '.py')):
+        print("file {}.py does not exist".format(SCRIPT_ROOT / (test_suite)))
         return None
 
     output = str(TARBALL_TEMP / test_suite)

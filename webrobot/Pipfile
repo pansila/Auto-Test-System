@@ -43,6 +43,9 @@ MarkupSafe = "==1.0"
 PyJWT = "==1.5.3"
 SQLAlchemy = "==1.2.0"
 Werkzeug = "==0.14.1"
+mongoengine = "==0.17.0"
+mistune = ">=0.8.4"
+robotframework = "==3.1.1"
 
 [requires]
 python_version = "3.6"
@@ -50,3 +53,7 @@ python_version = "3.6"
 [scripts]
 server = "python manage.py run"
 tests = "python manage.py test"
+
+task-runner = "python task-runner/runner.py"
+patch = "python task-runner/patch/apply.py"
+update-db = "python task-runner/util/dbhelper.py --action=UPDATE --scripts"

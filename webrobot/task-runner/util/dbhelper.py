@@ -5,17 +5,22 @@ import datetime
 from mongoengine import *
 import argparse
 
-from database import Test
+sys.path.insert(0, os.path.abspath('.'))
+from app.main.model.database import Test
+from app.main.config import get_config
 
 def filter_kw(item):
     item = item.strip()
     if item.startswith('${'):
         item = item[2:]
-    if item.endswith('}'):
-        item = item[0:-1]
+        if not item.endswith('}'):
+            print('{ } mismatch for ' + item)
+        else:
+            item = item[0:-1]
     return item
 
 def update_test(scripts_dir):
+    test_suites = []
     for root, _, files in os.walk(scripts_dir):
         for md_file in files:
             if not md_file.endswith('.md'):
@@ -27,7 +32,9 @@ def update_test(scripts_dir):
             test.author = 'John'
             test.test_cases = []
 
-            md_file = path.join(root, md_file)
+            test_suites.append(test_suite)
+
+            md_file = path.abspath(path.join(root, md_file))
             test.path = md_file
             with open(md_file) as f:
                 parser = mistune.BlockLexer()
@@ -44,7 +51,7 @@ def update_test(scripts_dir):
                         if table_header == 'variable' or table_header == 'variables':
                             for c in t["cells"]:
                                 if not c[0] == '---':
-                                    test.parameters[filter_kw(c[0])] = filter_kw(c[1])
+                                    test.variables[filter_kw(c[0])] = filter_kw(c[1])
             try:
                 old_test = Test.objects(test_suite=test_suite).get()
             except Test.DoesNotExist:
@@ -53,6 +60,7 @@ def update_test(scripts_dir):
                 print('Added new test suite {} to database'.format(test_suite))
                 continue
             except Test.MultipleObjectsReturned:
+                test_suites.pop()
                 print('Found duplicate test suite in the datebase: {}, abort'.format(test_suite))
                 return 1
 
@@ -62,6 +70,16 @@ def update_test(scripts_dir):
                 test.update_date = datetime.datetime.utcnow()
                 old_test.delete()
                 test.save()
+
+    # clean up stale test suites
+    for test_old in Test.objects({}):
+        for test_new in test_suites:
+            if test_new == test_old.test_suite:
+                break
+        else:
+            Test.objects(pk=test_old.id).modify(remove=True)
+            print('Remove stale test suite {}'.format(test_old.test_suite))
+
     return 0
 
 if __name__ == '__main__':
@@ -73,7 +91,7 @@ if __name__ == '__main__':
                     help='specify the root folder of robot scripts, required if action=UPDATE')
     args = parser.parse_args()
 
-    connect('autotest')
+    connect(get_config().MONGODB_DATABASE)
 
     if args.action == 'READ':
         print(Test.get_list())
