@@ -35,3 +35,9 @@ class TaskQueueDto:
     user = api.model('taskqueue', {
         'test': fields.String(required=True, description='test'),
     })
+
+class TestResultDto:
+    api = Namespace('testresult', description='serve test result files')
+    user = api.model('testresult', {
+        'test': fields.String(required=True, description='test'),
+    })

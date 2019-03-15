@@ -88,12 +88,23 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
 3. Run a test by using the restful API
    ```
-   http POST http://127.0.0.1/task/run/demo-test endpoint_list:=[\"127.0.0.1:8370\"] variables:={\"echo_message\":\"hello\"}
-
-   # or
-   curl -d "" http://127.0.0.1/task/run/demo-test
+   http POST http://127.0.0.1/task/demo-test endpoint_list:=[\"127.0.0.1:8370\"] variables:={\"echo_message\":\"hello\"}
    ```
-   Note: `http` is a handy http client tool provided by python, `"pip install httpie"`.
+   `http` is a handy http client tool provided by python, `"pip install httpie"`. Alternatively you can use `curl`. For more complicate test arguments, we can put them to a file and load it to `httpie` as follows.
+   ```
+   http POST http://127.0.0.1/task/demo-test < task.json
+   ```
+   While contents in `task.json` look like:
+   ```
+   {
+     "endpoint_list": ["127.0.0.1:8270"],
+     "variables": {
+       "echo_message": "hello"
+     },
+     "testcases": ["hello world"],
+     "tester": "abc@123.com"
+   }
+   ```
 
 4. (Optional) Run a test from the command line
 
