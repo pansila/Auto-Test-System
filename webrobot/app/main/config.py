@@ -18,7 +18,15 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_main.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
+    TEST_RESULT_ROOT = 'static/results'
     MONGODB_DATABASE = 'autotest'
+    SMTP_SERVER = 'smtp.abc.com'
+    SMTP_SERVER_PORT = 25
+    SMTP_USER = 'abc@123.com'
+    SMTP_PASSWORD = '12345678'
+    FROM_ADDR = 'Auto Test Admin <abc@123.com>'
+    TO_ADDR = 'Tester <ttt@123.com>'
+    SMTP_ALWAYS_CC = 'ccc@123.com'
 
 
 class TestingConfig(Config):
@@ -34,7 +42,15 @@ class ProductionConfig(Config):
     # uncomment the line below to use postgres
     # SQLALCHEMY_DATABASE_URI = postgres_local_base
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
+    TEST_RESULT_ROOT = 'static/results'
     MONGODB_DATABASE = 'autotest'
+    SMTP_SERVER = 'smtp.abc.com'
+    SMTP_SERVER_PORT = 25
+    SMTP_USER = 'abc@123.com'
+    SMTP_PASSWORD = '12345678'
+    FROM_ADDR = 'Auto Test Admin <abc@123.com>'
+    TO_ADDR = 'Tester <ttt@123.com>'
+    SMTP_ALWAYS_CC = 'ccc@123.com'
 
 
 config_by_name = dict(

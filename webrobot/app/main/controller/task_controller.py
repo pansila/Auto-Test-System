@@ -1,5 +1,6 @@
 from flask import request
 from flask_restplus import Resource
+from mongoengine import ValidationError
 
 from ..util.dto import TaskDto
 from ..model.database import Test, Task, TaskQueue, QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX
@@ -34,17 +35,26 @@ class TaskController(Resource):
             api.abort(404)
         else:
             task.endpoint_list = data['endpoint_list']
+
             task.priority = data.get('priority', QUEUE_PRIORITY_DEFAULT)
             if task.priority < QUEUE_PRIORITY_MIN or task.priority > QUEUE_PRIORITY_MAX:
                 api.abort(404)
+
             task.variables = data.get('variables', {})
             if not isinstance(task.variables, dict):
                 api.abort(404)
+
             task.testcases = data.get('testcases', [])
             if not isinstance(task.testcases, list):
                 api.abort(404)
+
+            task.tester = data.get('tester', '')
+            print(task.to_json())
         task.test = test.id
-        task.save()
+        try:
+            task.save()
+        except ValidationError:
+            api.abort(404)
 
         failed = []
         for endpoint in task.endpoint_list:

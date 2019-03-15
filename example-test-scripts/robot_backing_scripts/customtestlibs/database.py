@@ -47,6 +47,7 @@ class Task(Document):
     endpoint_run = StringField()
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     variables = DictField()
+    tester = EmailField()
 
     meta = {'collection': 'tasks'}
 

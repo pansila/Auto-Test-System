@@ -16,7 +16,9 @@ from app.main.model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                       QUEUE_PRIORITY_MIN, Task, TaskArchived, TaskQueue, Test)
 from app.main.config import get_config
 
-RESULT_DIR = Path('results')
+from util.notification import send_email
+
+RESULT_DIR = Path(get_config().TEST_RESULT_ROOT)
 
 def run_task(queue, args):
     exit_orig = sys.exit
@@ -77,6 +79,8 @@ def run_task_for_endpoint(endpoint):
                             task.status = 'failed'
                         task.save()
 
+                        send_email(task)
+
                         TaskArchived.objects({}).modify(push__tasks=task)
                 else:
                     print('task has been kicked off, just pop the task from the queue')
@@ -84,6 +88,9 @@ def run_task_for_endpoint(endpoint):
         time.sleep(1)
 
 def restart_interrupted_tasks():
+    """
+    Restart interrupted tasks that have been left over when task runner aborts
+    """
     pass
 
 def prepare_running_tasks():
