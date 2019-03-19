@@ -48,6 +48,7 @@ class Task(Document):
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     variables = DictField()
     tester = EmailField()
+    upload_dir = StringField()
 
     meta = {'collection': 'tasks'}
 

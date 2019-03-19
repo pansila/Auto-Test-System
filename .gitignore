@@ -116,3 +116,5 @@ temp/
 /migrations
 .gitreview
 results/
+webrobot/upload/
+robot-test-endpoint/resources/

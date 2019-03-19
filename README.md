@@ -2,11 +2,12 @@
 - [Features](#features)
 - [Test System Architecture](#test-system-architecture)
 - [Design of Robot Test Server](#design-of-robot-test-server)
-- [Set up the test environment](#set-up-the-test-environment)
-- [Run the tests](#run-the-tests)
-- [Configurations of the auto test system](#configurations-of-the-auto-test-system)
-- [Support the robot test cases in markdown](#support-the-robot-test-cases-in-markdown)
-- [Hacks to the robot](#hacks-to-the-robot)
+- [Set Up The Test Environment](#set-up-the-test-environment)
+- [Run Tests](#run-tests)
+- [Configurations of the Auto Test System](#configurations-of-the-auto-test-system)
+- [Support The Robot Test Cases In Markdown](#support-the-robot-test-cases-in-markdown)
+- [Hacks To The Robot](#hacks-to-the-robot)
+- [RESTful API of Web Server](#restful-api-of-web-server)
 
 ### Introduction
 This is a distributed test automation framework with a centralized management UI. We are not intent to invent a new test framework or language here, so we choose [Robot Framework](https://github.com/robotframework/robotframework) and [Robot Framework Remote Server](https://github.com/robotframework/PythonRemoteServer) as the test infrastructure, and then add the upper layer applications to make it easier to use.
@@ -34,7 +35,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 ### Design of Robot Test Server
 ![](https://i.loli.net/2019/01/25/5c4a64c32ae53.png)
 
-### Set up the test environment
+### Set Up The Test Environment
 
 1. Install python 3.6.x and pip.
 
@@ -73,7 +74,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
    By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
 
-### Run the tests
+### Run Tests
 1. Run the web server
    ```bash
    cd webrobot
@@ -105,6 +106,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
      "tester": "abc@123.com"
    }
    ```
+   For more complex operations like upload files, please refer to [RESTful API of Web Server](#restful-api-of-web-server).
 
 4. (Optional) Run a test from the command line
 
@@ -122,7 +124,7 @@ Notice:
 1. For a test in action, please check out `wifi-basic-test.md`.
 2. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script (`config.py`) and test endpoint's config file (`config.yml`). Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
 
-### Configurations of the auto test system
+### Configurations of the Auto Test System
 1. Test Endpoint
 
    It's as known as the `Robot Remote Server`. There is a `config.yml` to describe any SUT dependent details, such as serial port interfaces, robot server port, test library serving port, etc.
@@ -131,7 +133,7 @@ Notice:
 
    All configurations are store in the `config.py` file, such as mongodb URI, robot scripts root directory, etc.
 
-### Support the robot test cases in markdown
+### Support The Robot Test Cases In Markdown
 For how to write a robot test case, please check out the official [Quick Start Tutorial](https://github.com/robotframework/QuickStartGuide/blob/master/QuickStart.rst) and [User Manuel](http://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html).
 
 In an effort to support test cases written in a markdown file, we patched an unofficial work from [here](https://gist.github.com/Tset-Noitamotua/75d15a2beb9ab6f1931d3871172ebbbf) to make robot recognize markdown files and then read all code blocks marked as `robotframework`.
@@ -143,5 +145,74 @@ After that, we can execute a test suite in the markdown file as usual.
 robot demo-test.md
 ```
 
-### Hacks to the robot
+### Hacks To The Robot
 1. robot will cache test libraries if they have been imported before, we disabled it in `_import_library` in `importer.py` to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint. Change details please see `patch/robot.diff`.
+
+### RESTful API of Web Server
+1. Script
+   1. Method GET
+      Get a bundled script file that is necessary to run the test
+      ```
+      $ http GET http://127.0.0.1/script/demo-test
+      ```
+2. Task Resource
+   1. Method POST
+      Upload a file to the web server, will return a resource id associated with the uploading session.
+      ```
+      $ http POST http://127.0.0.1/taskresource name=firmware.bin resource@demo.bin
+      {
+          "data": "5c90ae3db38ff7139cb96f66",
+          "status": 0
+      }
+      ```
+   2. Method POST
+      Upload a file to the web server with a resource id, files uploaded will be put in the same place specified by the resource id.
+      ```
+      $ http POST http://127.0.0.1/taskresource/5c90ae3db38ff7139cb96f66 name=firmware1.bin resource@demo.bin
+      {
+          "data": "5c90ae3db38ff7139cb96f66",
+          "status": 0
+      }
+      ```
+   3. Method GET
+      Get a resource tarball associated to specified task id
+      ```
+      $ http GET http://127.0.0.1/taskresource/5c90aa12b38ff711584b3fab
+      ```
+3. Task
+   1. Method POST
+      Run a task with certain variables.
+      ```
+      $ http POST http://127.0.0.1/task/demo-test < task.json
+      $ cat task.json
+      {
+        "endpoint_list": ["127.0.0.1:8270"],
+        "variables": {
+          "echo_message": "hello"
+        },
+        "testcases": ["hello world"],
+        "tester": "abc@123.com",
+        "upload_dir": "5c90ae3db38ff7139cb96f66"
+      }
+      ```
+      `endpoint_list` is the list of endpoints that are allowed to run the task, only one endpoint will win the task, other endpoints will notice that and quit the contention.
+
+      `variables` will be passes to robot as `-v <arg>:<val>`. For more information  please see []().
+
+      `testcases` are the test cases in a test suite to run, they are passed to robot as `-t <testcase>`. For more information please see []().
+
+      `tester` will receive a notification email, so it should be a complete email address.
+
+      `upload_dir` should be filled with the resource id returned above if there is any resource needed for the test.
+4. Task Queue
+   1. Method POST
+      Create a task queue for an endpoint with the specified address.
+      ```
+      $ http POST http://127.0.0.1/taskqueue endpoint_address=127.0.0.1:8370
+      ```
+5. Task Result
+   1. Method GET
+      Get a list of tasks in the database, they may be in one of the following states: waiting, running, failed, successful.
+      ```
+      $ http GET http://127.0.0.1/testresult
+      ```

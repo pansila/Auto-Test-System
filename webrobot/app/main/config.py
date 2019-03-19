@@ -19,6 +19,7 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
+    UPLOAD_ROOT = 'upload'
     MONGODB_DATABASE = 'autotest'
     SMTP_SERVER = 'smtp.qiye.aliyun.com'
     SMTP_SERVER_PORT = 25
@@ -43,6 +44,7 @@ class ProductionConfig(Config):
     # SQLALCHEMY_DATABASE_URI = postgres_local_base
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
+    UPLOAD_ROOT = 'upload'
     MONGODB_DATABASE = 'autotest'
     SMTP_SERVER = 'smtp.qiye.aliyun.com'
     SMTP_SERVER_PORT = 25

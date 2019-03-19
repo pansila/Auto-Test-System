@@ -1,7 +1,4 @@
 import os
-import shutil
-import sys
-import tarfile
 from pathlib import Path
 
 from flask import Flask, send_from_directory
@@ -9,37 +6,12 @@ from flask_restplus import Resource
 
 from ..config import get_config
 from ..util.dto import ScriptDto
+from ..util.tarball import make_tarfile, pack_files
 
 api = ScriptDto.api
 
 TARBALL_TEMP = Path('temp')
 SCRIPT_ROOT = Path(get_config().SCRIPT_ROOT)
-
-def make_tarfile(output_filename, source_dir):
-    if output_filename[-2:] != 'gz':
-        output_filename = output_filename + '.tar.gz'
-    with tarfile.open(output_filename, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
-
-    return output_filename
-
-def pack_script(test_suite):
-    if not os.path.exists(SCRIPT_ROOT / (test_suite + '.py')):
-        print("file {}.py does not exist".format(SCRIPT_ROOT / (test_suite)))
-        return None
-
-    output = str(TARBALL_TEMP / test_suite)
-    try:
-        if (os.path.exists(TARBALL_TEMP)):
-            shutil.rmtree(TARBALL_TEMP)
-        tmp_dir = TARBALL_TEMP / 'files'
-        shutil.copytree(SCRIPT_ROOT, tmp_dir)
-        output = make_tarfile(output, tmp_dir)
-    except:
-        print('making tar ball went wrong: {}'.format(sys.exc_info()))
-        return None
-    else:
-        return output
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'bundled test suite script and dependencies')
@@ -49,7 +21,12 @@ class ScriptDownload(Resource):
         if test_suite.endswith('.py'):
             test_suite = test_suite[0:-3]
 
-        tarball = pack_script(test_suite)
+        script_file = SCRIPT_ROOT / (test_suite + '.py')
+        if not os.path.exists(script_file):
+            print("file {} does not exist".format(script_file))
+            return None
+
+        tarball = pack_files(test_suite, SCRIPT_ROOT, TARBALL_TEMP)
         if not tarball:
             api.abort(404)
         else:
