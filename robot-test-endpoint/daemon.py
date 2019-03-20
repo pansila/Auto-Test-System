@@ -75,6 +75,10 @@ class daemon(object):
         if r.status_code == 404:
             raise AssertionError('Downloading file {} failed'.format(tarball))
 
+        if r.status_code == 406:
+            print('No files need to download')
+            return
+
         output = Path(download_dir) / tarball
         with open(output, 'wb') as f:
             f.write(r.content)
@@ -93,8 +97,8 @@ class daemon(object):
 
         self._download_file('script/{}'.format(testcase), self.config["test_dir"])
         if task_id is not None or task_id != "":
-                ObjectId(task_id)  # validate the task id
-                self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
+            ObjectId(task_id)  # validate the task id
+            self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 
     def _verify(self, testcase):
         if not testcase.endswith(".py"):

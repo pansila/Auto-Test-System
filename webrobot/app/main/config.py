@@ -26,7 +26,6 @@ class DevelopmentConfig(Config):
     SMTP_USER = 'abc@123.com'
     SMTP_PASSWORD = '12345678'
     FROM_ADDR = 'Auto Test Admin <abc@123.com>'
-    TO_ADDR = 'Tester <ttt@123.com>'
     SMTP_ALWAYS_CC = 'ccc@123.com'
 
 
@@ -51,7 +50,6 @@ class ProductionConfig(Config):
     SMTP_USER = 'abc@123.com'
     SMTP_PASSWORD = '12345678'
     FROM_ADDR = 'Auto Test Admin <abc@123.com>'
-    TO_ADDR = 'Tester <ttt@123.com>'
     SMTP_ALWAYS_CC = 'ccc@123.com'
 
 

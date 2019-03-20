@@ -41,5 +41,6 @@ def send_email(task):
     except smtplib.SMTPAuthenticationError:
         print('SMTP authentication failed')
         return
-    server.sendmail(from_addr, [task.tester], msg.as_string())
+    ret = server.sendmail(from_addr, [task.tester], msg.as_string())
+    # print('send mail: ' + str(ret))
     server.quit()
