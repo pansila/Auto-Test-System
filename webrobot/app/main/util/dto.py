@@ -19,8 +19,8 @@ class AuthDto:
     })
 
 class ScriptDto:
-    api = Namespace('scripts', description='script download interface')
-    user = api.model('scripts', {
+    api = Namespace('script', description='script download interface')
+    user = api.model('script', {
         'test': fields.String(required=True, description='test'),
     })
 
@@ -39,5 +39,11 @@ class TaskQueueDto:
 class TestResultDto:
     api = Namespace('testresult', description='serve test result files')
     user = api.model('testresult', {
+        'test': fields.String(required=True, description='test'),
+    })
+
+class TaskResourceDto:
+    api = Namespace('taskresource', description='task resources')
+    user = api.model('taskresource', {
         'test': fields.String(required=True, description='test'),
     })

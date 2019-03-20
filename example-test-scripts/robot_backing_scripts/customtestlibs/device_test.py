@@ -75,8 +75,13 @@ class device_test(MongoDBClient):
                     a.kill(9)
                     raise AssertionError('J-Link running failed')
 
-                cmds = ['r', 'exec EnableEraseAllFlashBanks', 'erase', 'loadbin {} {:x} SWDSelect'.format(Path(d['datafile']).expanduser(), d['flash_addr']),
-                        'verifybin {} {:x}'.format(Path(d['datafile']).expanduser(), d['flash_addr']), 'r', 'g']
+                if os.path.isabs(d['datafile']):
+                    data_file = Path(d['datafile'])
+                else:
+                    data_file = Path(self.config["resource_dir"]) / d['datafile']
+
+                cmds = ['r', 'exec EnableEraseAllFlashBanks', 'erase', 'loadbin {} {:x} SWDSelect'.format(data_file, d['flash_addr']),
+                        'verifybin {} {:x}'.format(data_file, d['flash_addr']), 'r', 'g']
                 for c in cmds:
                     a.sendline(c)
                     idx = a.expect_list([re.compile('J-Link>'), re.compile('failed'), pexpect.TIMEOUT], timeout=120, searchwindowsize=10)

@@ -13,6 +13,8 @@ from distutils import dir_util
 from multiprocessing import Queue
 from pathlib import Path
 
+from bson.objectid import ObjectId
+
 import requests
 from robotremoteserver import RobotRemoteServer
 from ruamel import yaml
@@ -30,16 +32,22 @@ class daemon(object):
     def __init__(self, config):
         self.tests = {}
         self.config = config
+
         if os.path.exists(self.config["test_dir"]):
             dir_util.remove_tree(self.config["test_dir"])
         os.makedirs(self.config["test_dir"])
+
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
-    def start_test(self, testcase):
+        if os.path.exists(self.config["resource_dir"]):
+            dir_util.remove_tree(self.config["resource_dir"])
+        os.makedirs(self.config["resource_dir"])
+
+    def start_test(self, testcase, task_id=None):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
 
-        self._download(testcase)
+        self._download(testcase, task_id)
         self._verify(testcase)
 
         server_queue, server_process = start_remote_server(testcase,
@@ -58,29 +66,35 @@ class daemon(object):
         # else:
         #     print("test {} is not running".format(testcase))
 
-    def _download(self, testcase):
-        if testcase.endswith(".py"):
-            testcase = testcase[0:-3]
-
-        tarball = '{}.tar.gz'.format(testcase)
-        url = "{}:{}/scripts/{}".format(self.config["server_url"], self.config["server_port"], testcase)
-        print('Downloading test file {} from {}'.format(tarball, url))
+    def _download_file(self, endpoint, download_dir):
+        tarball = 'download.tar.gz'
+        url = "{}:{}/{}".format(self.config["server_url"], self.config["server_port"], endpoint)
+        print('Start to download file {} from {}'.format(tarball, url))
 
         r = requests.get(url)
         if r.status_code == 404:
-            raise AssertionError('Downloading test file {} failed'.format(tarball))
+            raise AssertionError('Downloading file {} failed'.format(tarball))
 
-        output = Path(self.config['test_dir']) / tarball
+        output = Path(download_dir) / tarball
         with open(output, 'wb') as f:
             f.write(r.content)
         print('Downloading test file {} succeeded'.format(tarball))
 
         with tarfile.open(output) as tarFile:
-            tarFile.extractall(self.config["test_dir"])
+            tarFile.extractall(download_dir)
 
-        temp_dir = Path(self.config['test_dir']) / TEMP_LIB
-        dir_util.copy_tree(temp_dir, self.config['test_dir'])
+        temp_dir = Path(download_dir) / TEMP_LIB
+        dir_util.copy_tree(temp_dir, download_dir)
         shutil.rmtree(temp_dir)
+
+    def _download(self, testcase, task_id):
+        if testcase.endswith(".py"):
+            testcase = testcase[0:-3]
+
+        self._download_file('script/{}'.format(testcase), self.config["test_dir"])
+        if task_id is not None or task_id != "":
+                ObjectId(task_id)  # validate the task id
+                self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 
     def _verify(self, testcase):
         if not testcase.endswith(".py"):

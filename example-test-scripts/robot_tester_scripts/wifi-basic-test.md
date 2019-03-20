@@ -36,6 +36,7 @@ Because it's a distributed test system compared to a local standalone test syste
 
 | Variables | Value |
 |---|---|
+| ${task_id} | will be automatically filled by task runner |
 | ${dut1} | STA1 |
 | ${address_daemon} | 127.0.0.1 |
 | ${port_daemon} | 8270 |
@@ -49,7 +50,7 @@ Because it's a distributed test system compared to a local standalone test syste
 |---|---|---|---|---|---|
 | Setup Remote |
 | | [Arguments] | ${daemon} | ${testcase} | ${testlib} |
-| | Run Keyword | ${daemon}.start test | ${testcase} |
+| | Run Keyword | ${daemon}.start test | ${testcase} | ${task_id} |
 | | Import Library | Remote | ${remote_test_address} | WITH NAME | ${testlib} |
 | | Run Keyword | ${testlib}.Connect Dut | ${dut1} |
 | Teardown Remote |

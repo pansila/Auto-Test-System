@@ -5,6 +5,8 @@ import os
 import signal
 import sys
 import time
+import shutil
+import tarfile
 from pathlib import Path
 
 import robot
@@ -19,6 +21,14 @@ from app.main.config import get_config
 from util.notification import send_email
 
 RESULT_DIR = Path(get_config().TEST_RESULT_ROOT)
+
+def make_tarfile(output_filename, source_dir):
+    if output_filename[-2:] != 'gz':
+        output_filename = output_filename + '.tar.gz'
+    with tarfile.open(output_filename, "w:gz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+    return output_filename
 
 def run_task(queue, args):
     exit_orig = sys.exit
@@ -47,8 +57,9 @@ def run_task_for_endpoint(endpoint):
                         print('a race condition happened')
                     else:
                         print('\nStart to run task {} ...'.format(task.id))
-                        # args = ['--loglevel', 'debug', '--outputdir', str(RESULT_DIR / str(task.id)), '--extension', 'md']
-                        args = ['--outputdir', str(RESULT_DIR / str(task.id)), '--extension', 'md']
+                        result_dir = RESULT_DIR / str(task.id)
+                        args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
+                        # args = ['--outputdir', str(result_dir), '--extension', 'md']
 
                         if hasattr(task, 'testcases'):
                             for t in task.testcases:
@@ -60,7 +71,7 @@ def run_task_for_endpoint(endpoint):
 
                         addr, port = endpoint.split(':')
                         args.extend(['-v', 'address_daemon:{}'.format(addr), '-v', 'port_daemon:{}'.format(port),
-                                    '-v', 'port_test:{}'.format(int(port)+1)])
+                                    '-v', 'port_test:{}'.format(int(port)+1), '-v', 'task_id:{}'.format(task.id)])
                         args.append(task.test.path)
 
                         task.status = 'running'
@@ -78,6 +89,11 @@ def run_task_for_endpoint(endpoint):
                         else:
                             task.status = 'failed'
                         task.save()
+
+                        resource_dir_tmp = Path(get_config().UPLOAD_ROOT) / task.upload_dir
+                        if resource_dir_tmp != '' and os.path.exists(resource_dir_tmp):
+                            make_tarfile(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
+                            shutil.rmtree(resource_dir_tmp)
 
                         send_email(task)
 

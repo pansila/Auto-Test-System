@@ -11,9 +11,11 @@ port_daemon: 8270
 port_test: 8271
 server_url: http://127.0.0.1
 server_port: 5000
-test_dir: testlibs
 mongodb_uri: 127.0.0.1
 mongodb_port: 27017
+
+test_dir: testlibs
+resource_dir: resources
 
 ## Windows dependent configurations
 
@@ -42,7 +44,7 @@ DUT:
         path: C:\Program Files (x86)\SEGGER\JLink_V640b\JLink.exe
         interface: SWD
         device: STM32F103C8
-        datafile: d:\demo.bin
+        datafile: firmware.bin  # relative to <resource_dir> if it's not an absolute path
         speed: 4000
         flash_addr: 0x08000000
 
