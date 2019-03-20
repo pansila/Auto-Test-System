@@ -18,6 +18,7 @@ UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
 @api.route('/<task_id>')
 @api.param('task_id', 'task id to process')
 class TaskResourceController(Resource):
+    @api.response(406, "Task resource doesn't exist.")
     def get(self, task_id):
         try:
             task = Task.objects(pk=task_id).get()
@@ -25,6 +26,9 @@ class TaskResourceController(Resource):
             api.abort(404)
         except Task.DoesNotExist:
             api.abort(404)
+        
+        if task.upload_dir == '':
+            api.abort(406)
 
         tarball = pack_files(task_id, UPLOAD_DIR / task.upload_dir, TARBALL_TEMP)
         if not tarball:

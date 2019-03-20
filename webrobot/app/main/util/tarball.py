@@ -10,7 +10,6 @@ def make_tarfile(output_filename, source_dir):
     with tarfile.open(output_filename, "w:gz") as tar:
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
-    print(output_filename)
     return output_filename
 
 def pack_files(filename, src, dst):
@@ -28,7 +27,6 @@ def pack_files(filename, src, dst):
         tmp_dir = dst / 'files'
         shutil.copytree(src, tmp_dir)
         output = make_tarfile(output, tmp_dir)
-        print(output)
     except:
         print('making tar ball went wrong: {}'.format(sys.exc_info()))
         return None

@@ -26,7 +26,6 @@ class DevelopmentConfig(Config):
     SMTP_USER = 'ftsw@freethink.cn'
     SMTP_PASSWORD = 'freethink_123'
     FROM_ADDR = 'Auto Test Admin <ftsw@freethink.cn>'
-    TO_ADDR = 'Tester <lin.zhou@freethink.cn>'
     SMTP_ALWAYS_CC = 'lin.zhou@freethink.cn'
 
 
@@ -51,7 +50,6 @@ class ProductionConfig(Config):
     SMTP_USER = 'ftsw@freethink.cn'
     SMTP_PASSWORD = 'freethink_123'
     FROM_ADDR = 'Auto Test Admin <ftsw@freethink.cn>'
-    TO_ADDR = 'Tester <lin.zhou@freethink.cn>'
     SMTP_ALWAYS_CC = 'lin.zhou@freethink.cn'
 
 
