@@ -92,7 +92,7 @@ if __name__ == '__main__':
                     help='specify the root folder of robot scripts, required if action=UPDATE')
     args = parser.parse_args()
 
-    connect(get_config().MONGODB_DATABASE)
+    connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
 
     if args.action == 'READ':
         print(Test.get_list())
