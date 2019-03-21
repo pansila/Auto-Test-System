@@ -13,7 +13,7 @@ import robot
 from bson import DBRef
 from mongoengine import connect
 
-sys.path.insert(0, os.path.abspath('.'))
+sys.path.append('.')
 from app.main.model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                       QUEUE_PRIORITY_MIN, Task, TaskArchived, TaskQueue, Test)
 from app.main.config import get_config
@@ -144,6 +144,11 @@ def listen_task():
 
 if __name__ == '__main__':
     connect(get_config().MONGODB_DATABASE)
+
+    try:
+        os.makedirs(RESULT_DIR)
+    except FileExistsError:
+        pass
 
     if len(sys.argv) < 2:
         listen_task()

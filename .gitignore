@@ -115,6 +115,6 @@ temp/
 .mypy_cache/
 /migrations
 .gitreview
-results/
+webrobot/static/results/
 webrobot/upload/
 robot-test-endpoint/resources/

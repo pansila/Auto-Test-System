@@ -5,7 +5,7 @@ import datetime
 from mongoengine import *
 import argparse
 
-sys.path.insert(0, os.path.abspath('.'))
+sys.path.append('.')
 from app.main.model.database import Test
 from app.main.config import get_config
 
@@ -50,7 +50,8 @@ def update_test(scripts_dir):
                                     break
                         if table_header == 'variable' or table_header == 'variables':
                             for c in t["cells"]:
-                                if not c[0] == '---':
+                                if not c[0] == '---' and not c[0].startswith('#') and \
+                                        not c[0] == '...' and not c[0].startswith('@'):
                                     test.variables[filter_kw(c[0])] = filter_kw(c[1])
             try:
                 old_test = Test.objects(test_suite=test_suite).get()

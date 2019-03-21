@@ -4,7 +4,7 @@ from email.mime.text import MIMEText
 from email.utils import parseaddr, formataddr
 import smtplib
 
-# sys.path.insert(0, os.path.abspath('.'))
+# sys.path.append('.')
 from app.main.config import get_config
 
 BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:5000/testresult/{}/log.html'
