@@ -33,15 +33,13 @@ class daemon(object):
         self.tests = {}
         self.config = config
 
-        if os.path.exists(self.config["test_dir"]):
-            dir_util.remove_tree(self.config["test_dir"])
-        os.makedirs(self.config["test_dir"])
+        try:
+            os.makedirs(self.config["test_dir"])
+            os.makedirs(self.config["resource_dir"])
+        except FileExistsError:
+            pass
 
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
-
-        if os.path.exists(self.config["resource_dir"]):
-            dir_util.remove_tree(self.config["resource_dir"])
-        os.makedirs(self.config["resource_dir"])
 
     def start_test(self, testcase, task_id=None):
         if testcase.endswith(".py"):
@@ -96,7 +94,7 @@ class daemon(object):
             testcase = testcase[0:-3]
 
         self._download_file('script/{}'.format(testcase), self.config["test_dir"])
-        if task_id is not None or task_id != "":
+        if task_id is not None and task_id != "":
             ObjectId(task_id)  # validate the task id
             self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 
