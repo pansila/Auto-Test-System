@@ -90,10 +90,11 @@ def run_task_for_endpoint(endpoint):
                             task.status = 'failed'
                         task.save()
 
-                        resource_dir_tmp = Path(get_config().UPLOAD_ROOT) / task.upload_dir
-                        if resource_dir_tmp != '' and os.path.exists(resource_dir_tmp):
-                            make_tarfile(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
-                            shutil.rmtree(resource_dir_tmp)
+                        if task.upload_dir:
+                            resource_dir_tmp = Path(get_config().UPLOAD_ROOT) / task.upload_dir
+                            if resource_dir_tmp != '' and os.path.exists(resource_dir_tmp):
+                                make_tarfile(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
+                                shutil.rmtree(resource_dir_tmp)
 
                         send_email(task)
 

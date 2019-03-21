@@ -89,7 +89,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
 3. Run a test by using the restful API
    ```
-   http POST http://127.0.0.1/task/demo-test endpoint_list:=[\"127.0.0.1:8370\"] variables:={\"echo_message\":\"hello\"}
+   http POST http://127.0.0.1/task/demo-test endpoint_list:=[\"127.0.0.1:8270\"] variables:={\"echo_message\":\"bye\"}
    ```
    `http` is a handy http client tool provided by python, `"pip install httpie"`. Alternatively you can use `curl`. For more complicate test arguments, we can put them to a file and load it to `httpie` as follows.
    ```
@@ -100,13 +100,19 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    {
      "endpoint_list": ["127.0.0.1:8270"],
      "variables": {
-       "echo_message": "hello"
+       "echo_message": "bye"
      },
      "testcases": ["hello world"],
      "tester": "abc@123.com"
    }
    ```
    For more complex operations like upload files, please refer to [RESTful API of Web Server](#restful-api-of-web-server).
+
+
+   There is a help script to relieve the pain of debugging RESTful APIs, please note that it's not for production environment.
+   ```
+   python webrobot/task-runner/util/run_test.py http://127.0.0.1:5000 demo-test 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
+   ```
 
 4. (Optional) Run a test from the command line
 
