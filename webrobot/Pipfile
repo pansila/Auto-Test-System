@@ -11,46 +11,46 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-alembic = {version = "==0.9.6", index="piwheels"}
-aniso8601 = {version = "==1.3.0", index="piwheels"}
-bcrypt = {version = "==3.1.4", index="piwheels"}
-cffi = {version = "==1.11.2", index="piwheels"}
-click = {version = "==6.7", index="piwheels"}
-coverage = {version = "==4.4.2", index="piwheels"}
-enum-compat = {version = "==0.0.2", index="piwheels"}
-eventlet = {version = "==0.21.0", index="piwheels"}
-flask-cors = {version = "==3.0.3", index="piwheels"}
-flask-restplus = {version = "==0.10.1", index="piwheels"}
-gem = {version = "==0.1.12", index="piwheels"}
-greenlet = {version = "==0.4.12", index="piwheels"}
-gunicorn = {version = "==19.7.1", index="piwheels"}
-itsdangerous = {version = "==0.24", index="piwheels"}
-jsonschema = {version = "==2.6.0", index="piwheels"}
-psycopg2 = {version = "==2.7.3.2", index="piwheels"}
-pycparser = {version = "==2.18", index="piwheels"}
-python-dateutil = {version = "==2.6.1", index="piwheels"}
-python-editor = {version = "==1.0.3", index="piwheels"}
-python-engineio = {version = "==2.0.2", index="piwheels"}
-python-socketio = {version = "==1.8.4", index="piwheels"}
-pytz = {version = "==2017.3", index="piwheels"}
-selenium = {version = "==3.8.1", index="piwheels"}
-six = {version = "==1.11.0", index="piwheels"}
-Flask = {version = ">=0.12.3", index="piwheels"}
-Flask-Bcrypt = {version = "==0.7.1", index="piwheels"}
-Flask-Migrate = {version = "==2.1.1", index="piwheels"}
-Flask-Script = {version = "==2.0.6", index="piwheels"}
-Flask-SocketIO = {version = "==2.9.3", index="piwheels"}
-Flask-SQLAlchemy = {version = "==2.3.2", index="piwheels"}
-Flask-Testing = {version = "==0.7.1", index="piwheels"}
-Jinja2 = {version = "==2.10", index="piwheels"}
-Mako = {version = "==1.0.7", index="piwheels"}
-MarkupSafe = {version = "==1.0", index="piwheels"}
-PyJWT = {version = "==1.5.3", index="piwheels"}
-SQLAlchemy = {version = "==1.2.0", index="piwheels"}
-Werkzeug = {version = "==0.14.1", index="piwheels"}
-mongoengine = {version = "==0.17.0", index="piwheels"}
-mistune = {version = ">=0.8.4", index="piwheels"}
-robotframework = {version = "==3.1.1", index="piwheels"}
+alembic = {version = "==0.9.6",index = "piwheels"}
+aniso8601 = {version = "==1.3.0",index = "piwheels"}
+bcrypt = {version = "==3.1.4",index = "piwheels"}
+cffi = {version = "==1.11.2",index = "piwheels"}
+click = {version = "==6.7",index = "piwheels"}
+coverage = {version = "==4.4.2",index = "piwheels"}
+enum-compat = {version = "==0.0.2",index = "piwheels"}
+eventlet = {version = "==0.21.0",index = "piwheels"}
+flask-cors = {version = "==3.0.3",index = "piwheels"}
+flask-restplus = {version = "==0.10.1",index = "piwheels"}
+gem = {version = "==0.1.12",index = "piwheels"}
+greenlet = {version = "==0.4.12",index = "piwheels"}
+gunicorn = {version = "==19.7.1",index = "piwheels"}
+itsdangerous = {version = "==0.24",index = "piwheels"}
+jsonschema = {version = "==2.6.0",index = "piwheels"}
+psycopg2 = {version = "==2.7.3.2",index = "piwheels"}
+pycparser = {version = "==2.18",index = "piwheels"}
+python-dateutil = {version = "==2.6.1",index = "piwheels"}
+python-editor = {version = "==1.0.3",index = "piwheels"}
+python-engineio = {version = "==2.0.2",index = "piwheels"}
+python-socketio = {version = "==1.8.4",index = "piwheels"}
+pytz = {version = "==2017.3",index = "piwheels"}
+six = {version = "==1.11.0",index = "piwheels"}
+Flask = {version = ">=0.12.3",index = "piwheels"}
+Flask-Bcrypt = {version = "==0.7.1",index = "piwheels"}
+Flask-Migrate = {version = "==2.1.1",index = "piwheels"}
+Flask-Script = {version = "==2.0.6",index = "piwheels"}
+Flask-SocketIO = {version = "==2.9.3",index = "piwheels"}
+Flask-SQLAlchemy = {version = "==2.3.2",index = "piwheels"}
+Flask-Testing = {version = "==0.7.1",index = "piwheels"}
+Jinja2 = {version = "==2.10",index = "piwheels"}
+Mako = {version = "==1.0.7",index = "piwheels"}
+MarkupSafe = {version = "==1.0",index = "piwheels"}
+PyJWT = {version = "==1.5.3",index = "piwheels"}
+SQLAlchemy = {version = "==1.2.0",index = "piwheels"}
+Werkzeug = {version = "==0.14.1",index = "piwheels"}
+mongoengine = {version = "==0.17.0",index = "piwheels"}
+mistune = {version = ">=0.8.4",index = "piwheels"}
+robotframework = {version = "==3.1.1",index = "piwheels"}
+requests = {version = "==2.21.0",index = "piwheels"}
 
 [requires]
 python_version = "3.6"
@@ -58,7 +58,7 @@ python_version = "3.6"
 [scripts]
 server = "python manage.py run"
 tests = "python manage.py test"
-
 task-runner = "python task-runner/runner.py"
 patch = "python task-runner/patch/apply.py"
 update-db = "python task-runner/util/dbhelper.py --action=UPDATE --scripts"
+start = "python task-runner/util/run_test.py"

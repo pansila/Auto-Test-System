@@ -111,20 +111,16 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
    There is a help script to relieve the pain of debugging RESTful APIs, please note that it's not for production environment.
    ```
-   python webrobot/task-runner/util/run_test.py http://127.0.0.1:5000 demo-test 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
+   cd webrobot
+   pipenv run start http://127.0.0.1:5000 demo-test 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
    ```
 
 4. (Optional) Run a test from the command line
 
    ```bash
    cd webrobot
-   pipenv run start demo-test  # need database updated to work
-
-   # or
    pipenv run robot --loglevel=DEBUG ../example-test-scripts/robot_tester_scripts/demo-test.robot
    ```
-
-   Test reports will be generated when test finished under the current directory
 
 Notice:
 1. For a test in action, please check out `wifi-basic-test.md`.
