@@ -143,7 +143,7 @@ def listen_task():
         time.sleep(1)
 
 if __name__ == '__main__':
-    connect(get_config().MONGODB_DATABASE)
+    connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
 
     try:
         os.makedirs(RESULT_DIR)

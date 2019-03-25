@@ -20,6 +20,8 @@ class DevelopmentConfig(Config):
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
     UPLOAD_ROOT = 'upload'
+    MONGODB_URL = '127.0.0.1'
+    MONGODB_PORT = 27017
     MONGODB_DATABASE = 'autotest'
     SMTP_SERVER = 'smtp.abc.com'
     SMTP_SERVER_PORT = 25
@@ -44,6 +46,8 @@ class ProductionConfig(Config):
     SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
     UPLOAD_ROOT = 'upload'
+    MONGODB_URL = '127.0.0.1'
+    MONGODB_PORT = 27017
     MONGODB_DATABASE = 'autotest'
     SMTP_SERVER = 'smtp.abc.com'
     SMTP_SERVER_PORT = 25

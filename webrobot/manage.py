@@ -24,7 +24,7 @@ manager.add_command('db', MigrateCommand)
 
 @manager.command
 def run():
-    connect(get_config().MONGODB_DATABASE)
+    connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
     app.run(host='0.0.0.0')
 
 
