@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "4d1c5a78236381442f69ac7ac937c14996c5b5875738bf5f76c5395cd594a08b"
+            "sha256": "92d298dc6d8f0cb835f02d1f518113fc33c012ea120ed3d1a115d7868e503312"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -26,6 +26,7 @@
                 "sha256:339dc09518b07e2fa7eda5450740925974815557727d6bd35d319c1524a04a4c",
                 "sha256:6d58c986d22b038c8c0df30d639f23a3e6d172a05c3583e766f4c0b785c0986a"
             ],
+            "index": "piwheels",
             "version": "==2018.10.15"
         },
         "chardet": {
@@ -33,14 +34,31 @@
                 "sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae",
                 "sha256:fc323ffcaeaed0e0a02bf4d117757b98aed530d9ed4531e3e15460124c106691"
             ],
+            "index": "piwheels",
             "version": "==3.0.4"
+        },
+        "docutils": {
+            "hashes": [
+                "sha256:02aec4bd92ab067f6ff27a38a38a41173bf01bed8f89157768c1573f53e474a6",
+                "sha256:51e64ef2ebfb29cae1faa133b3710143496eca21c530f3f71424d77687764274",
+                "sha256:7a4bd47eaf6596e1295ecb11361139febe29b084a87bf005bf899f9a42edc3c6"
+            ],
+            "version": "==0.14"
         },
         "idna": {
             "hashes": [
                 "sha256:156a6814fb5ac1fc6850fb002e0852d56c0c8d2531923a51032d1b70760e186e",
                 "sha256:684a38a6f903c1d71d6d5fac066b58d7768af4de2b832e426ec79c30daa94a16"
             ],
+            "index": "piwheels",
             "version": "==2.7"
+        },
+        "lockfile": {
+            "hashes": [
+                "sha256:6aed02de03cba24efabcd600b30540140634fc06cfa603822d508d5361e9f799",
+                "sha256:6c3cb24f344923d30b2785d5ad75182c8ea7ac1b6171b08657258ec7429d50fa"
+            ],
+            "version": "==0.12.2"
         },
         "mongoengine": {
             "hashes": [
@@ -48,6 +66,7 @@
                 "sha256:988836aaaf3e82db4983d77e657da02423ca31bcd2c6a2596e5915b0c72ee1c9",
                 "sha256:ca4993f39df07dabbf7503d56c4eba67dbdac5d2ec83ccffe20d38d5d02c2d3b"
             ],
+            "index": "piwheels",
             "version": "==0.16.3"
         },
         "netifaces": {
@@ -74,6 +93,7 @@
                 "sha256:e76d38d9cff51ecf9fd5b8d0adf63f7b8875e1ac8548ccb52264939e308b771e",
                 "sha256:f6cd3cb7b8db08bc3e3a6b101d9665060384d02f428e83be0c9bb197976fa015"
             ],
+            "index": "piwheels",
             "version": "==0.10.7"
         },
         "pexpect": {
@@ -81,6 +101,7 @@
                 "sha256:2a8e88259839571d1251d278476f3eec5db26deb73a70be5ed5dc5435e418aba",
                 "sha256:3fbd41d4caf27fa4a377bfd16fef87271099463e6fa73e92a52f92dfee5d425b"
             ],
+            "index": "piwheels",
             "version": "==4.6.0"
         },
         "ptyprocess": {
@@ -129,6 +150,7 @@
                 "sha256:d7929c513732dff093481f4a0954ed5ff16816365842136b17caa0b4992e49d3",
                 "sha256:dec753c78c8a739dc4fbf03488d199850a7a6eca5dbaa39de6d376ac358bf51c"
             ],
+            "index": "piwheels",
             "version": "==3.7.2"
         },
         "pyserial": {
@@ -136,20 +158,31 @@
                 "sha256:6e2d401fdee0eab996cf734e67773a0143b932772ca8b42451440cfed942c627",
                 "sha256:e0770fadba80c31013896c7e6ef703f72e7834965954a78e71a3049488d4d7d8"
             ],
+            "index": "piwheels",
             "version": "==3.4"
+        },
+        "python-daemon": {
+            "hashes": [
+                "sha256:1d9a541f74822ac87045163ebd5473f9a7b22ab4031ed28293aba81fdaf6c156",
+                "sha256:affeca9e5adfce2666a63890af9d6aff79f670f7511899edaddca7f96593cc25"
+            ],
+            "index": "piwheels",
+            "version": "==2.2.3"
         },
         "requests": {
             "hashes": [
-                "sha256:65b3a120e4329e33c9889db89c80976c5272f56ea92d3e74da8a463992e3ff54",
-                "sha256:ea881206e59f41dbd0bd445437d792e43906703fff75ca8ff43ccdb11f33f263"
+                "sha256:502a824f31acdacb3a35b6690b5fbf0bc41d63a24a45c4004352b0242707598e",
+                "sha256:7bf2a778576d825600030a110f3c0e3e8edc51dfaafe1c146e39a2027784957b"
             ],
-            "version": "==2.20.1"
+            "index": "piwheels",
+            "version": "==2.21.0"
         },
         "robotremoteserver": {
             "hashes": [
                 "sha256:1d78ebc63738838a638042407c1da472811853892d64498fd89e061f7f15addd",
                 "sha256:b95e75d5de49f4ba5eefb985469ee6dd3604042faed7198d2a77be35e56aea9e"
             ],
+            "index": "piwheels",
             "version": "==1.1"
         },
         "ruamel-yaml": {
@@ -176,20 +209,15 @@
                 "sha256:fc6a2b2f4453944ab8bbe4d6d2eba0c864c098baa8487b08e4340a93a1f811c7",
                 "sha256:fffc4dd4097451c0ae1c6cb89bbff1a8248fda6366adb08d1c7bbc4ea2e6a637"
             ],
+            "index": "piwheels",
             "version": "==0.15.89"
-        },
-        "selenium": {
-            "hashes": [
-                "sha256:2d7131d7bc5a5b99a2d9b04aaf2612c411b03b8ca1b1ee8d3de5845a9be2cb3c",
-                "sha256:deaf32b60ad91a4611b98d8002757f29e6f2c2d5fcaf202e1c9ad06d6772300d"
-            ],
-            "version": "==3.141.0"
         },
         "six": {
             "hashes": [
                 "sha256:3350809f0555b11f552448330d0b52d5f24c91a322ea4a15ef22629740f3761c",
                 "sha256:d16a0141ec1a18405cd4ce8b4613101da75da0e9a7aec5bdd4fa804d0e0eba73"
             ],
+            "index": "piwheels",
             "version": "==1.12.0"
         },
         "urllib3": {

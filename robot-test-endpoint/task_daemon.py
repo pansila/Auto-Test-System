@@ -16,10 +16,11 @@ from pathlib import Path
 from bson.objectid import ObjectId
 
 import requests
+# import daemon as Daemon
+# from daemoniker import Daemonizer, SignalHandler1
 from robotremoteserver import RobotRemoteServer
 from ruamel import yaml
 
-#from robotlibcore import HybridCore
 
 DOWNLOAD_LIB = "testlibs"
 TEMP_LIB = "files"
@@ -27,7 +28,7 @@ TERMINATE = 1
 
 g_config = {}
 
-class daemon(object):
+class task_daemon(object):
 
     def __init__(self, config):
         self.tests = {}
@@ -53,7 +54,6 @@ class daemon(object):
                                     host=self.config["host_daemon"],
                                     port=self.config["port_test"])
         self.tests[testcase] = {"queue": server_queue, "process": server_process}
-        return
 
     def stop_test(self, testcase):
         if testcase in self.tests:
@@ -181,7 +181,7 @@ def start_daemon(config_file = "config.yml", host=None, port=None):
         if g_config['server_url'][-1] == '/':
             g_config['server_url'] = g_config['server_url'][0:-1]
 
-    server_queue, server_process = start_remote_server('daemon', g_config, host=g_config["host_daemon"], port=g_config["port_daemon"])
+    server_queue, server_process = start_remote_server('task_daemon', g_config, host=g_config["host_daemon"], port=g_config["port_daemon"])
     while server_process.is_alive():
         try:
             server_process.join(1)
@@ -205,3 +205,28 @@ if __name__ == '__main__':
     except OSError as err:
         print(err)
         print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+
+    sys.exit(0)
+
+    if os.name == 'nt':
+        with Daemonizer() as (is_setup, daemonizer):
+            if is_setup:
+                pass
+            is_parent, host, port = daemonizer('daemon.pid', host, port, stdout_goto='daemon.log', stderr_goto='daemon.log')
+            if not is_parent:
+                sighandler = SignalHandler1(pid_file)
+                sighandler.start()
+        try:
+            start_daemon(host=host, port=port)
+        except OSError as err:
+            print(err)
+            print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+    elif os.name == 'posix':
+        with Daemon.DaemonContext():
+            try:
+                start_daemon(host=host, port=port)
+            except OSError as err:
+                print(err)
+                print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+    else:
+        raise AssertionError(os.name + ' is not supported')
