@@ -91,6 +91,7 @@ We only check whether a traffic is running successfully and throughput is not ze
 | | ${tp} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
 
 ### iperf TCP RX test
+Reboot the device after the test due to a bug.
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|---|
@@ -100,11 +101,9 @@ We only check whether a traffic is running successfully and throughput is not ze
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
+| | iperftestlib.reboot | ${dut1} |
 
 ### iperf UDP TX test
-
-Reboot the device after previous iperf3 RX test due to a bug.
-
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
 | Teardown Iperf TX Server |
@@ -117,7 +116,6 @@ Reboot the device after previous iperf3 RX test due to a bug.
 | iperf UDP TX test |
 | | [Setup] | Setup Remote | EndpointDaemon1 | iperftest | iperftestlib |
 | | [Teardown] | Teardown Iperf TX Server | EndpointDaemon1 | iperftest | iperftestlib | ${dut1} |
-| | iperftestlib.reboot | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |

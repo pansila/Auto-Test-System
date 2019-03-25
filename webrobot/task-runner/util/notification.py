@@ -34,12 +34,17 @@ def send_email(task):
     except TimeoutError:
         print('SMTP server connecting failed')
         return
+    except ConnectionRefusedError:
+        print('SMTP server connecting refused')
+        return
+
     # server.starttls()
     # server.set_debuglevel(1)
     try:
         server.login(smtp_user, password)
     except smtplib.SMTPAuthenticationError:
         print('SMTP authentication failed')
+        server.quit()
         return
     ret = server.sendmail(from_addr, [task.tester], msg.as_string())
     # print('send mail: ' + str(ret))
