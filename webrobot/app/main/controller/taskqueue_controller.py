@@ -16,7 +16,6 @@ class TaskQueueController(Resource):
     @api.doc('create a task queue for the endpoint address')
     def post(self):
         data = request.json
-        # print(data)
         endpoint_address = data['endpoint_address']
         try:
             TaskQueue.objects(endpoint_address=endpoint_address).get()

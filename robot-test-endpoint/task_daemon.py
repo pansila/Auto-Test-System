@@ -13,14 +13,13 @@ from distutils import dir_util
 from multiprocessing import Queue
 from pathlib import Path
 
+import requests
 from bson.objectid import ObjectId
 
-import requests
 # import daemon as Daemon
 # from daemoniker import Daemonizer, SignalHandler1
 from robotremoteserver import RobotRemoteServer
 from ruamel import yaml
-
 
 DOWNLOAD_LIB = "testlibs"
 TEMP_LIB = "files"
@@ -30,36 +29,43 @@ g_config = {}
 
 class task_daemon(object):
 
-    def __init__(self, config):
+    def __init__(self, config, task_id):
         self.tests = {}
         self.config = config
 
         try:
             os.makedirs(self.config["test_dir"])
+        except FileExistsError:
+            pass
+        try:
             os.makedirs(self.config["resource_dir"])
         except FileExistsError:
             pass
 
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
-    def start_test(self, testcase, task_id=None):
-        if testcase.endswith(".py"):
-            testcase = testcase[0:-3]
+    def start_test(self, test_case, backing_file, task_id=None):
+        if backing_file.endswith(".py"):
+            backing_file = backing_file[0:-3]
 
-        self._download(testcase, task_id)
-        self._verify(testcase)
+        self.task_id = task_id
+        self._download(backing_file, self.task_id)
+        self._verify(backing_file)
 
-        server_queue, server_process = start_remote_server(testcase,
+        server_queue, server_process = start_remote_server(backing_file,
                                     self.config,
                                     host=self.config["host_daemon"],
-                                    port=self.config["port_test"])
-        self.tests[testcase] = {"queue": server_queue, "process": server_process}
+                                    port=self.config["port_test"],
+                                    task_id=self.task_id)
+        self.tests[test_case] = {"queue": server_queue, "process": server_process}
+        self._create_test_result(test_case)
 
-    def stop_test(self, testcase):
-        if testcase in self.tests:
-            self.tests[testcase]["queue"].put(TERMINATE)
-            del self.tests[testcase]["queue"]
-            del self.tests[testcase]
+    def stop_test(self, test_case, status):
+        self._update_test_result(status)
+        if test_case in self.tests:
+            self.tests[test_case]["queue"].put(TERMINATE)
+            del self.tests[test_case]["queue"]
+            del self.tests[test_case]
             time.sleep(0.5)
         # else:
         #     print("test {} is not running".format(testcase))
@@ -94,7 +100,7 @@ class task_daemon(object):
             testcase = testcase[0:-3]
 
         self._download_file('script/{}'.format(testcase), self.config["test_dir"])
-        if task_id is not None and task_id != "":
+        if task_id and task_id != "":
             ObjectId(task_id)  # validate the task id
             self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 
@@ -120,14 +126,31 @@ class task_daemon(object):
     def upload_log(self):
         pass
 
-# Don't run RobotRemoteServer directly as there is a thread.lock pickling issue
-def start_test_library(queue, testcase, config, host, port):
-    # importlib.invalidate_caches()
-    testlib = importlib.import_module(testcase)
-    # importlib.reload(testlib)
-    test = getattr(testlib, testcase)
+    def _update_test_result(self, status):
+        data = {'status': status}
+        ret = requests.post('{}:{}/testresult/{}'.format(self.config['server_url'],
+                                                         self.config['server_port'],
+                                                         self.task_id),
+                            json=data)
+        if ret.status_code != 200:
+            print('Updating the task result on the server failed')
 
-    server = RobotRemoteServer(test(config), host=host, serve=False, port=port)
+    def _create_test_result(self, test_case):
+        data = {'task_id': self.task_id, 'test_case': test_case}
+        ret = requests.post('{}:{}/testresult/'.format(self.config['server_url'],
+                                                       self.config['server_port']),
+                            json=data)
+        if ret.status_code != 200:
+            print('Creating the task result on the server failed')
+
+# Don't run RobotRemoteServer directly as there is a thread.lock pickling issue
+def start_test_library(queue, backing_file, task_id, config, host, port):
+    # importlib.invalidate_caches()
+    testlib = importlib.import_module(backing_file)
+    # importlib.reload(testlib)
+    test = getattr(testlib, backing_file)
+
+    server = RobotRemoteServer(test(config, task_id), host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.daemon = True
     server_thread.start()
@@ -146,11 +169,12 @@ def start_test_library(queue, testcase, config, host, port):
     while server_thread.is_alive():
         server_thread.join(0.1)
 
-def start_remote_server(testcase, config, host, port=8270):
-    q = Queue()
-    server_process = multiprocessing.Process(target=start_test_library, args=(q, testcase, config, host, port))
+def start_remote_server(backing_file, config, host, port=8270, task_id=None):
+    queue = Queue()
+    server_process = multiprocessing.Process(target=start_test_library,
+                                             args=(queue, backing_file, task_id, config, host, port))
     server_process.start()
-    return q, server_process
+    return queue, server_process
 
 def start_daemon(config_file = "config.yml", host=None, port=None):
     global g_config

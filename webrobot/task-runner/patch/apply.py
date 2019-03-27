@@ -16,7 +16,6 @@ elif os.name == 'posix':
 else:
     print('Unknown OS {}'.format(os.name))
     sys.exit(1)
-# print(venv)
 
 patchdir = os.path.dirname(os.path.abspath(__file__))
 patchset = patch.fromfile(Path(patchdir) / 'robot.diff')

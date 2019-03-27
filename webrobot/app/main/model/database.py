@@ -1,7 +1,6 @@
-from mongoengine import *
-from mongoengine.connection import disconnect
 import datetime
 
+from mongoengine import *
 
 QUEUE_PRIORITY_MIN = 1
 QUEUE_PRIORITY_DEFAULT = 2
@@ -34,13 +33,12 @@ class Test(Document):
         test_suites = cls.objects({})
         return [t.test_suite for t in test_suites]
 
-
 class Task(Document):
     schema_version = StringField(max_length=10, default='1')
     test = ReferenceField(Test)
     testcases = ListField(StringField())
-    start_date = DateTimeField(default=datetime.datetime.utcnow)
-    run_date = DateTimeField(default=datetime.datetime.utcnow)
+    schedule_date = DateTimeField(default=datetime.datetime.utcnow)
+    run_date = DateTimeField()
     status = StringField(default='waiting')
     kickedoff = IntField(min_value=0, default=0)
     endpoint_list = ListField(StringField())
@@ -49,6 +47,7 @@ class Task(Document):
     variables = DictField()
     tester = EmailField()
     upload_dir = StringField()
+    test_results = ListField(ReferenceField('TestResult'))
 
     meta = {'collection': 'tasks'}
 
@@ -92,15 +91,14 @@ class TestResult(Document):
     schema_version = StringField(max_length=10, default='1')
     test_case = StringField(max_length=100, required=True)
     test_site = StringField(max_length=50)
-    test_suite = ReferenceField(Test)
-    tester = StringField(max_length=20)
-    tester_email = EmailField()
-    test_date = DateTimeField()
+    task = ReferenceField(Task)
+    test_date = DateTimeField(default=datetime.datetime.utcnow)
     duration = IntField()
     summary = StringField(max_length=200)
-    status = StringField(max_length=10, default='Fail')
+    status = StringField(max_length=10, default='FAIL')
+    more_result = DictField()
 
-    meta = {'allow_inheritance': True}
+    meta = {'collection': 'testresults'}
 
 class TaskArchived(Document):
     '''
@@ -111,11 +109,3 @@ class TaskArchived(Document):
     tasks = ListField(ReferenceField(Task))
 
     meta = {'collection': 'taskarchived'}
-
-class MongoDBClient():
-
-    def __init__(self, config):
-        connect('autotest', host=config['mongodb_uri'], port=config['mongodb_port'])
-    
-    def __del__(self):
-        disconnect()

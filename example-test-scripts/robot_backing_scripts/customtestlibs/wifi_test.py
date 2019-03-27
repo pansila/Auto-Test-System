@@ -1,7 +1,7 @@
 import os.path
 import re
+
 from .device_test import device_test
-#from robotlibcore import keyword
 
 class wifi_basic_test(device_test):
     SCAN_TIMEOUT = 5        # seconds
@@ -9,8 +9,8 @@ class wifi_basic_test(device_test):
 
     REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, task_id):
+        super().__init__(config, task_id)
         self._iperf_path = os.path.join(os.path.dirname(__file__),
                                       '..', 'sut', 'login.py')
         self.ip_AP = None
@@ -49,7 +49,7 @@ class wifi_basic_test(device_test):
         print(result)
 
         if elapsedTime == self.TIMEOUT_ERR:
-            raise AssertionError('Connecting timeout')
+            raise AssertionError('Connecting to {} timeout'.format(ssid))
         print('Connecting used time {0}s'.format(elapsedTime))
 
         ret = re.compile('IP: {0}'.format(self.REGEXP_IP)).search(result)

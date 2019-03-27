@@ -155,13 +155,13 @@ robot demo-test.md
    1. Method GET
       Get a bundled script file that is necessary to run the test
       ```
-      $ http GET http://127.0.0.1/script/demo-test
+      $ http GET http://127.0.0.1:5000/script/demo-test
       ```
 2. Task Resource
    1. Method POST
       Upload a file to the web server, will return a resource id associated with the uploading session.
       ```
-      $ http POST http://127.0.0.1/taskresource name=firmware.bin resource@demo.bin
+      $ http POST http://127.0.0.1:5000/taskresource name=firmware.bin resource@demo.bin
       {
           "data": "5c90ae3db38ff7139cb96f66",
           "status": 0
@@ -170,7 +170,7 @@ robot demo-test.md
    2. Method POST
       Upload a file to the web server with a resource id, files uploaded will be put in the same place specified by the resource id.
       ```
-      $ http POST http://127.0.0.1/taskresource/5c90ae3db38ff7139cb96f66 name=firmware1.bin resource@demo.bin
+      $ http POST http://127.0.0.1:5000/taskresource/5c90ae3db38ff7139cb96f66 name=firmware1.bin resource@demo.bin
       {
           "data": "5c90ae3db38ff7139cb96f66",
           "status": 0
@@ -179,13 +179,13 @@ robot demo-test.md
    3. Method GET
       Get a resource tarball associated to specified task id
       ```
-      $ http GET http://127.0.0.1/taskresource/5c90aa12b38ff711584b3fab
+      $ http GET http://127.0.0.1:5000/taskresource/5c90aa12b38ff711584b3fab
       ```
 3. Task
    1. Method POST
       Run a task with certain variables.
       ```
-      $ http POST http://127.0.0.1/task/demo-test < task.json
+      $ http POST http://127.0.0.1:5000/task/demo-test < task.json
       $ cat task.json
       {
         "endpoint_list": ["127.0.0.1:8270"],
@@ -210,11 +210,21 @@ robot demo-test.md
    1. Method POST
       Create a task queue for an endpoint with the specified address.
       ```
-      $ http POST http://127.0.0.1/taskqueue endpoint_address=127.0.0.1:8370
+      $ http POST http://127.0.0.1:5000/taskqueue/ endpoint_address=127.0.0.1:8270
       ```
 5. Task Result
    1. Method GET
       Get a list of tasks in the database, they may be in one of the following states: waiting, running, failed, successful.
       ```
-      $ http GET http://127.0.0.1/testresult
+      $ http GET http://127.0.0.1:5000/testresult
+      ```
+   2. Method POST
+      Create the test result document in the database.
+      ```
+      $ http POST http://127.0.0.1:5000/testresult/ task_id=<task id> test_case=<test case name>
+      ```
+   3. Method POST
+      Update the lastest test result document of a task in the database. A task usually hosts several test cases of a test suite, there is a test result document for each test case.
+      ```
+      $ http POST http://127.0.0.1:5000/testresult/<task id> status={PASS | FAIL} ...
       ```

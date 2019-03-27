@@ -27,7 +27,7 @@ class TaskResourceController(Resource):
         except Task.DoesNotExist:
             api.abort(404)
         
-        if task.upload_dir == '':
+        if task.upload_dir == '' or task.upload_dir == None:
             api.abort(406)
 
         tarball = pack_files(task_id, UPLOAD_DIR / task.upload_dir, TARBALL_TEMP)
@@ -39,7 +39,6 @@ class TaskResourceController(Resource):
 
 @api.route('/')
 class TaskResourceInitUpload(Resource):
-    @api.response(201, 'Task resource successfully uploaded.')
     @api.doc('upload some resource associated with a task')
     def post(self):
         upload_dir = Path(get_config().UPLOAD_ROOT)
@@ -51,8 +50,11 @@ class TaskResourceInitUpload(Resource):
 
         file = request.files['resource']
 
-        if not os.path.exists(upload_dir):
+        try:
             os.mkdir(upload_dir)
+        except FileExistsError:
+            pass
+
         os.mkdir(upload_dir / temp_id)
         filename = upload_dir / temp_id / name
         file.save(str(filename))
