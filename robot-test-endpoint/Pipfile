@@ -14,9 +14,7 @@ verify_ssl = true
 certifi = {version = "==2018.10.15",index = "piwheels"}
 chardet = {version = "==3.0.4",index = "piwheels"}
 idna = {version = "==2.7",index = "piwheels"}
-mongoengine = {version = "==0.16.3",index = "piwheels"}
 netifaces = {version = "==0.10.7",index = "piwheels"}
-pymongo = {version = "==3.7.2",index = "piwheels"}
 pyserial = {version = "==3.4",index = "piwheels"}
 requests = {version = "==2.21.0",index = "piwheels"}
 robotremoteserver = {version = "==1.1",index = "piwheels"}
@@ -24,6 +22,7 @@ six = {version = "==1.12.0",index = "piwheels"}
 ruamel-yaml = {version = "==0.15.89",index = "piwheels"}
 pexpect = {version = "==4.6.0",index = "piwheels"}
 python-daemon = {version = "==2.2.3",index = "piwheels"}
+bson = {index = "piwheels",version = "==0.5.8"}
 
 [requires]
 python_version = "3.6"

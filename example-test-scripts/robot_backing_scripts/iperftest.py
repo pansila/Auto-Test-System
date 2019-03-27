@@ -1,24 +1,15 @@
-from customtestlibs.wifi_test import wifi_basic_test
-import subprocess
-from subprocess import PIPE
-import threading
-import queue
-import ipaddress
-import netifaces
-import time
-import re
-from mongoengine import *
-from customtestlibs.database import TestResult, Test
 import datetime
+import ipaddress
+import queue
+import re
+import subprocess
+import threading
+import time
+from subprocess import PIPE
 
-class IperfTestResult(TestResult):
-    firmware_revision = StringField(max_length=100)
-    test_tool = StringField(max_length=50)
-    test_type = StringField(max_length=10)
-    direction = StringField(max_length=10)
-    throughput = IntField()
-    total_bytes = IntField()
-    throughput_hum = StringField(max_length=50)
+import netifaces
+from customtestlibs.wifi_test import wifi_basic_test
+
 
 class iperftest(wifi_basic_test):
     unit_conversion = {
@@ -28,18 +19,10 @@ class iperftest(wifi_basic_test):
         'G': 1024*1024*1024,
     }
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, task_id):
+        super().__init__(config, task_id)
         self.iperf_process = None
         self.iperf_queue = None
-        test_result = IperfTestResult()
-        test_result.test_case = 'Throughput Test'
-        test_result.test_suite = Test.objects(test_suite='wifi-basic-test').get()
-        test_result.test_site = '@'.join((self.config['name'], self.config['location']))
-        test_result.tester = 'John'
-        test_result.tester_email = 'John@123.com'
-        test_result.save()
-        self.test_result_id = test_result.pk
 
     def _unit_convert_to_digit(self, input):
         input = input.strip()
@@ -79,16 +62,13 @@ class iperftest(wifi_basic_test):
         if rx_bandwidth < 1:
             raise AssertionError('No traffic found in the iperf test')
 
-        result = {
-            'status': 'Pass',
+        update = {
             'throughput': rx_bandwidth,
             'total_bytes': rx_bytes,
             'throughput_hum': rx_bandwidth_hum,
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**result)
-        return result
-
-
+        self._update_result(update)
+        return update
 
 
     #################### RX test ####################
@@ -196,7 +176,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'UDP',
             'direction': 'RX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
@@ -213,7 +193,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'TCP',
             'direction': 'RX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         _, tx_log = self.iperf_rx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
@@ -230,7 +210,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'UDP',
             'direction': 'RX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf2', 'UDP', length, bandwidth, time, interval)
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
@@ -247,7 +227,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'TCP',
             'direction': 'RX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_rx(deviceName, host, 'iperf2', 'TCP', length, bandwidth, time, interval)
         # find the result in the lines like "0 - <d> sec ..." except for the first line "0 - 1 sec ..."
@@ -406,7 +386,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'UDP',
             'direction': 'TX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         _, tx_log = self.iperf_tx(deviceName, host, 'iperf3', 'UDP', length, bandwidth, time, interval)
         # there is a bug in iperf3 PC server statistics for UDP, we use iperf3 client's report instead
@@ -424,7 +404,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'TCP',
             'direction': 'TX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf3', 'TCP', length, bandwidth, time, interval)
         # [  2]   0.00-4.00   sec  4.78 MBytes  10.0 Mbits/sec  1.468 ms  1667/4651 (36%)
@@ -441,7 +421,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'UDP',
             'direction': 'TX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf2', 'UDP', length, bandwidth, time, interval)
         # find the result in the lines like "0.0 - <d>.<d> sec ..." except for the first line "0 - 1.0 sec ..."
@@ -459,7 +439,7 @@ class iperftest(wifi_basic_test):
             'test_type': 'TCP',
             'direction': 'TX',
         }
-        IperfTestResult.objects(pk=self.test_result_id).update(**update)
+        self._update_result(update)
 
         rx_log, _ = self.iperf_tx(deviceName, host, 'iperf2', 'TCP', length, bandwidth, time, interval)
         # find the result in the lines like "0.0 - <d>.<d> sec ..." except for the first line "0 - 1.0 sec ..."

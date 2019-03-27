@@ -1,12 +1,13 @@
 import argparse
+import datetime
 import multiprocessing
-import threading
 import os
+import shutil
 import signal
 import sys
-import time
-import shutil
 import tarfile
+import threading
+import time
 from pathlib import Path
 
 import robot
@@ -14,11 +15,12 @@ from bson import DBRef
 from mongoengine import connect
 
 sys.path.append('.')
-from app.main.model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
-                      QUEUE_PRIORITY_MIN, Task, TaskArchived, TaskQueue, Test)
-from app.main.config import get_config
-
 from util.notification import send_email
+from app.main.config import get_config
+from app.main.model.database import (QUEUE_PRIORITY_DEFAULT,
+                                     QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN,
+                                     Task, TaskArchived, TaskQueue, Test)
+
 
 RESULT_DIR = Path(get_config().TEST_RESULT_ROOT)
 
@@ -46,7 +48,6 @@ def run_task(queue, args):
 def run_task_for_endpoint(endpoint):
     while True:
         for priority in (QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MIN):
-            # print('checking priority {}'.format(priority))
             task = TaskQueue.pop(endpoint, priority)
             if task:
                 if isinstance(task, DBRef):
@@ -75,6 +76,7 @@ def run_task_for_endpoint(endpoint):
                         args.append(task.test.path)
 
                         task.status = 'running'
+                        task.run_date = datetime.datetime.utcnow()
                         task.save()
 
                         proc_queue = multiprocessing.Queue()
@@ -115,13 +117,25 @@ def prepare_running_tasks():
         TaskArchived.objects({}).get()
     except TaskArchived.DoesNotExist:
         TaskArchived().save()
+
+    try:
+        TaskQueue.objects({}).get()
+    except TaskQueue.MultipleObjectsReturned:
+        pass
+    except TaskQueue.DoesNotExist:
+        print('Error: Task Queue has not been created')
+        return False
     
     restart_interrupted_tasks()
 
-def listen_task():
-    print('Start listening tasks from database 127.0.0.1:27017')
+    return True
 
-    prepare_running_tasks()
+def listen_task():
+    print('Start listening to tasks at database {}:{}'.format(get_config().MONGODB_URL,
+                                                              get_config().MONGODB_PORT))
+
+    if prepare_running_tasks() == False:
+        return 1
 
     task_threads = []
     while True:
@@ -142,6 +156,7 @@ def listen_task():
                 break
 
         time.sleep(1)
+    return 0
 
 if __name__ == '__main__':
     connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
@@ -152,8 +167,8 @@ if __name__ == '__main__':
         pass
 
     if len(sys.argv) < 2:
-        listen_task()
-        sys.exit(0)
+        ret = listen_task()
+        sys.exit(ret)
 
     # if len(os.getcwd().split(os.path.sep)) < 2:
     #     print('Please run it in the server root directory')

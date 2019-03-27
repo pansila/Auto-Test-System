@@ -49,14 +49,14 @@ Because it's a distributed test system compared to a local standalone test syste
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
 | Setup Remote |
-| | [Arguments] | ${daemon} | ${testcase} | ${testlib} |
-| | Run Keyword | ${daemon}.start test | ${testcase} | ${task_id} |
+| | [Arguments] | ${daemon} | ${backing file} | ${testlib} | ${dut} |
+| | Run Keyword | ${daemon}.start test | ${TEST NAME} | ${backing file} | ${task_id} |
 | | Import Library | Remote | ${remote_test_address} | WITH NAME | ${testlib} |
-| | Run Keyword | ${testlib}.Connect Dut | ${dut1} |
+| | Run Keyword | ${testlib}.Connect Dut | ${dut} |
 | Teardown Remote |
-| | [Arguments] | ${daemon} | ${testcase} | ${testlib} | ${dut} |
+| | [Arguments] | ${daemon} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.Disconnect Dut | ${dut} |
-| | Run Keyword | ${daemon}.stop test | ${testcase} |
+| | Run Keyword | ${daemon}.stop test | ${TEST NAME} | ${TEST STATUS} |
 
 ### Ping Test
 
@@ -68,8 +68,8 @@ Notes:
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|
 | Ping test |
-| | [Setup] | Setup Remote | EndpointDaemon1 | pingtest | pingtestlib |
-| | [Teardown] | Teardown Remote | EndpointDaemon1 | pingtest | pingtestlib | ${dut1} |
+| | [Setup] | Setup Remote | EndpointDaemon1 | pingtest.py | pingtestlib | ${dut1} |
+| | [Teardown] | Teardown Remote | EndpointDaemon1 | pingtestlib | ${dut1} |
 |#| pingtestlib.download | ${dut1} |
 | | pingtestlib.open wifi | ${dut1} |
 | | pingtestlib.scan networks | ${dut1} |
@@ -84,8 +84,8 @@ We only check whether a traffic is running successfully and throughput is not ze
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|---|
 | iperf UDP RX test |
-| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest | iperftestlib |
-| | [Teardown] | Teardown Remote | EndpointDaemon1 | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest.py | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Remote | EndpointDaemon1 | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 udp rx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 | interval=1 |
@@ -96,8 +96,8 @@ Reboot the device after the test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|---|
 | iperf TCP RX test |
-| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest | iperftestlib |
-| | [Teardown] | Teardown Remote | EndpointDaemon1 | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest.py | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Remote | EndpointDaemon1 | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 tcp rx | ${dut1} | ${dut_ip} | length=1000 | time=10 | interval=1 |
@@ -107,15 +107,15 @@ Reboot the device after the test due to a bug.
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
 | Teardown Iperf TX Server |
-| | [Arguments] | ${daemon} | ${testcase} | ${testlib} | ${dut} |
+| | [Arguments] | ${daemon} | ${testlib} | ${dut} |
 | | Run Keyword | ${testlib}.iperf3 stop tx server |
-| | Teardown Remote | EndpointDaemon1 | ${testcase} | ${testlib} | ${dut} |
+| | Teardown Remote | EndpointDaemon1 | ${testlib} | ${dut} |
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|
 | iperf UDP TX test |
-| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | EndpointDaemon1 | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest.py | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Iperf TX Server | EndpointDaemon1 | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 udp tx | ${dut1} | ${dut_ip} | length=1000 | bandwidth=40M | time=10 |
@@ -125,8 +125,8 @@ Reboot the device after the test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|
 | iperf TCP TX test |
-| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest | iperftestlib |
-| | [Teardown] | Teardown Iperf TX Server | EndpointDaemon1 | iperftest | iperftestlib | ${dut1} |
+| | [Setup] | Setup Remote | EndpointDaemon1 | iperftest.py | iperftestlib | ${dut1} |
+| | [Teardown] | Teardown Iperf TX Server | EndpointDaemon1 | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
 | | ${tp} = | iperftestlib.iperf3 tcp tx | ${dut1} | ${dut_ip} | length=1000 | time=10 |

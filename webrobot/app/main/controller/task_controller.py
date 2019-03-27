@@ -51,7 +51,6 @@ class TaskController(Resource):
             task.tester = data.get('tester', '')
 
             task.upload_dir = data.get('upload_dir', '')
-            # print(task.to_json())
         task.test = test.id
         try:
             task.save()

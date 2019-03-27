@@ -1,5 +1,7 @@
 import re
+
 from customtestlibs.wifi_test import wifi_basic_test
+
 
 class pingtest(wifi_basic_test):
 

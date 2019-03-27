@@ -46,6 +46,5 @@ def send_email(task):
         print('SMTP authentication failed')
         server.quit()
         return
-    ret = server.sendmail(from_addr, [task.tester], msg.as_string())
-    # print('send mail: ' + str(ret))
+    server.sendmail(from_addr, [task.tester], msg.as_string())
     server.quit()

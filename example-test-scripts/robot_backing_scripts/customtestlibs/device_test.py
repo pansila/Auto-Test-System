@@ -1,21 +1,27 @@
-import serial
-import re
-import time
-import subprocess
+import json
 import os
-from pathlib import Path
+import re
+import subprocess
 import sys
-from .database import MongoDBClient
-import pexpect
+import time
+from pathlib import Path
 
-class device_test(MongoDBClient):
+import requests
+
+import pexpect
+import serial
+
+from .rest_api import rest_api
+
+
+class device_test(rest_api):
     TIMEOUT_ERR = -1
     TIMEOUT = 1
 
-    def __init__(self, config):
-        super().__init__(config)
-        self.config = config
+    def __init__(self, config, task_id):
+        super().__init__(config, task_id)
         self.configDut = {}
+
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut
 
@@ -88,7 +94,6 @@ class device_test(MongoDBClient):
                     if idx != 0:
                         a.kill(9)
                         raise AssertionError('JLink command "{}" failed:\n{}\n{}'.format(c, a.before, a.after))
-                    # print(a.before)
                 a.sendline('qc')
                 a.expect(pexpect.EOF)
                 break
@@ -142,5 +147,4 @@ class device_test(MongoDBClient):
         '''
         
         result = self._serial_read(deviceName, wait_time)[0]
-        # print(result)
         return result
