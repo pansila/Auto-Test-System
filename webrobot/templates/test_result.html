@@ -91,7 +91,7 @@
       <table>
         <tr><th class="n">Test Suite</th><th class="d">Test Suite ID</th><th class="d">Test Date</th><th class="s">Test Result</th></tr>
         {% for task in tasks %}
-        <tr><td class="n"><a href="{{task.id}}/report.html">{{task.test.test_suite}}</a></td><td class="sh">{{task.id}}</td><td class="d">{{task.start_date}}</td><td class="s">{{task.status}}</td></tr>
+        <tr><td class="n"><a href="{{task.id}}/report.html">{{task.test.test_suite}}</a></td><td class="sh">{{task.id}}</td><td class="d">{{task.run_date.replace(tzinfo=from_zone).astimezone(to_zone)}}</td><td class="s">{{task.status}}</td></tr>
         {% endfor %}
       </table>
   </body>
