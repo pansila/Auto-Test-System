@@ -1,7 +1,8 @@
 import os
 import json
 from pathlib import Path
-from mongoengine import ValidationError
+from mongoengine import ValidationError, DoesNotExist
+from dateutil import tz
 
 from flask import Flask, send_from_directory, render_template, url_for, make_response, request
 from flask_restplus import Resource
@@ -34,8 +35,16 @@ class TestResultRoot(Resource):
             except Task.DoesNotExist:
                 pass
             else:
+                try:
+                    r.test.test_suite
+                except DoesNotExist:
+                    continue
                 ret.append(r)
-        return make_response(render_template('test_result.html', tasks=ret), 200, headers)
+        return make_response(render_template('test_result.html',
+                                             tasks=ret,
+                                             from_zone=tz.tzutc(),
+                                             to_zone=tz.tzlocal()),
+                             200, headers)
 
 @api.route('/')
 class TestResultCreate(Resource):
