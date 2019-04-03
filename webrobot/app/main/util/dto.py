@@ -18,21 +18,15 @@ class AuthDto:
         'password': fields.String(required=True, description='The user password '),
     })
 
-class ScriptDto:
-    api = Namespace('script', description='script download interface')
-    user = api.model('script', {
+class TestDto:
+    api = Namespace('test', description='test management operations')
+    user = api.model('test', {
         'test': fields.String(required=True, description='test'),
     })
 
 class TaskDto:
     api = Namespace('task', description='task management operations')
     user = api.model('task', {
-        'test': fields.String(required=True, description='test'),
-    })
-
-class TaskQueueDto:
-    api = Namespace('taskqueue', description='task management operations')
-    user = api.model('taskqueue', {
         'test': fields.String(required=True, description='test'),
     })
 
@@ -45,5 +39,11 @@ class TestResultDto:
 class TaskResourceDto:
     api = Namespace('taskresource', description='task resources')
     user = api.model('taskresource', {
+        'test': fields.String(required=True, description='test'),
+    })
+
+class EndpointDto:
+    api = Namespace('endpoint', description='test endpoint management operations')
+    user = api.model('endpoint', {
         'test': fields.String(required=True, description='test'),
     })

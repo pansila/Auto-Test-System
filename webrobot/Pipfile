@@ -19,7 +19,7 @@ click = {version = "==6.7",index = "piwheels"}
 coverage = {version = "==4.4.2",index = "piwheels"}
 enum-compat = {version = "==0.0.2",index = "piwheels"}
 eventlet = {version = "==0.21.0",index = "piwheels"}
-flask-cors = {version = "==3.0.3",index = "piwheels"}
+flask-cors = {index = "piwheels",version = "==3.0.7"}
 flask-restplus = {version = "==0.10.1",index = "piwheels"}
 gem = {version = "==0.1.12",index = "piwheels"}
 greenlet = {version = "==0.4.12",index = "piwheels"}
@@ -48,9 +48,9 @@ PyJWT = {version = "==1.5.3",index = "piwheels"}
 SQLAlchemy = {version = "==1.2.0",index = "piwheels"}
 Werkzeug = {version = "==0.14.1",index = "piwheels"}
 mongoengine = {version = "==0.17.0",index = "piwheels"}
-mistune = {version = ">=0.8.4",index = "piwheels"}
+mistune = {version = "==0.8.4",index = "piwheels"}
 robotframework = {version = "==3.1.1",index = "piwheels"}
-requests = {index = "piwheels",version = "*"}
+requests = {index = "piwheels",version = "==2.21.0"}
 
 [requires]
 python_version = "3.6"

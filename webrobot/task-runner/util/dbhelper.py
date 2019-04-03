@@ -95,7 +95,8 @@ if __name__ == '__main__':
     connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
 
     if args.action == 'READ':
-        print(Test.get_list())
+        test_suites = Test.objects({})
+        print([t.test_suite for t in test_suites])
     elif args.action == 'UPDATE':
         if args.scripts:
             ret = update_test(args.scripts)

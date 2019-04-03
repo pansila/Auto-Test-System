@@ -17,7 +17,7 @@ class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_main.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
+    SCRIPT_ROOT = 'd:/work/Auto-Test-Scripts/robot-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
     UPLOAD_ROOT = 'upload'
     MONGODB_URL = '127.0.0.1'
