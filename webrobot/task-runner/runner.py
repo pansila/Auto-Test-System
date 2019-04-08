@@ -52,9 +52,9 @@ def run_task_for_endpoint(endpoint):
             if task:
                 if isinstance(task, DBRef):
                     print('task {} has been deleted, ignore it'.format(task.id))
-                if task.kickedoff == 0:
+                if task.kickedoff == 0 or task.parallelization:
                     task = Task.objects(pk=task.id).modify(new=True, inc__kickedoff=1)
-                    if task.kickedoff != 1:
+                    if task.kickedoff != 1 and not task.parallelization:
                         print('a race condition happened')
                     else:
                         print('\nStart to run task {} ...'.format(task.id))
@@ -102,7 +102,7 @@ def run_task_for_endpoint(endpoint):
 
                         TaskArchived.objects({}).modify(push__tasks=task)
                 else:
-                    print('task has been kicked off, just pop the task from the queue')
+                    print('task has been kicked off, do nothing but to pop the task from the queue')
                 break
         time.sleep(1)
 

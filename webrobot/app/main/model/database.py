@@ -38,6 +38,7 @@ class Task(Document):
     status = StringField(default='waiting')
     kickedoff = IntField(min_value=0, default=0)
     endpoint_list = ListField(StringField())
+    parallelization = BooleanField(default=False)
     endpoint_run = StringField()
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     variables = DictField()

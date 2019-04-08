@@ -104,6 +104,9 @@ class TaskController(Resource):
             api.abort(404)
         task.priority = priority
 
+        parallelization = data.get('parallelization', False)
+        task.parallelization = parallelization == True
+
         variables = data.get('variables', {})
         if not isinstance(variables, dict):
             print('variables should be a dictionary')

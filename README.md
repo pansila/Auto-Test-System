@@ -1,5 +1,6 @@
 - [Introduction](#introduction)
 - [Features](#features)
+- [System Dashboard (In progress)](#system-dashboard-in-progress)
 - [Test System Architecture](#test-system-architecture)
 - [Design of Robot Test Server](#design-of-robot-test-server)
 - [Set Up The Test Environment](#set-up-the-test-environment)
@@ -16,7 +17,10 @@ This is a distributed test automation framework with a centralized management UI
 1. Provide a web server to serve all test scripts and test data in a centralized place to facilitate the update.
 2. Automatically download test libraries to test endpoints which run the actual tests.
 3. Support test cases written in markdown to make it more legible to test users.
-4. Provide a Web UI to help schedule tests in priority and review the test reports in a diverse charts (in progress).
+4. Provide a Web UI to help schedule tests in priority and review the test reports in a diverse charts.
+
+### System Dashboard (In progress)
+![](https://i.loli.net/2019/04/09/5cabf46602d8f.png)
 
 ### Test System Architecture
 A typical architecture for a Robot Remote Server is described in the official [website](https://github.com/robotframework/RemoteInterface).
@@ -33,7 +37,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 ![](https://i.loli.net/2019/01/24/5c498aa0a7354.png)
 
 ### Design of Robot Test Server
-![](https://i.loli.net/2019/01/25/5c4a64c32ae53.png)
+![](https://i.loli.net/2019/04/08/5cab120829e69.png)
 
 ### Set Up The Test Environment
 
