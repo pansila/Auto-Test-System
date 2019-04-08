@@ -48,8 +48,9 @@ PyJWT = {version = "==1.5.3",index = "piwheels"}
 SQLAlchemy = {version = "==1.2.0",index = "piwheels"}
 Werkzeug = {version = "==0.14.1",index = "piwheels"}
 mongoengine = {version = "==0.17.0",index = "piwheels"}
-mistune = {version = ">=0.8.4",index = "piwheels"}
+mistune = {version = "==0.8.4",index = "piwheels"}
 robotframework = {version = "==3.1.1",index = "piwheels"}
+requests = {index = "piwheels",version = "*"}
 
 [requires]
 python_version = "3.6"
@@ -57,9 +58,7 @@ python_version = "3.6"
 [scripts]
 server = "python manage.py run"
 tests = "python manage.py test"
-
 task-runner = "python task-runner/runner.py"
 patch = "python task-runner/patch/apply.py"
 update-db = "python task-runner/util/dbhelper.py --action=UPDATE --scripts"
-
 start = "python task-runner/util/run_test.py"

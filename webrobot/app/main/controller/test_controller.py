@@ -5,10 +5,11 @@ from flask import Flask, send_from_directory
 from flask_restplus import Resource
 
 from ..config import get_config
-from ..util.dto import ScriptDto
+from ..model.database import Test
+from ..util.dto import TestDto
 from ..util.tarball import make_tarfile, pack_files
 
-api = ScriptDto.api
+api = TestDto.api
 
 TARBALL_TEMP = Path('temp')
 SCRIPT_ROOT = Path(get_config().SCRIPT_ROOT)
@@ -32,3 +33,17 @@ class ScriptDownload(Resource):
         else:
             tarball = os.path.basename(tarball)
             return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
+
+@api.route('/')
+class ScriptDownload(Resource):
+    def get(self):
+        tests = Test.objects({})
+        ret = []
+        for t in tests:
+            ret.append({
+                'test_suite': t.test_suite,
+                'test_cases': t.test_cases,
+                'variables': t.variables,
+                'author': t.author
+            })
+        return ret

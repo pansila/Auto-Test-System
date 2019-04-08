@@ -17,6 +17,7 @@ def run(server, test, firmware, endpoints, tester, variables, testcases):
             else:
                 return False
 
+    payload['test_suite'] = test
     payload['endpoint_list'] = endpoints
     payload['upload_dir'] = resource_id
     payload['tester'] = tester
@@ -25,7 +26,7 @@ def run(server, test, firmware, endpoints, tester, variables, testcases):
     if testcases:
         payload['testcases'] = testcases
     
-    ret = requests.post('{}/task/{}'.format(server, test), json=payload)
+    ret = requests.post('{}/task/'.format(server), json=payload)
     if ret.status_code != 200:
         return False
 

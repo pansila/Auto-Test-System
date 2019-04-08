@@ -1,8 +1,10 @@
+import smtplib
+import socket
 from email import encoders
 from email.header import Header
 from email.mime.text import MIMEText
-from email.utils import parseaddr, formataddr
-import smtplib
+from email.utils import formataddr, parseaddr
+from socket import timeout
 
 # sys.path.append('.')
 from app.main.config import get_config
@@ -10,6 +12,7 @@ from app.main.config import get_config
 BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:5000/testresult/{}/log.html'
 SUBJECT_TEMPLATE = 'Test Report for {}'
 
+socket.setdefaulttimeout(5)
 
 def _format_addr(s):
     name, addr = parseaddr(s)
@@ -30,9 +33,12 @@ def send_email(task):
     msg['Subject'] = Header(SUBJECT_TEMPLATE.format(task.test.test_suite))
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_server_port)
+        server = smtplib.SMTP(smtp_server, smtp_server_port, timeout=5)
     except TimeoutError:
-        print('SMTP server connecting failed')
+        print('SMTP server connecting timeout')
+        return
+    except timeout:
+        print('SMTP server connecting socket timeout')
         return
     except ConnectionRefusedError:
         print('SMTP server connecting refused')

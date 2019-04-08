@@ -28,14 +28,10 @@ class Test(Document):
                 return False
         return True
 
-    @classmethod
-    def get_list(cls):
-        test_suites = cls.objects({})
-        return [t.test_suite for t in test_suites]
-
 class Task(Document):
     schema_version = StringField(max_length=10, default='1')
     test = ReferenceField(Test)
+    test_suite = StringField()  # embedded document from Test
     testcases = ListField(StringField())
     schedule_date = DateTimeField(default=datetime.datetime.utcnow)
     run_date = DateTimeField()
@@ -51,14 +47,22 @@ class Task(Document):
 
     meta = {'collection': 'tasks'}
 
+class Endpoint(Document):
+    schema_version = StringField(max_length=10, default='1')
+    endpoint_address = StringField(required=True)
+    tests = ListField(ReferenceField(Test))
+
+    meta = {'collection': 'endpoints'}
+
 class TaskQueue(Document):
     '''
     Per endpoint per priority queue
     '''
     schema_version = StringField(max_length=10, default='1')
-    endpoint_address = StringField()
+    endpoint_address = StringField(required=True)  # embedded document from Endpoint
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     tasks = ListField(ReferenceField(Task))
+    endpoint = ReferenceField(Endpoint)
 
     meta = {'collection': 'taskqueues'}
 

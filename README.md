@@ -89,15 +89,16 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
 3. Run a test by using the restful API
    ```
-   http POST http://127.0.0.1/task/demo-test endpoint_list:=[\"127.0.0.1:8270\"] variables:={\"echo_message\":\"bye\"}
+   http POST http://127.0.0.1:5000/task/ test_suite:=\"demo-test\" endpoint_list:=[\"127.0.0.1:8270\"] variables:={\"echo_message\":\"bye\"} tester:=\"abc@123.com\"
    ```
    `http` is a handy http client tool provided by python, `"pip install httpie"`. Alternatively you can use `curl`. For more complicate test arguments, we can put them to a file and load it to `httpie` as follows.
    ```
-   http POST http://127.0.0.1/task/demo-test < task.json
+   http POST http://127.0.0.1:5000/task/ < task.json
    ```
    While contents in `task.json` look like:
    ```
    {
+     "test_suite": "demo-test",
      "endpoint_list": ["127.0.0.1:8270"],
      "variables": {
        "echo_message": "bye"
@@ -106,13 +107,12 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
      "tester": "abc@123.com"
    }
    ```
-   For more complex operations like upload files, please refer to [RESTful API of Web Server](#restful-api-of-web-server).
+   For more complex operations like uploading files, please refer to [RESTful API of Web Server](#restful-api-of-web-server).
 
-
-   There is a help script to relieve the pain of debugging RESTful APIs, please note that it's not for production environment.
+   There is a script to help relieve the pain of debugging RESTful APIs, please note that it's not for production environment.
    ```
    cd webrobot
-   pipenv run start http://127.0.0.1:5000 demo-test 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
+   pipenv run start http://127.0.0.1:5000 demo-test -e 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
    ```
 
 4. (Optional) Run a test from the command line
@@ -151,17 +151,17 @@ robot demo-test.md
 1. robot will cache test libraries if they have been imported before, we disabled it in `_import_library` in `importer.py` to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint. Change details please see `patch/robot.diff`.
 
 ### RESTful API of Web Server
-1. Script
+1. Test Script files
    1. Method GET
       Get a bundled script file that is necessary to run the test
       ```
-      $ http GET http://127.0.0.1:5000/script/demo-test
+      $ http GET http://127.0.0.1:5000/test/demo-test
       ```
 2. Task Resource
    1. Method POST
       Upload a file to the web server, will return a resource id associated with the uploading session.
       ```
-      $ http POST http://127.0.0.1:5000/taskresource name=firmware.bin resource@demo.bin
+      $ http --form POST http://127.0.0.1:5000/taskresource file@demo.bin
       {
           "data": "5c90ae3db38ff7139cb96f66",
           "status": 0
@@ -170,7 +170,7 @@ robot demo-test.md
    2. Method POST
       Upload a file to the web server with a resource id, files uploaded will be put in the same place specified by the resource id.
       ```
-      $ http POST http://127.0.0.1:5000/taskresource/5c90ae3db38ff7139cb96f66 name=firmware1.bin resource@demo.bin
+      $ http --form POST http://127.0.0.1:5000/taskresource/ file@demo.bin resource_id=5c90ae3db38ff7139cb96f66
       {
           "data": "5c90ae3db38ff7139cb96f66",
           "status": 0
@@ -185,9 +185,10 @@ robot demo-test.md
    1. Method POST
       Run a task with certain variables.
       ```
-      $ http POST http://127.0.0.1:5000/task/demo-test < task.json
+      $ http POST http://127.0.0.1:5000/task/ < task.json
       $ cat task.json
       {
+        "test_suite": "demo-test"
         "endpoint_list": ["127.0.0.1:8270"],
         "variables": {
           "echo_message": "hello"
@@ -197,6 +198,8 @@ robot demo-test.md
         "upload_dir": "5c90ae3db38ff7139cb96f66"
       }
       ```
+      `test_suite` is the test suite to run.
+
       `endpoint_list` is the list of endpoints that are allowed to run the task, only one endpoint will win the task, other endpoints will notice that and quit the contention.
 
       `variables` will be passes to robot as `-v <arg>:<val>`. For more information  please see []().
@@ -206,11 +209,11 @@ robot demo-test.md
       `tester` will receive a notification email, so it should be a complete email address.
 
       `upload_dir` should be filled with the resource id returned above if there is any resource needed for the test.
-4. Task Queue
+4. Test Endpoint
    1. Method POST
-      Create a task queue for an endpoint with the specified address.
+      Create a test endpoint along with associated task queues with the specified address and supported test suites
       ```
-      $ http POST http://127.0.0.1:5000/taskqueue/ endpoint_address=127.0.0.1:8270
+      $ http POST http://127.0.0.1:5000/endpoint/ endpoint_address=127.0.0.1:8270 tests:=[\"demo-test\"]
       ```
 5. Task Result
    1. Method GET

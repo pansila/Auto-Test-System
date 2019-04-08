@@ -1,16 +1,16 @@
-import os
 import json
+import os
 from pathlib import Path
-from mongoengine import ValidationError, DoesNotExist
-from dateutil import tz
 
-from flask import Flask, send_from_directory, render_template, url_for, make_response, request
-from flask_restplus import Resource
 from bson.objectid import ObjectId
+from dateutil import tz
+from flask import Flask, render_template, request, send_from_directory, url_for
+from flask_restplus import Resource
+from mongoengine import DoesNotExist, ValidationError
 
 from ..config import get_config
-from ..util.dto import TestResultDto
 from ..model.database import Task, Test, TestResult
+from ..util.dto import TestResultDto
 
 api = TestResultDto.api
 
@@ -21,8 +21,8 @@ class TestResultDownload(Resource):
         path, filename = path.split('/')
         return send_from_directory(Path(os.getcwd()) / Path(get_config().TEST_RESULT_ROOT) / path, filename)
 
-@api.route('/')
-class TestResultRoot(Resource):
+@api.route('/view')
+class TestResultView(Resource):
     def get(self):
         headers = {'Content-Type': 'text/html'}
         tasks = os.listdir(Path(get_config().TEST_RESULT_ROOT))
@@ -45,6 +45,23 @@ class TestResultRoot(Resource):
                                              from_zone=tz.tzutc(),
                                              to_zone=tz.tzlocal()),
                              200, headers)
+
+@api.route('/')
+class TestResultRoot(Resource):
+    def get(self):
+        page = request.args.get('page', default=1)
+        limit = request.args.get('limit', default=10)
+        sort = request.args.get('sort', default='run_date')
+
+        page = int(page)
+        limit = int(limit)
+
+        dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
+        all_tasks = Task.objects(id__in=dirs).order_by(sort)
+        tasks = all_tasks[(page - 1) * limit : page * limit]
+        tasks = [t.to_json() for t in tasks]
+
+        return {'items': tasks, 'total': len(all_tasks)}
 
 @api.route('/')
 class TestResultCreate(Resource):
