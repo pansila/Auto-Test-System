@@ -23,8 +23,8 @@ class TaskStatistics(Resource):
         start_date = datetime.fromtimestamp(int(start_date)/1000)
         end_date = datetime.fromtimestamp(int(end_date)/1000)
 
-        if (start_date - end_date).seconds > 0:
-            print(start_date - end_date)
+        if (start_date - end_date).days > 0:
+            print('start date {} is larger than end date {}'.format(start_date, end_date))
             api.abort(404)
 
         delta = end_date - start_date
@@ -76,7 +76,7 @@ class TaskController(Resource):
         task = Task()
         test_suite = data.get('test_suite', None)
         if test_suite == None:
-            print('Field test_suite should be filled')
+            print('Field test_suite is required')
             api.abort(404)
         task.test_suite = test_suite
 
@@ -143,3 +143,32 @@ class TaskController(Resource):
             api.abort(404)
 
         return {'status': 0, 'data': task.to_json()}
+
+@api.route('/update')
+class TaskUpdate(Resource):
+    @api.doc('update a task')
+    def post(self):
+        data = request.json
+        if data is None:
+            print('The request data is empty')
+            api.abort(404)
+
+        task_id = data.get('_id', None)
+        task_id = task_id['$oid']
+        if task_id == None:
+            print('Field _id is required')
+            api.abort(404)
+
+        comment = data.get('comment', None)
+        if comment == None:
+            print('Field _id is required')
+            api.abort(404)
+
+        try:
+            task = Task.objects(id=task_id).get()
+        except Task.DoesNotExist:
+            print('The requested task is not found')
+            api.abort(404)
+        else:
+            task.comment = comment
+            task.save()

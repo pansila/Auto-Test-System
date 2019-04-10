@@ -14,8 +14,8 @@ api = TestDto.api
 TARBALL_TEMP = Path('temp')
 SCRIPT_ROOT = Path(get_config().SCRIPT_ROOT)
 
-@api.route('/<test_suite>')
-@api.param('test_suite', 'bundled test suite script and dependencies')
+@api.route('/script/<test_suite>')
+@api.param('test_suite', 'the test suite to download the script')
 @api.response(404, 'Script not found.')
 class ScriptDownload(Resource):
     def get(self, test_suite):
@@ -34,8 +34,21 @@ class ScriptDownload(Resource):
             tarball = os.path.basename(tarball)
             return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
 
+@api.route('/<test_suite>')
+@api.param('test_suite', 'the test suite to query')
+@api.response(404, 'Script not found.')
+class TestSuiteGet(Resource):
+    def get(self, test_suite):
+        try:
+            test = Test.objects(test_suite=test_suite).get()
+        except Test.DoesNotExist:
+            print('Test not found')
+            api.abort(404)
+
+        return test.to_json()
+
 @api.route('/')
-class ScriptDownload(Resource):
+class TestSuitesList(Resource):
     def get(self):
         tests = Test.objects({})
         ret = []

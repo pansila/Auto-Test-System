@@ -1,5 +1,7 @@
 import json
 import os
+from datetime import date, datetime, timedelta, timezone
+from dateutil import parser
 from pathlib import Path
 
 from bson.objectid import ObjectId
@@ -9,7 +11,8 @@ from flask_restplus import Resource
 from mongoengine import DoesNotExist, ValidationError
 
 from ..config import get_config
-from ..model.database import Task, Test, TestResult
+from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
+                              QUEUE_PRIORITY_MIN, Task, Test, TestResult)
 from ..util.dto import TestResultDto
 
 api = TestResultDto.api
@@ -51,17 +54,47 @@ class TestResultRoot(Resource):
     def get(self):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
-        sort = request.args.get('sort', default='run_date')
+        title = request.args.get('title', default=None)
+        priority = request.args.get('priority', default=None)
+        endpoint = request.args.get('endpoint', default=None)
+        sort = request.args.get('sort', default='-run_date')
+        start_date = request.args.get('start_date', None)
+        end_date = request.args.get('end_date', None)
+
+        if start_date:
+            start_date = parser.parse(start_date)
+            if end_date is None:
+                end_date = datetime.now(timezone.utc)
+            else:
+                end_date = parser.parse(end_date)
+
+            if (start_date - end_date).days > 0:
+                print('start date {} is larger than end date {}'.format(start_date, end_date))
+                api.abort(404)
+
+            query = {'run_date__lte': end_date, 'run_date__gte': start_date}
+        else:
+            query = {}
 
         page = int(page)
         limit = int(limit)
 
+        if priority and priority != '' and priority.isdigit() and \
+                int(priority) >= QUEUE_PRIORITY_MIN and int(priority) <= QUEUE_PRIORITY_MAX:
+            query['priority'] = priority
+
+        if title and priority != '':
+            query['test_suite__contains'] = title
+
+        if endpoint and endpoint != '':
+            query['endpoint_run'] = endpoint
+
         dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
-        all_tasks = Task.objects(id__in=dirs).order_by(sort)
+        all_tasks = Task.objects(id__in=dirs, **query).order_by(sort)
         tasks = all_tasks[(page - 1) * limit : page * limit]
         tasks = [t.to_json() for t in tasks]
 
-        return {'items': tasks, 'total': len(all_tasks)}
+        return {'items': tasks, 'total': all_tasks.count()}
 
 @api.route('/')
 class TestResultCreate(Resource):

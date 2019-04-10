@@ -13,7 +13,7 @@ class EndpointController(Resource):
     def get(self):
         ret = []
         for ep in Endpoint.objects({}):
-            ret.append({'address': ep.endpoint_address, 'tests': [t.test_suite for t in ep.tests]})
+            ret.append({'address': ep.endpoint_address, 'name': ep.name, 'tests': [t.test_suite for t in ep.tests]})
         return ret
 
     @api.response(201, 'Endpoint address successfully created.')
@@ -47,6 +47,8 @@ class EndpointController(Resource):
             else:
                 print('a task queue exists')
                 api.abort(404)
+
+        endpoint.name = data.get('name', endpoint_address)
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
