@@ -159,9 +159,15 @@ robot demo-test.md
    1. Method GET
       Get a bundled script file that is necessary to run the test
       ```
+      $ http GET http://127.0.0.1:5000/test/script/demo-test
+      ```
+2. Test Description
+   1. Method GET
+      Get the description information of a test suite
+      ```
       $ http GET http://127.0.0.1:5000/test/demo-test
       ```
-2. Task Resource
+3. Task Resource
    1. Method POST
       Upload a file to the web server, will return a resource id associated with the uploading session.
       ```
@@ -181,11 +187,16 @@ robot demo-test.md
       }
       ```
    3. Method GET
-      Get a resource tarball associated to specified task id
+      Get a resource tarball associated to specified task id.
       ```
       $ http GET http://127.0.0.1:5000/taskresource/5c90aa12b38ff711584b3fab
       ```
-3. Task
+   4. Method GET
+      Get a resource file of the task
+      ```
+      $ http GET http://127.0.0.1:5000/taskresource/5c90aa12b38ff711584b3fab?file=firmware.bin
+      ```
+4. Task
    1. Method POST
       Run a task with certain variables.
       ```
@@ -213,17 +224,43 @@ robot demo-test.md
       `tester` will receive a notification email, so it should be a complete email address.
 
       `upload_dir` should be filled with the resource id returned above if there is any resource needed for the test.
-4. Test Endpoint
+   2. Method POST
+      Update the task description. At present, only comment could be updated.
+      ```
+      $ http POST http://127.0.0.1:5000/task/update < task.json
+      $ cat task.json
+      {
+        "_id": { "$oid": "5c90ae3db38ff7139cb96f68" },
+        "comment": "hello world"
+      }
+      ```
+   3. Method GET
+      Get task statistics within a specified period of time, result is a array whose element is the test statistics per day
+      ```
+      $ http POST http://127.0.0.1:5000/task/?start_date=1554277440941&end_date=1554882240941
+      [{
+        'succeeded': 12,
+        'failed': 10,
+        'running': 0,
+        'waiting': 0
+      }, ...]
+      ```
+5. Test Endpoint
    1. Method POST
       Create a test endpoint along with associated task queues with the specified address and supported test suites
       ```
       $ http POST http://127.0.0.1:5000/endpoint/ endpoint_address=127.0.0.1:8270 tests:=[\"demo-test\"]
       ```
-5. Task Result
-   1. Method GET
-      Get a list of tasks in the database, they may be in one of the following states: waiting, running, failed, successful.
+   2. Method GET
+      Get a list of endpoint descriptions
       ```
-      $ http GET http://127.0.0.1:5000/testresult
+      $ http GET http://127.0.0.1:5000/endpoint/
+      ```
+6. Task Result
+   1. Method GET
+      Get a list of tasks in the database, supported querying arguments are listed below.
+      ```
+      $ http GET http://127.0.0.1:5000/testresult?page=1&limit=10&title=wifi&priority=2&endpoint=127.0.0.1:8270&sort=-run_date&start_date=1554277440941&end_date=1554882240941
       ```
    2. Method POST
       Create the test result document in the database.

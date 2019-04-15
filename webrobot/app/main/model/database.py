@@ -31,25 +31,27 @@ class Test(Document):
 class Task(Document):
     schema_version = StringField(max_length=10, default='1')
     test = ReferenceField(Test)
-    test_suite = StringField()  # embedded document from Test
+    test_suite = StringField(max_length=100)  # embedded document from Test
     testcases = ListField(StringField())
     schedule_date = DateTimeField(default=datetime.datetime.utcnow)
     run_date = DateTimeField()
-    status = StringField(default='waiting')
+    status = StringField(max_length=50, default='waiting')
+    comment = StringField(max_length=1000)
     kickedoff = IntField(min_value=0, default=0)
-    endpoint_list = ListField(StringField())
+    endpoint_list = ListField(StringField(max_length=50))
     parallelization = BooleanField(default=False)
-    endpoint_run = StringField()
+    endpoint_run = StringField(max_length=50)
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     variables = DictField()
     tester = EmailField()
-    upload_dir = StringField()
+    upload_dir = StringField(max_length=100)
     test_results = ListField(ReferenceField('TestResult'))
 
     meta = {'collection': 'tasks'}
 
 class Endpoint(Document):
     schema_version = StringField(max_length=10, default='1')
+    name = StringField(max_length=100)
     endpoint_address = StringField(required=True)
     tests = ListField(ReferenceField(Test))
 
@@ -60,7 +62,7 @@ class TaskQueue(Document):
     Per endpoint per priority queue
     '''
     schema_version = StringField(max_length=10, default='1')
-    endpoint_address = StringField(required=True)  # embedded document from Endpoint
+    endpoint_address = StringField(max_length=50, required=True)  # embedded document from Endpoint
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     tasks = ListField(ReferenceField(Task))
     endpoint = ReferenceField(Endpoint)
