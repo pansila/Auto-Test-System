@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from datetime import date, datetime, timedelta
 
-from flask import request
+from flask import request, Response
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
@@ -62,6 +62,24 @@ class TaskStatistics(Resource):
             start = start + timedelta(days=1)
             end = start + timedelta(days=1)
         return stats
+
+@api.route('/result/<task_id>')
+class TaskStatistics(Resource):
+    @api.doc('get the detailed result for a task')
+    def get(self, task_id):
+        dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
+        if task_id not in dirs:
+            print('Task result directory not found')
+            api.abort(404)
+
+        try:
+            task = Task.objects(id=task_id).get()
+        except Task.DoesNotExist:
+            print('Task not found')
+            api.abort(404)
+
+        with open(Path(get_config().TEST_RESULT_ROOT) / task_id / 'output.xml', encoding='utf-8') as f:
+            return Response(f.read(), mimetype='text/xml')
 
 @api.route('/')
 class TaskController(Resource):

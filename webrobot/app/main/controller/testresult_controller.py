@@ -102,24 +102,32 @@ class TestResultCreate(Resource):
     def post(self):
         data = request.json
         if data is None:
+            print("payload of the request is empty")
             api.abort(404)
 
         task_id = data.get('task_id', None)
         if task_id == None:
+            print("field task_id is required")
             api.abort(404)
         try:
             task = Task.objects(pk=task_id).get()
         except Task.DoesNotExist:
+            print("task not found")
             api.abort(404)
 
         test_case = data.get('test_case', None)
         if test_case == None:
+            print("field test_case is required")
             api.abort(404)
 
         test_result = TestResult()
         test_result.test_case = test_case
         test_result.task = ObjectId(task_id)
-        test_result.save()
+        try:
+            test_result.save()
+        except ValidationError:
+            print("test result validation failed")
+            api.abort(404)
 
         task.test_results.append(test_result)
         task.save()
@@ -138,9 +146,11 @@ class TestResultUpload(Resource):
         try:
             task = Task.objects(pk=task_id).get()
         except Task.DoesNotExist:
+            print("task not found")
             api.abort(404)
 
         if task.test_results is None or len(task.test_results) == 0:
+            print("test result not found")
             api.abort(404)
 
         cur_test_result = task.test_results[-1]
@@ -153,4 +163,5 @@ class TestResultUpload(Resource):
         try:
             cur_test_result.save()
         except ValidationError:
+            print("test result validation failed")
             api.abort(404)

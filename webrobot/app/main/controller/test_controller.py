@@ -25,10 +25,11 @@ class ScriptDownload(Resource):
         script_file = SCRIPT_ROOT / (test_suite + '.py')
         if not os.path.exists(script_file):
             print("file {} does not exist".format(script_file))
-            return None
+            api.abort(404)
 
         tarball = pack_files(test_suite, SCRIPT_ROOT, TARBALL_TEMP)
         if not tarball:
+            print("packaging files failed")
             api.abort(404)
         else:
             tarball = os.path.basename(tarball)
@@ -42,7 +43,7 @@ class TestSuiteGet(Resource):
         try:
             test = Test.objects(test_suite=test_suite).get()
         except Test.DoesNotExist:
-            print('Test not found')
+            print('Test {} not found'.format(test_suite))
             api.abort(404)
 
         return test.to_json()
