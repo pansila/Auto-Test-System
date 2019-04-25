@@ -11,18 +11,49 @@ api = EndpointDto.api
 class EndpointController(Resource):
     @api.doc('get all test endpoints available')
     def get(self):
-        ret = []
-        for ep in Endpoint.objects({}):
-            ret.append({'address': ep.endpoint_address, 'name': ep.name, 'tests': [t.test_suite for t in ep.tests]})
-        return ret
+        page = request.args.get('page', default=1)
+        limit = request.args.get('limit', default=10)
+        title = request.args.get('title', default=None)
 
-    @api.response(201, 'Endpoint address successfully created.')
+        page = int(page)
+        limit = int(limit)
+
+        query = []
+        if title:
+            query.append({'name__contains': title})
+            query.append({'endpoint_address__contains': title})
+        query.append({})
+
+        ret = []
+        for q in query:
+            for ep in Endpoint.objects(**q):
+                ret.append({
+                    'address': ep.endpoint_address,
+                    'name': ep.name,
+                    'status': ep.status,
+                    'enable': ep.enable,
+                    'last_run': ep.last_run_date.timestamp() * 1000 if ep.last_run_date else 0,
+                    'tests': [t.test_suite for t in ep.tests],
+                    'test_refs': [str(t.id) for t in ep.tests]
+                })
+            if len(ret) > 0:
+                break
+        return ret[(page-1)*limit:page*limit]
+
+    @api.doc('delete the test endpoint with the specified address')
+    def delete(self):
+        address = request.args.get('address', default=None)
+        if address:
+            ep = Endpoint.objects(endpoint_address=address)
+            if ep:
+                ep.delete()
+
     @api.doc('create a task queue for the endpoint address')
     def post(self):
         data = request.json
 
         endpoint_address = data.get('endpoint_address', None)
-        if endpoint_address is None:
+        if endpoint_address is None or endpoint_address == '':
             print('field endpoint_address is required')
             api.abort(404)
 
@@ -49,12 +80,14 @@ class EndpointController(Resource):
                 print('a task queue exists')
                 api.abort(404)
 
-        endpoint.name = data.get('name', endpoint_address)
+        endpoint.name = data.get('endpoint_name', endpoint_address)
+        endpoint.enable = data.get('enable', False)
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
             print('tests is not a list')
             api.abort(404)
+        endpoint.tests = []
         for t in tests:
             try:
                 tt = Test.objects(test_suite=t).get()

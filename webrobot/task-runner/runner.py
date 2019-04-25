@@ -19,7 +19,7 @@ from util.notification import send_email
 from app.main.config import get_config
 from app.main.model.database import (QUEUE_PRIORITY_DEFAULT,
                                      QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN,
-                                     Task, TaskArchived, TaskQueue, Test)
+                                     Endpoint, Task, TaskArchived, TaskQueue, Test)
 
 
 RESULT_DIR = Path(get_config().TEST_RESULT_ROOT)
@@ -92,6 +92,16 @@ def run_task_for_endpoint(endpoint):
                         else:
                             task.status = 'failed'
                         task.save()
+
+                        try:
+                            ep = Endpoint.objects(endpoint_address=endpoint).get()
+                        except Endpoint.DoesNotExist:
+                            print('No endpoint found with the address {}'.format(endpoint))
+                        except Endpoint.MultipleObjectsReturned:
+                            print('Multiple endpoints found with the address {}'.format(endpoint))
+                        else:
+                            ep.last_run_date = datetime.datetime.utcnow()
+                            ep.save()
 
                         if task.upload_dir:
                             resource_dir_tmp = Path(get_config().UPLOAD_ROOT) / task.upload_dir

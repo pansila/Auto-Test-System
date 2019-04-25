@@ -54,6 +54,9 @@ class Endpoint(Document):
     name = StringField(max_length=100)
     endpoint_address = StringField(required=True)
     tests = ListField(ReferenceField(Test))
+    status = StringField(default='Offline', max_length=10)
+    enable = BooleanField(default=True)
+    last_run_date = DateTimeField()
 
     meta = {'collection': 'endpoints'}
 
