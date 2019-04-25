@@ -41,7 +41,7 @@ Flask-Script = {version = "==2.0.6",index = "piwheels"}
 Flask-SocketIO = {version = "==2.9.3",index = "piwheels"}
 Flask-SQLAlchemy = {version = "==2.3.2",index = "piwheels"}
 Flask-Testing = {version = "==0.7.1",index = "piwheels"}
-Jinja2 = {version = "==2.10",index = "piwheels"}
+Jinja2 = {index = "piwheels",version = "==2.10.1"}
 Mako = {version = "==1.0.7",index = "piwheels"}
 MarkupSafe = {version = "==1.0",index = "piwheels"}
 PyJWT = {version = "==1.5.3",index = "piwheels"}
@@ -50,7 +50,8 @@ Werkzeug = {version = "==0.14.1",index = "piwheels"}
 mongoengine = {version = "==0.17.0",index = "piwheels"}
 mistune = {version = "==0.8.4",index = "piwheels"}
 robotframework = {version = "==3.1.1",index = "piwheels"}
-requests = {index = "piwheels",version = "*"}
+requests = {index = "piwheels",version = "==2.21.0"}
+pymongo = {index = "piwheels",version = "==3.8.0"}
 
 [requires]
 python_version = "3.6"

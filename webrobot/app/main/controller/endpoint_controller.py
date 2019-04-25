@@ -23,6 +23,7 @@ class EndpointController(Resource):
 
         endpoint_address = data.get('endpoint_address', None)
         if endpoint_address is None:
+            print('field endpoint_address is required')
             api.abort(404)
 
         try:
@@ -58,7 +59,7 @@ class EndpointController(Resource):
             try:
                 tt = Test.objects(test_suite=t).get()
             except Test.DoesNotExist:
-                print('specified test suite {} does not exist'.format(t))
+                print('test suite {} not found'.format(t))
                 api.abort(404)
             else:
                 endpoint.tests.append(tt)
