@@ -12,7 +12,6 @@ from app.main.config import get_config
 BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:5000/testresult/{}/log.html'
 SUBJECT_TEMPLATE = 'Test Report for {}'
 
-socket.setdefaulttimeout(5)
 
 def _format_addr(s):
     name, addr = parseaddr(s)
