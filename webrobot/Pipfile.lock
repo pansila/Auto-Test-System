@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "7f24a5e0dfbbbcc804ce6918d696cae9700a400f930a0b8913cfe4081dddf93c"
+            "sha256": "f79b548a549089aa7e093c61f36185925df18e91917395dc6011cfd959a6a194"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -188,6 +188,22 @@
             "index": "piwheels",
             "version": "==0.0.2"
         },
+        "enum34": {
+            "hashes": [
+                "sha256:2d81cbbe0e73112bdfe6ef8576f2238f2ba27dd0d55752a776c41d38b7da2850",
+                "sha256:644837f692e5f550741432dd3f223bbb9852018674981b1664e5dc339387588a",
+                "sha256:6bd0f6ad48ec2aa117d3d141940d484deccda84d4fcd884f5c3d93c23ecd8c79",
+                "sha256:8ad8c4783bf61ded74527bffb48ed9b54166685e4230386a9ed9b1279e2df5b1"
+            ],
+            "version": "==1.1.6"
+        },
+        "et-xmlfile": {
+            "hashes": [
+                "sha256:3f5fe09a295a4be6095e22eefbc5178499e5c7fc4043f5872c4849b9ffc7a37e",
+                "sha256:614d9722d572f6246302c4491846d2c393c199cfa4edc9af593437691683335b"
+            ],
+            "version": "==1.0.1"
+        },
         "eventlet": {
             "hashes": [
                 "sha256:08faffab88c1b08bd53ea28bf084a572c89f7e7648bd9d71e6116ac17a51a15d",
@@ -329,6 +345,13 @@
             "index": "piwheels",
             "version": "==0.24"
         },
+        "jdcal": {
+            "hashes": [
+                "sha256:1abf1305fce18b4e8aa248cf8fe0c56ce2032392bc64bbd61b5dff2a19ec8bba",
+                "sha256:472872e096eb8df219c23f2689fc336668bdb43d194094b5cc1707e1640acfc8"
+            ],
+            "version": "==1.4.1"
+        },
         "jinja2": {
             "hashes": [
                 "sha256:065c4f02ebe7f7cf559e49ee5a95fb800a9e4528727aec6f24402a5374c65013",
@@ -378,6 +401,20 @@
             ],
             "index": "piwheels",
             "version": "==0.17.0"
+        },
+        "natsort": {
+            "hashes": [
+                "sha256:a9156f61336a8d743f67a8c9f336b1287529f67a07fe6001c7d4b5673a42308e",
+                "sha256:c960082d2145b04723041c4b85092546560538e29664dd197a1344d5b090bc91"
+            ],
+            "version": "==5.2.0"
+        },
+        "openpyxl": {
+            "hashes": [
+                "sha256:59cc108fdbac22d54d2794e88718a2f935c226a9d194a85c1d44ee3af54ec3d5",
+                "sha256:c875fbefae29c4ac9ceaa88470b682834495173cbe9cd37e7286285b7fbc2602"
+            ],
+            "version": "==2.5.1"
         },
         "psycopg2": {
             "hashes": [
@@ -530,6 +567,14 @@
             "index": "piwheels",
             "version": "==3.1.1"
         },
+        "robotframework-excel": {
+            "hashes": [
+                "sha256:32b2673ecfd519dd305bd50107915363592727936596a248e0cf14c776e39cf4",
+                "sha256:cc94c6a72a6093ea294e09b7797d20c38934c74200aaf7876212251867a4e761"
+            ],
+            "index": "piwheels",
+            "version": "==1.0.0b4"
+        },
         "six": {
             "hashes": [
                 "sha256:70e8a77beed4562e7f14fe23a786b54f6296e34344c23bc42f07b15018ff98e9",
@@ -561,6 +606,27 @@
             ],
             "index": "piwheels",
             "version": "==0.14.1"
+        },
+        "xlrd": {
+            "hashes": [
+                "sha256:546eb36cee8db40c3eaa46c351e67ffee6eeb5fa2650b71bc4c758a29a1b29b2",
+                "sha256:e551fb498759fa3a5384a94ccd4c3c02eb7c00ea424426e212ac0c57be9dfbde"
+            ],
+            "version": "==1.2.0"
+        },
+        "xlutils": {
+            "hashes": [
+                "sha256:7e0e2c233bd185fecf5e2bd3f4e9469ca4a3bd87da64c82cfe5b2af27e7f9e54",
+                "sha256:b56640862c030e9d53104e7f1d750135fdfabf6bf55e425e5ac40fdee9dbaeb9"
+            ],
+            "version": "==2.0.0"
+        },
+        "xlwt": {
+            "hashes": [
+                "sha256:a082260524678ba48a297d922cc385f58278b8aa68741596a87de01a9c628b2e",
+                "sha256:c59912717a9b28f1a3c2a98fd60741014b06b043936dcecbc113eaaada156c88"
+            ],
+            "version": "==1.3.0"
         }
     },
     "develop": {}
