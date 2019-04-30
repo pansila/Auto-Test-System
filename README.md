@@ -251,15 +251,61 @@ robot demo-test.md
       $ http GET http://127.0.0.1:5000/task/result/<task_id>
       ```
 5. Test Endpoint
-   1. Method POST
+   1. Method GET
+      Get a list of endpoint descriptions
+      ```
+      $ http GET http://127.0.0.1:5000/endpoint/
+      ```
+   2. Method POST
       Create a test endpoint along with associated task queues with the specified address and supported test suites
       ```
       $ http POST http://127.0.0.1:5000/endpoint/ endpoint_address=127.0.0.1:8270 tests:=[\"demo-test\"]
       ```
-   2. Method GET
-      Get a list of endpoint descriptions
+   3. Method GET
+      Get the task queue of an endpoint
       ```
-      $ http GET http://127.0.0.1:5000/endpoint/
+      $ http GET http://127.0.0.1:5000/endpoint/queue/
+      [
+          {
+              "address": "127.0.0.1:8270",
+              "endpoint": "test site 1@lab1",
+              "priority": 1,
+              "status": "Online",
+              "tasks": [],
+              "waiting": 0
+          },
+          {
+              "address": "127.0.0.1:8270",
+              "endpoint": "test site 1@lab1",
+              "priority": 2,
+              "status": "Online",
+              "tasks": [
+                  {
+                      "address": "127.0.0.1:8270",
+                      "endpoint": "test site 1@lab1",
+                      "priority": 2,
+                      "status": "Running",
+                      "task": "demo-test",
+                      "task_id": "5cc7d2a3c74f38639e31e062"
+                  },
+                  {
+                      "address": "127.0.0.1:8270",
+                      "endpoint": "test site 1@lab1",
+                      "priority": 2,
+                      "status": "Waiting",
+                      "task": "demo-test",
+                      "task_id": "5cc7d2a4c74f38639e31e063"
+                  }
+              ],
+              "waiting": 1
+          },
+          ...
+      ]
+      ```
+   4. Method POST
+      Update the task queue of an endpoint, data structure is the same as the result from task queue GET API
+      ```
+      $ http POST http://127.0.0.1:5000/endpoint/queue/
       ```
 6. Task Result
    1. Method GET

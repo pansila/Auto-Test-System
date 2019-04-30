@@ -48,16 +48,36 @@ def run_task(queue, args):
 def run_task_for_endpoint(endpoint):
     while True:
         for priority in (QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MIN):
+            try:
+                taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=priority).get()
+            except TaskQueue.DoesNotExist:
+                print('taskqueue has been deleted, exit the task loop')
+                break
+            except TaskQueue.MultipleObjectsReturned:
+                print('Multiple taskqueues found')
+
             task = TaskQueue.pop(endpoint, priority)
             if task:
                 if isinstance(task, DBRef):
                     print('task {} has been deleted, ignore it'.format(task.id))
+                    continue
+                if not TaskQueue.acquire_lock(endpoint, priority):
+                    print('task queue locking timed out')
+                    continue
+
                 if task.kickedoff == 0 or task.parallelization:
                     task = Task.objects(pk=task.id).modify(new=True, inc__kickedoff=1)
                     if task.kickedoff != 1 and not task.parallelization:
                         print('a race condition happened')
                     else:
+                        # if task.parallelization:
+                        #     task = Task(task)
                         print('\nStart to run task {} ...'.format(task.id))
+                        task.status = 'running'
+                        task.run_date = datetime.datetime.utcnow()
+                        task.endpoint_run = endpoint
+                        task.save()
+
                         result_dir = RESULT_DIR / str(task.id)
                         args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
                         # args = ['--outputdir', str(result_dir), '--extension', 'md']
@@ -75,10 +95,9 @@ def run_task_for_endpoint(endpoint):
                                     '-v', 'port_test:{}'.format(int(port)+1), '-v', 'task_id:{}'.format(task.id)])
                         args.append(task.test.path)
 
-                        task.status = 'running'
-                        task.run_date = datetime.datetime.utcnow()
-                        task.endpoint_run = endpoint
-                        task.save()
+                        taskqueue.running_task = task
+                        taskqueue.save()
+                        TaskQueue.release_lock(endpoint, priority)
 
                         proc_queue = multiprocessing.Queue()
                         proc = multiprocessing.Process(target=run_task, args=(proc_queue, args))
@@ -92,6 +111,12 @@ def run_task_for_endpoint(endpoint):
                         else:
                             task.status = 'failed'
                         task.save()
+
+                        if not TaskQueue.acquire_lock(endpoint, priority):
+                            print('task queue locking timed out, continue anyway')
+                        taskqueue.running_task = None
+                        taskqueue.save()
+                        TaskQueue.release_lock(endpoint, priority)
 
                         try:
                             ep = Endpoint.objects(endpoint_address=endpoint).get()
@@ -114,6 +139,7 @@ def run_task_for_endpoint(endpoint):
                         TaskArchived.objects({}).modify(push__tasks=task)
                 else:
                     print('task has been kicked off, do nothing but to pop the task from the queue')
+                TaskQueue.release_lock(endpoint, priority)
                 break
         time.sleep(1)
 

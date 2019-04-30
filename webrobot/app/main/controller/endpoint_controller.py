@@ -43,6 +43,13 @@ class EndpointController(Resource):
     @api.doc('delete the test endpoint with the specified address')
     def delete(self):
         address = request.args.get('address', default=None)
+        if address is None:
+            print('parameter address is required')
+            api.abort(404)
+
+        for taskqueue in TaskQueue.objects(endpoint_address=address):
+            taskqueue.delete()
+
         if address:
             ep = Endpoint.objects(endpoint_address=address)
             if ep:
@@ -99,3 +106,82 @@ class EndpointController(Resource):
         endpoint.save()
 
         return {'status': 0}
+
+@api.route('/queue/')
+class EndpointController(Resource):
+    @api.doc('get queuing tasks of an endpoint')
+    def get(self):
+        query = {}
+        address = request.args.get('address', default=None)
+        if address:
+            query = {'endpoint_address': address}
+
+        ret = []
+        for taskqueue in TaskQueue.objects(**query):
+            taskqueue_stat = ({
+                'endpoint': taskqueue.endpoint.name,
+                'address': taskqueue.endpoint_address,
+                'priority': taskqueue.priority,
+                'waiting': len(taskqueue.tasks),
+                'status': taskqueue.endpoint.status,
+                'tasks': []
+            })
+            if taskqueue.running_task and taskqueue.running_task.status == 'running':
+                taskqueue_stat['tasks'].append({
+                    'endpoint': taskqueue.endpoint.name,
+                    'address': taskqueue.endpoint_address,
+                    'priority': taskqueue.priority,
+                    'task': taskqueue.running_task.test_suite,
+                    'task_id': str(taskqueue.running_task.id),
+                    'status': 'Running'
+                })
+            for task in taskqueue.tasks:
+                taskqueue_stat['tasks'].append({
+                    'endpoint': taskqueue.endpoint.name,
+                    'address': taskqueue.endpoint_address,
+                    'priority': task.priority,
+                    'task': task.test_suite,
+                    'task_id': str(task.id),
+                    'status': 'Waiting'})
+            ret.append(taskqueue_stat)
+        return ret
+
+    @api.doc('update task queue of an endpoint')
+    def post(self):
+        taskqueues = request.json
+
+        for taskqueue in taskqueues:
+            if 'address' not in taskqueue or 'priority' not in taskqueue:
+                print('task queue lacks the field address and field priority')
+                api.abort(404)
+            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'])
+            if queue.count() != 1:
+                print('task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority']))
+                api.abort(404)
+
+            for task in taskqueue['tasks']:
+                if 'task_id' not in task:
+                    print('task lacks the field task_id')
+                    api.abort(404)
+                if task['priority'] != taskqueue['priority']:
+                    print('task\'s priority is not equal to taskqueue\'s')
+                    api.abort(404)
+                try:
+                    t = Task.objects(pk=task['task_id']).get()
+                except Task.DoesNotExist:
+                    print('task not found for ' + task['task_id'])
+                    api.abort(404)
+
+            q = queue[0]
+            if not q.flush(q.endpoint_address, q.priority):
+                print('task queue flushing failed')
+                api.abort(404)
+                break
+
+            for task in taskqueue['tasks']:
+                # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
+                t = Task.objects(pk=task['task_id']).get()
+                if t.status == 'waiting':
+                    if not q.push(t, q.endpoint_address, q.priority):
+                        print('pushing the task to task queue timed out')
+                        api.abort(404)
