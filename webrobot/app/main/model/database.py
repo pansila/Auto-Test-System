@@ -1,10 +1,13 @@
 import datetime
+import time
 
 from mongoengine import *
 
 QUEUE_PRIORITY_MIN = 1
 QUEUE_PRIORITY_DEFAULT = 2
 QUEUE_PRIORITY_MAX = 3
+
+LOCK_TIMEOUT = 5
 
 class Test(Document):
     schema_version = StringField(max_length=10, default='1')
@@ -69,18 +72,42 @@ class TaskQueue(Document):
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     tasks = ListField(ReferenceField(Task))
     endpoint = ReferenceField(Endpoint)
+    running_task = ReferenceField(Task)
+    rwLock = BooleanField(default=False)
 
     meta = {'collection': 'taskqueues'}
+
+    @classmethod
+    def acquire_lock(cls, endpoint_address, priority):
+        timeout = 0
+        while True:
+            old = cls.objects(priority=priority, endpoint_address=endpoint_address).modify(rwLock=True)
+            if old.rwLock:
+                if timeout >= LOCK_TIMEOUT:
+                    return False
+                time.sleep(0.1)
+                timeout = timeout + 0.1
+            else:
+                break
+        return True
+
+    @classmethod
+    def release_lock(cls, endpoint_address, priority):
+        cls.objects(priority=priority, endpoint_address=endpoint_address).modify(rwLock=False)
 
     @classmethod
     def pop(cls, endpoint_address, priority=QUEUE_PRIORITY_DEFAULT):
         '''
         pop from the head of queue
         '''
+        if not cls.acquire_lock(endpoint_address, priority):
+            return None
         queue = cls.objects(priority=priority, endpoint_address=endpoint_address).modify(pop__tasks=-1)
         if queue == None or len(queue.tasks) == 0:
-            return None
-        task = queue.tasks[0]
+            task = None
+        else:
+            task = queue.tasks[0]
+        cls.release_lock(endpoint_address, priority)
         return task
 
     @classmethod
@@ -88,10 +115,25 @@ class TaskQueue(Document):
         '''
         push a task into the tail of queue
         '''
-        queue = cls.objects(priority=priority, endpoint_address=endpoint_address).modify(new=True, push__tasks=task)
-        if queue == None:
+        if not cls.acquire_lock(endpoint_address, priority):
             return None
+        queue = cls.objects(priority=priority, endpoint_address=endpoint_address).modify(new=True, push__tasks=task)
+        cls.release_lock(endpoint_address, priority)
         return queue
+    
+    @classmethod
+    def flush(cls, endpoint_address, priority):
+        if not cls.acquire_lock(endpoint_address, priority):
+            return False
+        queue = cls.objects(priority=priority, endpoint_address=endpoint_address)
+        if queue.count() != 1:
+            cls.release_lock(endpoint_address, priority)
+            return False
+        q = queue[0]
+        q.tasks = []
+        q.save()
+        cls.release_lock(endpoint_address, priority)
+        return True
 
     # @classmethod
     # def __getitem__(cls, index, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address):

@@ -13,8 +13,26 @@ from ..config import get_config
 
 api = TaskDto.api
 
-@api.route('/')
+@api.route('/result/<task_id>')
 class TaskStatistics(Resource):
+    @api.doc('get the detailed result for a task')
+    def get(self, task_id):
+        dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
+        if task_id not in dirs:
+            print('Task result directory not found')
+            api.abort(404)
+
+        try:
+            task = Task.objects(id=task_id).get()
+        except Task.DoesNotExist:
+            print('Task not found')
+            api.abort(404)
+
+        with open(Path(get_config().TEST_RESULT_ROOT) / task_id / 'output.xml', encoding='utf-8') as f:
+            return Response(f.read(), mimetype='text/xml')
+
+@api.route('/')
+class TaskController(Resource):
     @api.doc('get the statistics for a task')
     def get(self):
         start_date = request.args.get('start_date', default=(datetime.utcnow().timestamp()-86300)*1000)
@@ -63,26 +81,6 @@ class TaskStatistics(Resource):
             end = start + timedelta(days=1)
         return stats
 
-@api.route('/result/<task_id>')
-class TaskStatistics(Resource):
-    @api.doc('get the detailed result for a task')
-    def get(self, task_id):
-        dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
-        if task_id not in dirs:
-            print('Task result directory not found')
-            api.abort(404)
-
-        try:
-            task = Task.objects(id=task_id).get()
-        except Task.DoesNotExist:
-            print('Task not found')
-            api.abort(404)
-
-        with open(Path(get_config().TEST_RESULT_ROOT) / task_id / 'output.xml', encoding='utf-8') as f:
-            return Response(f.read(), mimetype='text/xml')
-
-@api.route('/')
-class TaskController(Resource):
     @api.response(201, 'Test suite successfully ran.')
     @api.doc('run a test suite')
     def post(self):
@@ -116,7 +114,7 @@ class TaskController(Resource):
             api.abort(404)
         task.endpoint_list = endpoint_list
 
-        priority = data.get('priority', QUEUE_PRIORITY_DEFAULT)
+        priority = int(data.get('priority', QUEUE_PRIORITY_DEFAULT))
         if priority < QUEUE_PRIORITY_MIN or priority > QUEUE_PRIORITY_MAX:
             print('task priority is out of range')
             api.abort(404)
@@ -162,10 +160,8 @@ class TaskController(Resource):
 
         return {'status': 0, 'data': task.to_json()}
 
-@api.route('/update')
-class TaskUpdate(Resource):
     @api.doc('update a task')
-    def post(self):
+    def patch(self):
         data = request.json
         if data is None:
             print('The request data is empty')
@@ -190,3 +186,44 @@ class TaskUpdate(Resource):
         else:
             task.comment = comment
             task.save()
+
+    @api.doc('cancel a task')
+    def delete(self):
+        data = request.json
+        if data is None:
+            print('The request data is empty')
+            api.abort(404)
+
+        task_id = data.get('task_id', None)
+        if task_id is None:
+            print('field task_id is required')
+            api.abort(404)
+        address = data.get('address', None)
+        if address is None:
+            print('field address is required')
+            api.abort(404)
+        priority = data.get('priority', None)
+        if priority is None:
+            print('field priority is required')
+            api.abort(404)
+        status = data.get('status', None)
+        if status is None:
+            print('field status is required')
+            api.abort(404)
+
+        if not TaskQueue.acquire_lock(address, priority):
+            print('task locking timed out')
+            api.abort(404)
+        try:
+            t = Task.objects(pk=task_id).get()
+        except Task.DoesNotExist:
+            print('task not found for ' + task_id)
+            TaskQueue.release_lock(address, priority)
+            api.abort(404)
+        else:
+            if t.status == 'waiting':
+                t.status = 'cancelled'
+                t.save()
+            elif t.status == 'running':
+                TaskQueue.objects(endpoint_address=address, priority=priority).modify(running_task=None)
+        TaskQueue.release_lock(address, priority)
