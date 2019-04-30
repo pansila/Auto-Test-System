@@ -52,6 +52,7 @@ mistune = {version = "==0.8.4",index = "piwheels"}
 robotframework = {version = "==3.1.1",index = "piwheels"}
 requests = {index = "piwheels",version = "==2.21.0"}
 pymongo = {index = "piwheels",version = "==3.8.0"}
+robotframework-excel = {index = "piwheels",version = "==1.0.0b4"}
 
 [requires]
 python_version = "3.6"
