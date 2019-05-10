@@ -27,13 +27,19 @@ class EndpointController(Resource):
         ret = []
         for q in query:
             for ep in Endpoint.objects(**q):
+                tests = []
+                for t in ep.tests:
+                    if hasattr(t, 'test_suite'):
+                        tests.append(t.test_suite)
+                    else:
+                        tests.append(str(t.id))
                 ret.append({
                     'address': ep.endpoint_address,
                     'name': ep.name,
                     'status': ep.status,
                     'enable': ep.enable,
                     'last_run': ep.last_run_date.timestamp() * 1000 if ep.last_run_date else 0,
-                    'tests': [t.test_suite for t in ep.tests],
+                    'tests': tests,
                     'test_refs': [str(t.id) for t in ep.tests]
                 })
             if len(ret) > 0:

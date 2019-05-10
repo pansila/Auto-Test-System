@@ -1,9 +1,12 @@
-import mistune
-import os, sys
-from os import path
-import datetime
-from mongoengine import *
 import argparse
+import copy
+import datetime
+import os
+import sys
+from os import path
+
+import mistune
+from mongoengine import *
 
 sys.path.append('.')
 from app.main.model.database import Test
@@ -11,7 +14,7 @@ from app.main.config import get_config
 
 def filter_kw(item):
     item = item.strip()
-    if item.startswith('${'):
+    if item.startswith('${') or item.startswith('@{') or item.startswith('&{'):
         item = item[2:]
         if not item.endswith('}'):
             print('{ } mismatch for ' + item)
@@ -49,10 +52,34 @@ def update_test(scripts_dir):
                                     test.test_cases.append(c[0])
                                     break
                         if table_header == 'variable' or table_header == 'variables':
+                            list_var = None
                             for c in t["cells"]:
-                                if not c[0] == '---' and not c[0].startswith('#') and \
-                                        not c[0] == '...' and not c[0].startswith('@'):
-                                    test.variables[filter_kw(c[0])] = filter_kw(c[1])
+                                if c[0].startswith('#') or c[0].startswith('---'):
+                                    continue
+                                if c[0].startswith('${'):
+                                    list_var = None
+                                    dict_var = None
+                                    test.variables[filter_kw(c[0])] = c[1]
+                                elif c[0].startswith('@'):
+                                    dict_var = None
+                                    list_var = filter_kw(c[0])
+                                    test.variables[list_var] = c[1:]
+                                elif c[0].startswith('...'):
+                                    if list_var:
+                                        test.variables[list_var].extend(c[1:])
+                                    elif dict_var:
+                                        for i in c[1:]:
+                                            k, v = i.split('=')
+                                            test.variables[dict_var][k] = v
+                                elif c[0].startswith('&'):
+                                    list_var = None
+                                    dict_var = filter_kw(c[0])
+                                    test.variables[dict_var] = {}
+                                    for i in c[1:]:
+                                        k, v = i.split('=')
+                                        test.variables[dict_var][k] = v
+                                else:
+                                    print('Unknown tag: ' + c[0])
             try:
                 old_test = Test.objects(test_suite=test_suite).get()
             except Test.DoesNotExist:
@@ -66,11 +93,12 @@ def update_test(scripts_dir):
                 return 1
 
             if old_test != test:
+                for name in test:
+                    if name != 'id' and not name.startswith('_') and not callable(test[name]):
+                        old_test[name] = test[name]
                 print('Update test suite {}'.format(test_suite))
-                test.create_date = old_test.create_date
-                test.update_date = datetime.datetime.utcnow()
-                old_test.delete()
-                test.save()
+                old_test.update_date = datetime.datetime.utcnow()
+                old_test.save()
 
     # clean up stale test suites
     for test_old in Test.objects({}):
