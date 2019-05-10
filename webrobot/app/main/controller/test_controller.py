@@ -12,7 +12,7 @@ from ..util.tarball import make_tarfile, pack_files
 api = TestDto.api
 
 TARBALL_TEMP = Path('temp')
-SCRIPT_ROOT = Path(get_config().SCRIPT_ROOT)
+BACKING_SCRIPT_ROOT = Path(get_config().BACKING_SCRIPT_ROOT)
 
 @api.route('/script/<test_suite>')
 @api.param('test_suite', 'the test suite to download the script')
@@ -22,12 +22,12 @@ class ScriptDownload(Resource):
         if test_suite.endswith('.py'):
             test_suite = test_suite[0:-3]
 
-        script_file = SCRIPT_ROOT / (test_suite + '.py')
+        script_file = BACKING_SCRIPT_ROOT / (test_suite + '.py')
         if not os.path.exists(script_file):
             print("file {} does not exist".format(script_file))
             api.abort(404)
 
-        tarball = pack_files(test_suite, SCRIPT_ROOT, TARBALL_TEMP)
+        tarball = pack_files(test_suite, BACKING_SCRIPT_ROOT, TARBALL_TEMP)
         if not tarball:
             print("packaging files failed")
             api.abort(404)
