@@ -81,14 +81,21 @@ def run_task_for_endpoint(endpoint):
                         result_dir = RESULT_DIR / str(task.id)
                         args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
                         # args = ['--outputdir', str(result_dir), '--extension', 'md']
+                        os.mkdir(result_dir)
 
                         if hasattr(task, 'testcases'):
                             for t in task.testcases:
                                 args.extend(['-t', t])
 
                         if hasattr(task, 'variables'):
-                            for k, v in task.variables.items():
-                                args.extend(['-v', '{}:{}'.format(k, v)])
+                            variable_file = Path(result_dir) / 'variablefile.py'
+                            with open(variable_file, 'w') as f:
+                                for k, v in task.variables.items():
+                                    if isinstance(v, str):
+                                        f.write('{} = \'{}\'\n'.format(k, v))
+                                    else:
+                                        f.write('{} = {}\n'.format(k, v))
+                            args.extend(['--variablefile', variable_file])
 
                         addr, port = endpoint.split(':')
                         args.extend(['-v', 'address_daemon:{}'.format(addr), '-v', 'port_daemon:{}'.format(port),
@@ -99,6 +106,7 @@ def run_task_for_endpoint(endpoint):
                         taskqueue.save()
                         TaskQueue.release_lock(endpoint, priority)
 
+                        print('Arguments: ' + str(args))
                         proc_queue = multiprocessing.Queue()
                         proc = multiprocessing.Process(target=run_task, args=(proc_queue, args))
                         proc.daemon = True
