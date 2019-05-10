@@ -47,3 +47,9 @@ class EndpointDto:
     user = api.model('endpoint', {
         'test': fields.String(required=True, description='test'),
     })
+
+class ScriptDto:
+    api = Namespace('script', description='scripts management operations')
+    user = api.model('script', {
+        'test': fields.String(required=True, description='test'),
+    })
