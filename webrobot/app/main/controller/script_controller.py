@@ -7,7 +7,7 @@ from flask import Flask, send_from_directory, request
 from flask_restplus import Resource
 
 from ..config import get_config
-from ..model.database import Test
+from ..model.database import Event, EventQueue, Test, EVENT_CODE_UPDATE_USER_SCRIPT
 from ..util.dto import ScriptDto
 from ..util.tarball import path_to_dict
 
@@ -89,6 +89,15 @@ class ScriptManagement(Resource):
         
         if new_name:
             os.rename(USER_SCRIPT_ROOT / script, USER_SCRIPT_ROOT / os.path.dirname(script) / new_name)
+
+        event = Event()
+        event.code = EVENT_CODE_UPDATE_USER_SCRIPT
+        event.message['script'] = str(Path(os.path.dirname(script)) / new_name) if new_name else script
+        event.save()
+
+        if EventQueue.push(event) is None:
+            print('Pushing the event to event queue failed')
+            api.abort(404)
 
     def delete(self):
         script = request.json.get('file', None)

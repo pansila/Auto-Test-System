@@ -17,6 +17,7 @@ from mongoengine import connect
 
 sys.path.append('.')
 from util.notification import send_email
+from util.dbhelper import update_test
 from app.main.config import get_config
 from app.main.model.database import (EVENT_CODE_CANCEL_TASK, EVENT_CODE_UPDATE_USER_SCRIPT,
                                      QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN,
@@ -65,7 +66,8 @@ def event_handler_cancel_task(event):
         TaskQueue.release_lock(address, priority)
 
 def event_handler_update_user_script(event):
-    pass
+    script = event.message['script']
+    update_test(script=script)
 
 def run_event_loop():
     global ROBOT_TASKS
