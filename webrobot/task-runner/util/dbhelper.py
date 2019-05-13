@@ -4,6 +4,7 @@ import datetime
 import os
 import sys
 from os import path
+from pathlib import Path
 
 import mistune
 from mongoengine import *
@@ -22,11 +23,17 @@ def filter_kw(item):
             item = item[0:-1]
     return item
 
-def update_test(scripts_dir):
+def update_test(scripts_dir=None, script=None):
+    if scripts_dir is None:
+        scripts_dir = get_config().USER_SCRIPT_ROOT
+
     test_suites = []
-    for root, _, files in os.walk(scripts_dir):
+    for root, dirs, files in os.walk(scripts_dir):
         for md_file in files:
             if not md_file.endswith('.md'):
+                continue
+
+            if script and not str(Path(root) / md_file).endswith(script):
                 continue
 
             test_suite = md_file.split('.')[0]
@@ -106,8 +113,9 @@ def update_test(scripts_dir):
             if test_new == test_old.test_suite:
                 break
         else:
-            Test.objects(pk=test_old.id).modify(remove=True)
-            print('Remove stale test suite {}'.format(test_old.test_suite))
+            if script is None:
+                Test.objects(pk=test_old.id).modify(remove=True)
+                print('Remove stale test suite {}'.format(test_old.test_suite))
 
     return 0
 
@@ -127,7 +135,7 @@ if __name__ == '__main__':
         print([t.test_suite for t in test_suites])
     elif args.action == 'UPDATE':
         if args.scripts:
-            ret = update_test(args.scripts)
+            ret = update_test(scripts_dir=args.scripts)
             sys.exit(ret)
         else:
             print('Error: Need to specify --scripts as well')
