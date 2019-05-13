@@ -7,6 +7,9 @@ QUEUE_PRIORITY_MIN = 1
 QUEUE_PRIORITY_DEFAULT = 2
 QUEUE_PRIORITY_MAX = 3
 
+EVENT_CODE_CANCEL_TASK = 200
+EVENT_CODE_UPDATE_USER_SCRIPT = 201
+
 LOCK_TIMEOUT = 5
 
 class Test(Document):
@@ -161,3 +164,69 @@ class TaskArchived(Document):
     tasks = ListField(ReferenceField(Task))
 
     meta = {'collection': 'taskarchived'}
+
+class Event(Document):
+    schema_version = StringField(max_length=10, default='1')
+    code = IntField(required=True)
+    message = DictField()
+
+    meta = {'collection': 'events'}
+
+class EventQueue(Document):
+    schema_version = StringField(max_length=10, default='1')
+    events = ListField(ReferenceField(Event))
+    rwLock = BooleanField(default=False)
+
+    meta = {'collection': 'eventqueues'}
+
+    @classmethod
+    def acquire_lock(cls):
+        timeout = 0
+        while True:
+            old = cls.objects().modify(rwLock=True)
+            if old.rwLock:
+                if timeout >= LOCK_TIMEOUT:
+                    return False
+                time.sleep(0.1)
+                timeout = timeout + 0.1
+            else:
+                break
+        return True
+
+    @classmethod
+    def release_lock(cls):
+        cls.objects().modify(rwLock=False)
+
+    @classmethod
+    def pop(cls):
+        if not cls.acquire_lock():
+            return None
+        queue = cls.objects().modify(pop__events=-1)
+        if queue == None or len(queue.events) == 0:
+            event = None
+        else:
+            event = queue.events[0]
+        cls.release_lock()
+        return event
+
+    @classmethod
+    def push(cls, event):
+        if not cls.acquire_lock():
+            return None
+        queue = cls.objects().modify(new=True, push__events=event)
+        cls.release_lock()
+        return queue
+    
+    @classmethod
+    def flush(cls):
+        if not cls.acquire_lock():
+            return False
+        queue = cls.objects()
+        if queue.count() != 1:
+            cls.release_lock()
+            return False
+        q = queue[0]
+        q.events = []
+        q.save()
+        cls.release_lock()
+        return True

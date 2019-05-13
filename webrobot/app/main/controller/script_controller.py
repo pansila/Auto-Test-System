@@ -84,7 +84,6 @@ class ScriptManagement(Resource):
                 print('Unsupported script type ' + script_type)
                 api.abort(404)
 
-            print(root, script)
             with open(root / script, 'w') as f:
                 f.write(content)
         
