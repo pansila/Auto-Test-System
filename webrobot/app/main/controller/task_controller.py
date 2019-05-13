@@ -6,8 +6,8 @@ from flask import request, Response
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
-from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
-                              QUEUE_PRIORITY_MIN, Task, TaskQueue, Test)
+from ..model.database import (EVENT_CODE_CANCEL_TASK, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
+                              QUEUE_PRIORITY_MIN, Task, TaskQueue, Test, Event, EventQueue)
 from ..util.dto import TaskDto
 from ..config import get_config
 
@@ -211,19 +211,13 @@ class TaskController(Resource):
             print('field status is required')
             api.abort(404)
 
-        if not TaskQueue.acquire_lock(address, priority):
-            print('task locking timed out')
+        event = Event()
+        event.code = EVENT_CODE_CANCEL_TASK
+        event.message['address'] = address
+        event.message['priority'] = priority
+        event.message['task_id'] = task_id
+        event.save()
+
+        if EventQueue.push(event) is None:
+            print('Pushing the event to event queue failed')
             api.abort(404)
-        try:
-            t = Task.objects(pk=task_id).get()
-        except Task.DoesNotExist:
-            print('task not found for ' + task_id)
-            TaskQueue.release_lock(address, priority)
-            api.abort(404)
-        else:
-            if t.status == 'waiting':
-                t.status = 'cancelled'
-                t.save()
-            elif t.status == 'running':
-                TaskQueue.objects(endpoint_address=address, priority=priority).modify(running_task=None)
-        TaskQueue.release_lock(address, priority)

@@ -2,6 +2,7 @@ import argparse
 import datetime
 import multiprocessing
 import os
+import queue
 import shutil
 import signal
 import sys
@@ -11,18 +12,19 @@ import time
 from pathlib import Path
 
 import robot
-from bson import DBRef
+from bson import DBRef, ObjectId
 from mongoengine import connect
 
 sys.path.append('.')
 from util.notification import send_email
 from app.main.config import get_config
-from app.main.model.database import (QUEUE_PRIORITY_DEFAULT,
-                                     QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN,
-                                     Endpoint, Task, TaskArchived, TaskQueue, Test)
+from app.main.model.database import (EVENT_CODE_CANCEL_TASK, EVENT_CODE_UPDATE_USER_SCRIPT,
+                                     QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN,
+                                     Event, EventQueue, Endpoint, Task, TaskArchived, TaskQueue, Test)
 
 
 RESULT_DIR = Path(get_config().TEST_RESULT_ROOT)
+ROBOT_TASKS = []
 
 def make_tarfile(output_filename, source_dir):
     if output_filename[-2:] != 'gz':
@@ -31,6 +33,65 @@ def make_tarfile(output_filename, source_dir):
         tar.add(source_dir, arcname=os.path.basename(source_dir))
 
     return output_filename
+
+def event_handler_cancel_task(event):
+    address = event.message['address']
+    priority = event.message['priority']
+    task_id = event.message['task_id']
+
+    if not TaskQueue.acquire_lock(address, priority):
+        print('task locking timed out')
+    else:
+        try:
+            t = Task.objects(pk=task_id).get()
+        except Task.DoesNotExist:
+            print('task not found for ' + task_id)
+            TaskQueue.release_lock(address, priority)
+        else:
+            task = Task.objects(pk=task_id).get()
+            if task.status == 'waiting':
+                TaskQueue.objects(endpoint_address=address, priority=priority).update_one(pull__tasks=ObjectId(task_id))
+                Task.objects(pk=task_id).update_one(status='cancelled')
+            elif task.status == 'running':
+                TaskQueue.objects(endpoint_address=address, priority=priority).modify(running_task=None)
+                oid = ObjectId(task_id)
+                for idx, task in enumerate(ROBOT_TASKS):
+                    if task['task_id'] == oid:
+                        task['process'].terminate()
+                        del ROBOT_TASKS[idx]
+                        break
+                else:
+                    print('task not found for ' + task_id)
+        TaskQueue.release_lock(address, priority)
+
+def event_handler_update_user_script(event):
+    pass
+
+def run_event_loop():
+    global ROBOT_TASKS
+    while True:
+        try:
+            eventqueue = EventQueue.objects.get()
+        except EventQueue.DoesNotExist:
+            print('event queue does not exist, please create it first')
+            break
+        except EventQueue.MultipleObjectsReturned:
+            print('Error: multiple event queues found')
+            break
+
+        event = EventQueue.pop()
+        if event:
+            if isinstance(event, DBRef):
+                print('event {} has been deleted, ignore it'.format(event.id))
+                continue
+
+            print('\nStart to process event {} ...'.format(event.code))
+            if event.code == EVENT_CODE_CANCEL_TASK:
+                event_handler_cancel_task(event)
+            elif event.code == EVENT_CODE_UPDATE_USER_SCRIPT:
+                event_handler_update_user_script(event)
+
+        time.sleep(1)
 
 def run_task(queue, args):
     exit_orig = sys.exit
@@ -46,15 +107,17 @@ def run_task(queue, args):
     sys.exit = exit_orig
 
 def run_task_for_endpoint(endpoint):
+    global ROBOT_TASKS
     while True:
         for priority in (QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MIN):
             try:
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=priority).get()
             except TaskQueue.DoesNotExist:
-                print('taskqueue has been deleted, exit the task loop')
+                print('task queue has been deleted, exit the task loop')
                 break
             except TaskQueue.MultipleObjectsReturned:
-                print('Multiple taskqueues found')
+                print('Error: multiple task queues found')
+                continue
 
             task = TaskQueue.pop(endpoint, priority)
             if task:
@@ -107,18 +170,24 @@ def run_task_for_endpoint(endpoint):
                         TaskQueue.release_lock(endpoint, priority)
 
                         print('Arguments: ' + str(args))
-                        proc_queue = multiprocessing.Queue()
-                        proc = multiprocessing.Process(target=run_task, args=(proc_queue, args))
+                        proc_queue_read = multiprocessing.Queue()
+                        proc = multiprocessing.Process(target=run_task, args=(proc_queue_read, args))
                         proc.daemon = True
                         proc.start()
+
+                        ROBOT_TASKS.append({'task_id': task.id, 'process': proc, 'queue_read': proc_queue_read})
                         proc.join()
 
-                        ret = proc_queue.get()
-                        if ret == 0:
-                            task.status = 'successful'
+                        try:
+                            ret = proc_queue_read.get(timeout=1)
+                        except queue.Empty:
+                            pass
                         else:
-                            task.status = 'failed'
-                        task.save()
+                            if ret == 0:
+                                task.status = 'successful'
+                            else:
+                                task.status = 'failed'
+                            task.save()
 
                         if not TaskQueue.acquire_lock(endpoint, priority):
                             print('task queue locking timed out, continue anyway')
@@ -159,12 +228,17 @@ def restart_interrupted_tasks():
 
 def prepare_running_tasks():
     try:
-        TaskArchived.objects({}).get()
+        TaskArchived.objects().get()
     except TaskArchived.DoesNotExist:
         TaskArchived().save()
 
     try:
-        TaskQueue.objects({}).get()
+        EventQueue.objects().get()
+    except EventQueue.DoesNotExist:
+        EventQueue().save()
+
+    try:
+        TaskQueue.objects().get()
     except TaskQueue.MultipleObjectsReturned:
         pass
     except TaskQueue.DoesNotExist:
@@ -181,6 +255,10 @@ def listen_task():
 
     if prepare_running_tasks() == False:
         return 1
+
+    task_thread = threading.Thread(target=run_event_loop)
+    task_thread.daemon = True
+    task_thread.start()
 
     task_threads = []
     while True:
