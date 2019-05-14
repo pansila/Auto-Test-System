@@ -180,7 +180,7 @@ class EndpointController(Resource):
 
             q = queue[0]
             if not q.flush(q.endpoint_address, q.priority):
-                print('task queue flushing failed')
+                print('task queue {} {} flushing failed'.format(q.endpoint_address, q.priority))
                 api.abort(404)
                 break
 
