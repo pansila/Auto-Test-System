@@ -1,4 +1,5 @@
 import os
+import time
 from pathlib import Path
 
 from flask import Flask, send_from_directory
@@ -13,6 +14,11 @@ api = TestDto.api
 
 TARBALL_TEMP = Path('temp')
 BACKING_SCRIPT_ROOT = Path(get_config().BACKING_SCRIPT_ROOT)
+try:
+    os.mkdir(TARBALL_TEMP)
+except FileExistsError:
+    pass
+
 
 @api.route('/script/<test_suite>')
 @api.param('test_suite', 'the test suite to download the script')
@@ -27,13 +33,17 @@ class ScriptDownload(Resource):
             print("file {} does not exist".format(script_file))
             api.abort(404)
 
-        tarball = pack_files(test_suite, BACKING_SCRIPT_ROOT, TARBALL_TEMP)
-        if not tarball:
-            print("packaging files failed")
-            api.abort(404)
+        for _ in range(3):
+            tarball = pack_files(test_suite, BACKING_SCRIPT_ROOT, TARBALL_TEMP)
+            if tarball is None:
+                print("retry packaging files")
+                time.sleep(1)
+            else:
+                tarball = os.path.basename(tarball)
+                return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
         else:
-            tarball = os.path.basename(tarball)
-            return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
+            api.abort(404)
+            print("packaging files failed")
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'the test suite to query')

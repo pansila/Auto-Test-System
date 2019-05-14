@@ -151,9 +151,23 @@ class TaskController(Resource):
 
         failed = []
         for endpoint in task.endpoint_list:
-            ret = TaskQueue.push(task, endpoint, task.priority)
-            if ret == None:
-                failed.append(endpoint)
+            if task.parallelization:
+                new_task = Task()
+                for name in task:
+                    if name != 'id' and not name.startswith('_') and not callable(task[name]):
+                        new_task[name] = task[name]
+                else:
+                    new_task.save()
+                    ret = TaskQueue.push(new_task, endpoint, task.priority)
+                    if ret == None:
+                        failed.append(endpoint)
+            else:
+                ret = TaskQueue.push(task, endpoint, task.priority)
+                if ret == None:
+                    failed.append(endpoint)
+        else:
+            if task.parallelization:
+                task.delete()
         if len(failed) != 0:
             print('Task scheduling failed')
             api.abort(404)
