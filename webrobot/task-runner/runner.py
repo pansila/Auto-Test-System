@@ -95,6 +95,17 @@ def run_event_loop():
 
         time.sleep(1)
 
+
+def convert_json_to_robot_variable(args, variables, variable_file):
+    with open(variable_file, 'w') as f:
+        for k, v in variables.items():
+            if isinstance(v, str):
+                args.extend(['-v', '{}:{}'.format(k, v)])
+            else:
+                f.write('{} = {}\n'.format(k, v))
+
+    args.extend(['--variablefile', variable_file])
+
 def run_task(queue, args):
     exit_orig = sys.exit
     ret = 0
@@ -154,13 +165,7 @@ def run_task_for_endpoint(endpoint):
 
                         if hasattr(task, 'variables'):
                             variable_file = Path(result_dir) / 'variablefile.py'
-                            with open(variable_file, 'w') as f:
-                                for k, v in task.variables.items():
-                                    if isinstance(v, str):
-                                        f.write('{} = \'{}\'\n'.format(k, v))
-                                    else:
-                                        f.write('{} = {}\n'.format(k, v))
-                            args.extend(['--variablefile', variable_file])
+                            convert_json_to_robot_variable(args, task.variables, variable_file)
 
                         addr, port = endpoint.split(':')
                         args.extend(['-v', 'address_daemon:{}'.format(addr), '-v', 'port_daemon:{}'.format(port),
@@ -247,6 +252,16 @@ def prepare_running_tasks():
         print('Error: Task Queue has not been created')
         return False
     
+    task_queues = TaskQueue.objects(rwLock=True)
+    for q in task_queues:
+        q.update(rwLock=False)
+        print('Reset the read/write lock for queue {} with priority {}'.format(q.endpoint_address, q.priority))
+
+    event_queues = EventQueue.objects(rwLock=True)
+    for q in event_queues:
+        q.update(rwLock=False)
+        print('Reset the read/write lock for event queue')
+
     restart_interrupted_tasks()
 
     return True
