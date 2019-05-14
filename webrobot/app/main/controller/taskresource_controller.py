@@ -17,6 +17,11 @@ api = TaskResourceDto.api
 
 TARBALL_TEMP = Path('temp')
 UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
+try:
+    os.mkdir(UPLOAD_DIR)
+except FileExistsError:
+    pass
+
 
 @api.route('/<task_id>')
 @api.param('task_id', 'task id to process')
@@ -73,13 +78,7 @@ class TaskResourceList(Resource):
 class TaskResourceUpload(Resource):
     @api.doc('upload resource files associated with a task')
     def post(self):
-        upload_dir = Path(get_config().UPLOAD_ROOT)
         found = False
-
-        try:
-            os.mkdir(upload_dir)
-        except FileExistsError:
-            pass
 
         if 'resource_id' in request.form:
             temp_id = request.form['resource_id']

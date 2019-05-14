@@ -19,18 +19,29 @@ def pack_files(filename, src, dst):
     output = str(dst / filename)
 
     if not os.path.exists(src):
+        print('Source files {} do not exist'.format(src))
         return None
 
+    lock_file = dst / 'packing.lock'
+    if os.path.exists(lock_file):
+        print('source files {} are in use'.format(src))
+        return None
+    open(lock_file, 'w').close()
+
+    tmp_dir = dst / 'files'
     try:
-        if (os.path.exists(dst)):
-            shutil.rmtree(dst)
-        tmp_dir = dst / 'files'
+        if (os.path.exists(tmp_dir)):
+            shutil.rmtree(tmp_dir)
         shutil.copytree(src, tmp_dir)
         output = make_tarfile(output, tmp_dir)
     except:
-        print('making tar ball went wrong: {}'.format(sys.exc_info()))
+        # ex_type, ex_val, ex_stack = sys.exc_info()
+        # print('making tar ball went wrong: {}, {}'.format(ex_type, ex_val))
+        # print(ex_stack)
+        os.remove(lock_file)
         return None
     else:
+        os.remove(lock_file)
         return output
 
 def path_to_dict(path):
