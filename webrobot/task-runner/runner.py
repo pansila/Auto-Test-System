@@ -2,6 +2,7 @@ import argparse
 import datetime
 import multiprocessing
 import os
+import re
 import queue
 import shutil
 import signal
@@ -97,12 +98,54 @@ def run_event_loop():
 
 
 def convert_json_to_robot_variable(args, variables, variable_file):
+    local_args = None
+    p = re.compile(r'\${(.*?)}')
+
+    def var_replace(m):
+        nonlocal local_args
+        local_args.extend(m.groups(0))
+        return '{}'
+
     with open(variable_file, 'w') as f:
         for k, v in variables.items():
             if isinstance(v, str):
-                args.extend(['-v', '{}:{}'.format(k, v)])
-            else:
-                f.write('{} = {}\n'.format(k, v))
+                f.write(k + ' = ')
+                local_args = []
+                a = p.sub(var_replace, v)
+                if len(local_args) > 0:
+                    f.write('\'' + a + '\'.format(')
+                    for arg in local_args:
+                        f.write(arg + ', ')
+                    f.write(')')
+                else:
+                    f.write('\'{}\''.format(v))
+                f.write('\n')
+            elif isinstance(v, list):
+                f.write(k + ' = [')
+                for vv in v:
+                    local_args = []
+                    a = p.sub(var_replace, vv)
+                    if len(local_args) > 0:
+                        f.write('\'' + a + '\'.format(')
+                        for arg in local_args:
+                            f.write(arg + ', ')
+                        f.write('), ')
+                    else:
+                        f.write('\'{}\', '.format(vv))
+                f.write(']\n')
+            elif isinstance(v, dict):
+                f.write(k + ' = {')
+                for kk in v:
+                    local_args = []
+                    a = p.sub(var_replace, v[kk])
+                    if len(local_args) > 0:
+                        f.write('\'' + kk + '\': \'' + a + '\'.format(')
+                        for arg in local_args:
+                            f.write(arg + ', ')
+                        f.write('), ')
+                    else:
+                        f.write('\'{}\': \'{}\', '.format(kk, v[kk]))
+                f.write('}\n')
 
     args.extend(['--variablefile', variable_file])
 
