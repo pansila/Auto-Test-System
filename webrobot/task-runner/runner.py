@@ -45,21 +45,20 @@ def event_handler_cancel_task(event):
         print('task locking timed out')
     else:
         try:
-            t = Task.objects(pk=task_id).get()
+            task = Task.objects(pk=task_id).get()
         except Task.DoesNotExist:
             print('task not found for ' + task_id)
             TaskQueue.release_lock(address, priority)
         else:
-            task = Task.objects(pk=task_id).get()
+            oid = ObjectId(task_id)
             if task.status == 'waiting':
-                TaskQueue.objects(endpoint_address=address, priority=priority).update_one(pull__tasks=ObjectId(task_id))
+                TaskQueue.objects(endpoint_address=address, priority=priority).update_one(pull__tasks=oid)
                 Task.objects(pk=task_id).update_one(status='cancelled')
             elif task.status == 'running':
                 TaskQueue.objects(endpoint_address=address, priority=priority).modify(running_task=None)
-                oid = ObjectId(task_id)
-                for idx, task in enumerate(ROBOT_TASKS):
-                    if task['task_id'] == oid:
-                        task['process'].terminate()
+                for idx, proc in enumerate(ROBOT_TASKS):
+                    if proc['task_id'] == oid:
+                        proc['process'].terminate()
                         del ROBOT_TASKS[idx]
                         break
                 else:

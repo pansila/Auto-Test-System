@@ -3,6 +3,7 @@ from functools import wraps
 from flask import request
 
 from app.main.service.auth_helper import Auth
+from ..util.errors import *
 
 
 def token_required(f):
@@ -12,7 +13,7 @@ def token_required(f):
         data, status = Auth.get_logged_in_user(request)
         token = data.get('data')
 
-        if not token:
+        if data.get('code') != SUCCESS:
             return data, status
 
         return f(*args, **kwargs)
@@ -27,14 +28,16 @@ def admin_token_required(f):
         data, status = Auth.get_logged_in_user(request)
         token = data.get('data')
 
-        if not token:
+        if data.get('code') != SUCCESS:
             return data, status
 
-        admin = token.get('admin')
-        if not admin:
+        roles = token.get('roles')
+        if 'admin' not in roles:
             response_object = {
-                'status': 'fail',
-                'message': 'admin token required'
+                'code': ADMIN_TOKEN_REQUIRED,
+                'data': {
+                    'message': 'admin token required'
+                }
             }
             return response_object, 401
 

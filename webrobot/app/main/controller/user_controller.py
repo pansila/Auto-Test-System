@@ -2,9 +2,12 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.util.decorator import admin_token_required
+from app.main.model.user import User
 
 from ..service.user_service import get_a_user, get_all_users, save_new_user
+from ..service.auth_helper import Auth
 from ..util.dto import UserDto
+from ..util.errors import *
 
 api = UserDto.api
 _user = UserDto.user
@@ -28,16 +31,14 @@ class UserList(Resource):
         return save_new_user(data=data)
 
 
-@api.route('/<public_id>')
-@api.param('public_id', 'The User identifier')
-@api.response(404, 'User not found.')
-class User(Resource):
-    @api.doc('get a user')
-    @api.marshal_with(_user)
-    def get(self, public_id):
-        """get a user given its identifier"""
-        user = get_a_user(public_id)
-        if not user:
-            api.abort(404)
-        else:
-            return user
+@api.route('/info')
+class UserInfo(Resource):
+    """
+    User information
+    """
+    @api.doc('get the information of a user')
+    def get(self):
+        data, status = Auth.get_logged_in_user(request)
+        token = data.get('data')
+
+        return data, status

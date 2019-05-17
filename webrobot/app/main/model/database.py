@@ -1,6 +1,9 @@
 import datetime
 import time
+import jwt
 
+from .. import flask_bcrypt
+from ..config import key
 from mongoengine import *
 
 QUEUE_PRIORITY_MIN = 1
@@ -230,3 +233,93 @@ class EventQueue(Document):
         q.save()
         cls.release_lock()
         return True
+
+class User(Document):
+    schema_version = StringField(max_length=10, default='1')
+    email = EmailField(required=True, unique=True)
+    registered_on = DateTimeField(default=datetime.datetime.utcnow)
+    username = StringField(max_length=50)
+    password_hash = StringField(max_length=100)
+    roles = ListField(StringField(max_length=50))
+    avatar = StringField(max_length=100)
+    introduction = StringField(max_length=500)
+
+    meta = {'collection': 'users'}
+
+    @property
+    def password(self):
+        raise AttributeError('password: write-only field')
+
+    @password.setter
+    def password(self, password):
+        self.password_hash = flask_bcrypt.generate_password_hash(password).decode('utf-8')
+
+    def check_password(self, password):
+        return flask_bcrypt.check_password_hash(self.password_hash, password)
+
+    @staticmethod
+    def encode_auth_token(user_id):
+        """
+        Generates the Auth Token
+        :return: string
+        """
+        try:
+            payload = {
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1, seconds=5),
+                'iat': datetime.datetime.utcnow(),
+                'sub': user_id
+            }
+            return jwt.encode(
+                payload,
+                key,
+                algorithm='HS256'
+            )
+        except Exception as e:
+            print(e)
+            return None
+
+    @staticmethod
+    def decode_auth_token(auth_token):
+        """
+        Decodes the auth token
+        :param auth_token:
+        :return: dict|string
+        """
+        try:
+            payload = jwt.decode(auth_token, key)
+            is_blacklisted_token = BlacklistToken.check_blacklist(auth_token)
+            if is_blacklisted_token:
+                return 'Token blacklisted. Please log in again.'
+            else:
+                return payload
+        except jwt.ExpiredSignatureError:
+            return 'Signature expired. Please log in again.'
+        except jwt.InvalidTokenError:
+            return 'Invalid token. Please log in again.'
+
+    def __repr__(self):
+        return "<User '{}'>".format(self.username)
+
+class BlacklistToken(Document):
+    """
+    Token Model for storing JWT tokens
+    """
+    token = StringField(max_length=500, required=True, unique=True)
+    blacklisted_on = DateTimeField(default=datetime.datetime.utcnow)
+
+    meta = {'collection': 'blacklist_tokens'}
+
+    def __repr__(self):
+        return '<id: token: {}'.format(self.token)
+
+    @staticmethod
+    def check_blacklist(auth_token):
+        # check whether auth token has been blacklisted
+        try:
+            res = BlacklistToken.objects(token=str(auth_token)).get()
+        except BlacklistToken.DoesNotExist:
+            return False
+        except BlacklistToken.MultipleObjectsReturned:
+            return True
+        else:
+            return True

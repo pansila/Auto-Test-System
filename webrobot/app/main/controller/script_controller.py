@@ -90,14 +90,15 @@ class ScriptManagement(Resource):
         if new_name:
             os.rename(USER_SCRIPT_ROOT / script, USER_SCRIPT_ROOT / os.path.dirname(script) / new_name)
 
-        event = Event()
-        event.code = EVENT_CODE_UPDATE_USER_SCRIPT
-        event.message['script'] = str(Path(os.path.dirname(script)) / new_name) if new_name else script
-        event.save()
+        if script_type == 'user_scripts':
+            event = Event()
+            event.code = EVENT_CODE_UPDATE_USER_SCRIPT
+            event.message['script'] = str(Path(os.path.dirname(script)) / new_name) if new_name else script
+            event.save()
 
-        if EventQueue.push(event) is None:
-            print('Pushing the event to event queue failed')
-            api.abort(404)
+            if EventQueue.push(event) is None:
+                print('Pushing the event to event queue failed')
+                api.abort(404)
 
     def delete(self):
         script = request.json.get('file', None)
