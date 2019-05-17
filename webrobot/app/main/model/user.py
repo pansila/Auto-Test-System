@@ -17,6 +17,9 @@ class User(db.Model):
     public_id = db.Column(db.String(100), unique=True)
     username = db.Column(db.String(50), unique=True)
     password_hash = db.Column(db.String(100))
+    roles = db.Column(db.String(100))
+    avatar = db.Column(db.String(100))
+    introduction = db.Column(db.String(500))
 
     @property
     def password(self):
