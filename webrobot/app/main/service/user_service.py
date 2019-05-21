@@ -14,9 +14,9 @@ def save_new_user(data):
             email=data['email'],
             username=data['username'],
             registered_on=datetime.datetime.utcnow(),
-            roles=data['roles'],
-            avatar=data['avatar'],
-            introduction=data['introduction']
+            roles=data.get('roles', ['admin']),
+            avatar=data.get('avatar', ''),
+            introduction=data.get('introduction', '')
         )
         new_user.password = data['password']
         new_user.save()

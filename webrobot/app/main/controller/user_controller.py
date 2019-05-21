@@ -2,7 +2,7 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.util.decorator import admin_token_required
-from app.main.model.user import User
+from app.main.model.database import User
 
 from ..service.user_service import get_a_user, get_all_users, save_new_user
 from ..service.auth_helper import Auth
@@ -42,3 +42,31 @@ class UserInfo(Resource):
         token = data.get('data')
 
         return data, status
+
+@api.route('/check')
+class UserInfoCheck(Resource):
+    """
+    Check User information for register
+    """
+    @api.doc('Check User information for register')
+    def get(self):
+        email = request.args.get('email', None)
+        if email:
+            user = User.objects(email=email).first()
+            if user:
+                return {
+                    'code': USER_ALREADY_EXIST,
+                    'data': {
+                        'message': 'Email has been registered'
+                    }
+                }, 401
+            return {
+                'code': SUCCESS,
+            }, 200
+        else:
+            return {
+                'code': UNKNOWN_ERROR,
+                'data': {
+                    'message': 'No query data found'
+                }
+            }, 401
