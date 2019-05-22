@@ -116,5 +116,6 @@ temp/
 /migrations
 .gitreview
 webrobot/static/results/
+webrobot/static/users/
 webrobot/upload/
 robot-test-endpoint/resources/

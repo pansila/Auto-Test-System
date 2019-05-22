@@ -1,13 +1,18 @@
-from flask import request
+import os
+from pathlib import Path
+from flask import request, send_from_directory
 from flask_restplus import Resource
 
-from app.main.util.decorator import admin_token_required
+from app.main.util.decorator import admin_token_required, token_required
 from app.main.model.database import User
 
 from ..service.user_service import get_a_user, get_all_users, save_new_user
 from ..service.auth_helper import Auth
 from ..util.dto import UserDto
 from ..util.errors import *
+from ..config import get_config
+
+USERS_ROOT = Path(get_config().USERS_ROOT)
 
 api = UserDto.api
 _user = UserDto.user
@@ -38,10 +43,26 @@ class UserInfo(Resource):
     """
     @api.doc('get the information of a user')
     def get(self):
-        data, status = Auth.get_logged_in_user(request)
-        token = data.get('data')
+        return Auth.get_logged_in_user(request)
 
-        return data, status
+@api.route('/avatar')
+class UserInfo(Resource):
+    """
+    User avatar
+    """
+    @api.doc('get the avatar of a user')
+    def get(self):
+        auth_token = request.cookies.get('Admin-Token')
+        if auth_token:
+            payload = User.decode_auth_token(auth_token)
+            if not isinstance(payload, str):
+                user = User.objects(pk=payload['sub']).first()
+                if user:
+                    return send_from_directory(Path(os.getcwd()) / USERS_ROOT / user.email, user.avatar)
+                else:
+                    return error_message(USER_NOT_EXIST), 401
+
+        return error_message(TOKEN_ILLEGAL), 401
 
 @api.route('/check')
 class UserInfoCheck(Resource):
@@ -54,19 +75,7 @@ class UserInfoCheck(Resource):
         if email:
             user = User.objects(email=email).first()
             if user:
-                return {
-                    'code': USER_ALREADY_EXIST,
-                    'data': {
-                        'message': 'Email has been registered'
-                    }
-                }, 401
-            return {
-                'code': SUCCESS,
-            }, 200
+                return error_message(USER_ALREADY_EXIST), 401
+            return error_message(SUCCESS), 200
         else:
-            return {
-                'code': UNKNOWN_ERROR,
-                'data': {
-                    'message': 'No query data found'
-                }
-            }, 401
+            return error_message(UNKNOWN_ERROR, 'No query data found'), 401
