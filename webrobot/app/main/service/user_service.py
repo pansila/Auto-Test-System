@@ -1,10 +1,20 @@
 # import uuid
 import datetime
+import os
+from pathlib import Path
 
 from app.main import db
 from app.main.model.database import User
 
+from ..config import get_config
 from ..util.errors import *
+from ..util.identicon import *
+
+USERS_ROOT = Path(get_config().USERS_ROOT)
+try:
+    os.mkdir(USERS_ROOT)
+except FileExistsError:
+    pass
 
 def save_new_user(data):
     user = User.objects(email=data['email']).first()
@@ -12,23 +22,38 @@ def save_new_user(data):
         new_user = User(
             # public_id=str(uuid.uuid4()),
             email=data['email'],
-            username=data['username'],
+            username=data.get('username', ''),
             registered_on=datetime.datetime.utcnow(),
             roles=data.get('roles', ['admin']),
             avatar=data.get('avatar', ''),
             introduction=data.get('introduction', '')
         )
         new_user.password = data['password']
-        new_user.save()
+        try:
+            new_user.save()
+        except Exception as e:
+            print(e)
+            return error_message(EINVAL, 'Field validating for User failed'), 401
+
+        user_root = USERS_ROOT / data['email']
+        try:
+            os.mkdir(user_root)
+        except Exception as e:
+            print(e)
+            return error_message(EEXIST), 401
+
+        if new_user.avatar == '':
+            img= render_identicon(hash(data['email']), 27)
+            img.save(user_root / ('%s.png' % new_user.id))
+            new_user.avatar = '%s.png' % new_user.id
+            new_user.save()
+        if new_user.username == '':
+            new_user.username = new_user.email.split('@')[0]
+            new_user.save()
+
         return generate_token(new_user)
     else:
-        response_object = {
-            'code': USER_ALREADY_EXIST,
-            'data': {
-                'message': 'User already exists. Please Log in.',
-            }
-        }
-        return response_object, 409
+        return error_message(USER_ALREADY_EXIST), 409
 
 
 def get_all_users():
@@ -43,20 +68,8 @@ def generate_token(user):
     try:
         # generate the auth token
         auth_token = User.encode_auth_token(str(user.id))
-        response_object = {
-            'code': SUCCESS,
-            'data': {
-                'message': 'Successfully registered.',
-                'token': auth_token.decode()
-            }
-        }
-        return response_object, 201
+        return error_message(SUCCESS, token=auth_token.decode()), 201
     except Exception as e:
-        response_object = {
-            'code': UNKNOWN_ERROR,
-            'data': {
-                'message': 'Some error occurred. Please try again.'
-            }
-        }
-        return response_object, 401
+        print(e)
+        return error_message(UNKNOWN_ERROR), 401
 

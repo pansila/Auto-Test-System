@@ -20,6 +20,7 @@ class DevelopmentConfig(Config):
     USER_SCRIPT_ROOT = '../example-test-scripts/robot_tester_scripts'
     BACKING_SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
+    USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
@@ -47,6 +48,7 @@ class ProductionConfig(Config):
     USER_SCRIPT_ROOT = '../example-test-scripts/robot_tester_scripts'
     BACKING_SCRIPT_ROOT = '../example-test-scripts/robot_backing_scripts'
     TEST_RESULT_ROOT = 'static/results'
+    USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
