@@ -54,3 +54,15 @@ class ScriptDto:
     user = api.model('script', {
         'test': fields.String(required=True, description='test'),
     })
+
+class OrganizationDto:
+    api = Namespace('organization', description='organization management operations')
+    organization = api.model('organization', {
+        'name': fields.String(required=True, description='organization name'),
+    })
+
+class TeamDto:
+    api = Namespace('team', description='team management operations')
+    team = api.model('team', {
+        'name': fields.String(required=True, description='team name'),
+    })

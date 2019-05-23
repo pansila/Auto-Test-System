@@ -46,15 +46,17 @@ class Auth:
             payload = User.decode_auth_token(auth_token)
             if not isinstance(payload, str):
                 user = User.objects(pk=payload['sub']).first()
-                return error_message(SUCCESS,
-                        user_id=str(user.id),
-                        email=user.email,
-                        username=user.username,
-                        roles=user.roles,
-                        registered_on=str(user.registered_on),
-                        avatar=user.avatar,
-                        introduction=user.introduction
-                    ), 200
+                if user:
+                    return error_message(SUCCESS,
+                            user_id=str(user.id),
+                            email=user.email,
+                            username=user.username,
+                            roles=user.roles,
+                            registered_on=str(user.registered_on),
+                            avatar=user.avatar,
+                            introduction=user.introduction,
+                            region=user.region
+                        ), 200
+                return error_message(USER_NOT_EXIST), 404
             return error_message(TOKEN_ILLEGAL, payload), 401
-        else:
-            return error_message(TOKEN_REQUIRED), 401
+        return error_message(TOKEN_REQUIRED), 401
