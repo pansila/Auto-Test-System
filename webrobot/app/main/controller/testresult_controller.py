@@ -14,6 +14,7 @@ from ..config import get_config
 from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                               QUEUE_PRIORITY_MIN, Task, Test, TestResult)
 from ..util.dto import TestResultDto
+from ..util.errors import *
 
 api = TestResultDto.api
 
@@ -69,8 +70,7 @@ class TestResultRoot(Resource):
                 end_date = parser.parse(end_date)
 
             if (start_date - end_date).days > 0:
-                print('start date {} is larger than end date {}'.format(start_date, end_date))
-                api.abort(404)
+                return error_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
 
             query = {'run_date__lte': end_date, 'run_date__gte': start_date}
         else:
@@ -102,32 +102,29 @@ class TestResultCreate(Resource):
     def post(self):
         data = request.json
         if data is None:
-            print("payload of the request is empty")
-            api.abort(404)
+            return error_message(EINVAL, "payload of the request is empty"), 400
 
         task_id = data.get('task_id', None)
         if task_id == None:
-            print("field task_id is required")
-            api.abort(404)
+            return error_message(EINVAL, "field task_id is required"), 400
         try:
             task = Task.objects(pk=task_id).get()
-        except Task.DoesNotExist:
-            print("task not found")
-            api.abort(404)
+        except Task.DoesNotExist as e:
+            print(e)
+            return error_message(ENOENT, "task not found"), 404
 
         test_case = data.get('test_case', None)
         if test_case == None:
-            print("field test_case is required")
-            api.abort(404)
+            return error_message(EINVAL, "field test_case is required"), 400
 
         test_result = TestResult()
         test_result.test_case = test_case
         test_result.task = ObjectId(task_id)
         try:
             test_result.save()
-        except ValidationError:
-            print("test result validation failed")
-            api.abort(404)
+        except ValidationError as e:
+            print(e)
+            return error_message(EPERM, "test result validation failed"), 400
 
         task.test_results.append(test_result)
         task.save()
@@ -145,13 +142,12 @@ class TestResultUpload(Resource):
 
         try:
             task = Task.objects(pk=task_id).get()
-        except Task.DoesNotExist:
-            print("task not found")
-            api.abort(404)
+        except Task.DoesNotExist as e:
+            print(e)
+            return error_message(ENOENT, "task not found"), 404
 
         if task.test_results is None or len(task.test_results) == 0:
-            print("test result not found")
-            api.abort(404)
+            return error_message(ENOENT, "test result not found"), 404
 
         cur_test_result = task.test_results[-1]
 
@@ -162,6 +158,6 @@ class TestResultUpload(Resource):
                 cur_test_result.more_result[k] = v
         try:
             cur_test_result.save()
-        except ValidationError:
-            print("test result validation failed")
-            api.abort(404)
+        except ValidationError as e:
+            print(e)
+            return error_message(EPERM, "test result validation failed"), 400

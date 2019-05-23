@@ -10,6 +10,7 @@ from ..config import get_config
 from ..model.database import Event, EventQueue, Test, EVENT_CODE_UPDATE_USER_SCRIPT
 from ..util.dto import ScriptDto
 from ..util.tarball import path_to_dict
+from ..util.errors import *
 
 api = ScriptDto.api
 
@@ -25,18 +26,15 @@ class ScriptManagement(Resource):
         script_type = request.args.get('script_type', default=None)
         if script_path:
             if script_type is None:
-                print('Field script_type is required')
-                api.abort(404)
+                return error_message(EINVAL, 'Field script_type is required'), 400
             if script_type == 'user_scripts':
                 return send_from_directory(USER_SCRIPT_ROOT, script_path)
             elif script_type == 'backing_scripts':
                 return send_from_directory(BACKING_SCRIPT_ROOT, script_path)
             else:
-                print('Unsupported script type ' + script_type)
-                api.abort(404)
+                return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
         elif script_type:
-            print('Field file is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field file is required'), 400
 
         user_scripts = path_to_dict(USER_SCRIPT_ROOT)
         backing_scripts = path_to_dict(BACKING_SCRIPT_ROOT)
@@ -45,27 +43,22 @@ class ScriptManagement(Resource):
     def post(self):
         script = request.json.get('file', None)
         if script is None or script == '':
-            print('field file is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
-            print('Referencing to Upper level directory is not allowed')
-            api.abort(404)
+            return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         new_name = request.json.get('new_name', None)
         if new_name:
             if '..' in new_name:
-                print('Referencing to Upper level directory is not allowed')
-                api.abort(404)
+                return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
         if script_type is None:
-            print('field script_type is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field script_type is required'), 400
 
         content = request.json.get('content', None)
         if content is None and new_name is None:
-            print('field content is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field content is required'), 400
 
         if content is not None:
             if script_type == 'user_scripts':
@@ -81,8 +74,7 @@ class ScriptManagement(Resource):
             elif script_type == 'backing_scripts':
                 root = BACKING_SCRIPT_ROOT
             else:
-                print('Unsupported script type ' + script_type)
-                api.abort(404)
+                return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
             with open(root / script, 'w') as f:
                 f.write(content)
@@ -97,30 +89,25 @@ class ScriptManagement(Resource):
             event.save()
 
             if EventQueue.push(event) is None:
-                print('Pushing the event to event queue failed')
-                api.abort(404)
+                return error_message(EIO, 'Pushing the event to event queue failed'), 401
 
     def delete(self):
         script = request.json.get('file', None)
         if script is None or script == '':
-            print('field file is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
-            print('Referencing to Upper level directory is not allowed')
-            api.abort(404)
+            return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
         if script_type is None:
-            print('field script_type is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
             root = USER_SCRIPT_ROOT
         elif script_type == 'backing_scripts':
             root = BACKING_SCRIPT_ROOT
         else:
-            print('Unsupported script type ' + script_type)
-            api.abort(404)
+            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         if not os.path.exists(root / script):
             print('file/directory {} doesn\'t exist'.format(root / script))
@@ -130,14 +117,14 @@ class ScriptManagement(Resource):
             try:
                 os.remove(root / script)
             except OSError as err:
-                print('Error happened while deleting a file: ' + str(err))
-                api.abort(404)
+                print(err)
+                return error_message(EIO, 'Error happened while deleting a file: '), 401
         else:
             try:
                 shutil.rmtree(root / script)
             except OSError as err:
-                print('Error happened while deleting a directory: ' + str(err))
-                api.abort(404)
+                print(err)
+                return error_message(EIO, 'Error happened while deleting a directory'), 401
 
 @api.route('/upload/')
 class ScriptUpload(Resource):
@@ -147,16 +134,14 @@ class ScriptUpload(Resource):
 
         script_type = request.form.get('script_type', None)
         if script_type is None:
-            print('field script_type is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
             root = USER_SCRIPT_ROOT
         elif script_type == 'backing_scripts':
             root = BACKING_SCRIPT_ROOT
         else:
-            print('Unsupported script type ' + script_type)
-            api.abort(404)
+            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         print(request.form)
         for name, file in request.files.items():
@@ -166,5 +151,4 @@ class ScriptUpload(Resource):
             file.save(str(filename))
 
         if not found:
-            print('No files are found in the request')
-            api.abort(404)
+            return error_message(ENOENT, 'No files are found in the request'), 404

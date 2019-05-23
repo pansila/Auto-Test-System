@@ -12,6 +12,7 @@ from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                               QUEUE_PRIORITY_MIN, Task, TaskQueue, Test)
 from ..util.dto import TaskResourceDto
 from ..util.tarball import make_tarfile, pack_files
+from ..util.errors import *
 
 api = TaskResourceDto.api
 
@@ -30,23 +31,21 @@ class TaskResourceController(Resource):
     def get(self, task_id):
         try:
             task = Task.objects(pk=task_id).get()
-        except ValidationError:
-            print('Task ID incorrect')
-            api.abort(404)
+        except ValidationError as e:
+            print(e)
+            return error_message(EINVAL, 'Task ID incorrect'), 400
         except Task.DoesNotExist:
-            print('Task not found')
-            api.abort(404)
+            return error_message(ENOENT, 'Task not found'), 404
         
         if task.upload_dir == '' or task.upload_dir == None:
-            api.abort(406)
+            return error_message(ENOENT, 'Upload directory is empty'), 406
 
         if request.args.get('file', None):
             return send_from_directory(Path(os.getcwd()) / UPLOAD_DIR / task.upload_dir, request.args['file'])
         else:
             tarball = pack_files(task_id, UPLOAD_DIR / task.upload_dir, TARBALL_TEMP)
             if not tarball:
-                print('Packing task resource files failed')
-                api.abort(404)
+                return error_message(EIO, 'Packing task resource files failed'), 401
             else:
                 tarball = os.path.basename(tarball)
                 return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
@@ -58,19 +57,17 @@ class TaskResourceList(Resource):
     def get(self, task_id):
         try:
             task = Task.objects(pk=task_id).get()
-        except ValidationError:
-            print('Task ID incorrect')
-            api.abort(404)
+        except ValidationError as e:
+            print(e)
+            return error_message(EINVAL, 'Task ID incorrect'), 400
         except Task.DoesNotExist:
-            print('Task not found')
-            api.abort(404)
+            return error_message(ENOENT, 'Task not found'), 404
         
         if task.upload_dir == '' or task.upload_dir == None:
-            api.abort(406)
+            return error_message(ENOENT, 'Upload directory is empty'), 406
 
         if not os.path.exists(UPLOAD_DIR / task.upload_dir):
-            print('Task upload directory does not exist')
-            api.abort(404)
+            return error_message(ENOENT, 'Task upload directory does not exist'), 404
 
         return os.listdir(UPLOAD_DIR / task.upload_dir)
 
@@ -102,7 +99,6 @@ class TaskResourceUpload(Resource):
                     fp.write(ret.content)
 
         if not found:
-            print('No files are found in the request')
-            api.abort(404)
+            return error_message(ENOENT, 'No files are found in the request'), 404
 
         return {'status': 0, 'data': temp_id}

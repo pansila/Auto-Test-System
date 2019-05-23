@@ -10,6 +10,7 @@ from ..model.database import (EVENT_CODE_CANCEL_TASK, QUEUE_PRIORITY_DEFAULT, QU
                               QUEUE_PRIORITY_MIN, Task, TaskQueue, Test, Event, EventQueue)
 from ..util.dto import TaskDto
 from ..config import get_config
+from ..util.errors import *
 
 api = TaskDto.api
 
@@ -19,14 +20,13 @@ class TaskStatistics(Resource):
     def get(self, task_id):
         dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
         if task_id not in dirs:
-            print('Task result directory not found')
-            api.abort(404)
+            return error_message(ENOENT, 'Task result directory not found'), 404
 
         try:
             task = Task.objects(id=task_id).get()
-        except Task.DoesNotExist:
-            print('Task not found')
-            api.abort(404)
+        except Task.DoesNotExist as e:
+            print(e)
+            return error_message(ENOENT, 'Task not found'), 404
 
         with open(Path(get_config().TEST_RESULT_ROOT) / task_id / 'output.xml', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/xml')
@@ -42,8 +42,7 @@ class TaskController(Resource):
         end_date = datetime.fromtimestamp(int(end_date)/1000)
 
         if (start_date - end_date).days > 0:
-            print('start date {} is larger than end date {}'.format(start_date, end_date))
-            api.abort(404)
+            return error_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
 
         delta = end_date - start_date
         days = delta.days
@@ -86,38 +85,31 @@ class TaskController(Resource):
     def post(self):
         data = request.json
         if data is None:
-            print('The request data is empty')
-            api.abort(404)
+            return error_message(EINVAL, 'The request data is empty'), 400
 
         task = Task()
         test_suite = data.get('test_suite', None)
         if test_suite == None:
-            print('Field test_suite is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field test_suite is required'), 400
         task.test_suite = test_suite
 
         try:
             test = Test.objects(test_suite=task.test_suite).get()
         except Test.DoesNotExist:
-            print('The requested test suite is not found')
-            api.abort(404)
+            return error_message(ENOENT, 'The requested test suite is not found'), 404
 
         endpoint_list = data.get('endpoint_list', None)
         if endpoint_list == None:
-            print('endpoint list is not included in the request')
-            api.abort(404)
+            return error_message(EINVAL, 'Endpoint list is not included in the request'), 400
         if not isinstance(endpoint_list, list):
-            print('endpoint list is not a list')
-            api.abort(404)
+            return error_message(EINVAL, 'Endpoint list is not a list'), 400
         if len(endpoint_list) == 0:
-            print('endpoint list is empty')
-            api.abort(404)
+            return error_message(EINVAL, 'Endpoint list is empty'), 400
         task.endpoint_list = endpoint_list
 
         priority = int(data.get('priority', QUEUE_PRIORITY_DEFAULT))
         if priority < QUEUE_PRIORITY_MIN or priority > QUEUE_PRIORITY_MAX:
-            print('task priority is out of range')
-            api.abort(404)
+            return error_message(ERANGE, 'Task priority is out of range'), 400
         task.priority = priority
 
         parallelization = data.get('parallelization', False)
@@ -125,20 +117,17 @@ class TaskController(Resource):
 
         variables = data.get('variables', {})
         if not isinstance(variables, dict):
-            print('variables should be a dictionary')
-            api.abort(404)
+            return error_message(EINVAL, 'Variables should be a dictionary'), 400
         task.variables = variables
 
         testcases = data.get('testcases', [])
         if not isinstance(testcases, list):
-            print('testcases should be a list')
-            api.abort(404)
+            return error_message(EINVAL, 'Testcases should be a list'), 400
         task.testcases = testcases
 
         tester = data.get('tester', None)
         if tester == None:
-            print('Field tester should not be empty')
-            api.abort(404)
+            return error_message(EINVAL, 'Field tester should not be empty'), 400
         task.tester = tester
 
         task.upload_dir = data.get('upload_dir', '')
@@ -146,8 +135,7 @@ class TaskController(Resource):
         try:
             task.save()
         except ValidationError:
-            print('Task validation failed')
-            api.abort(404)
+            return error_message(EPERM, 'Task validation failed'), 400
 
         failed = []
         for endpoint in task.endpoint_list:
@@ -169,8 +157,7 @@ class TaskController(Resource):
             if task.parallelization:
                 task.delete()
         if len(failed) != 0:
-            print('Task scheduling failed')
-            api.abort(404)
+            return error_message(EPERM, 'Task scheduling failed'), 403
 
         return {'status': 0, 'data': task.to_json()}
 
@@ -178,25 +165,21 @@ class TaskController(Resource):
     def patch(self):
         data = request.json
         if data is None:
-            print('The request data is empty')
-            api.abort(404)
+            return error_message(EINVAL, 'The request data is empty'), 400
 
         task_id = data.get('_id', None)
         task_id = task_id['$oid']
         if task_id == None:
-            print('Field _id is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field _id is required'), 400
 
         comment = data.get('comment', None)
         if comment == None:
-            print('Field _id is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field comment is required'), 400
 
         try:
             task = Task.objects(id=task_id).get()
         except Task.DoesNotExist:
-            print('The requested task is not found')
-            api.abort(404)
+            return error_message(ENOENT, 'The requested task is not found'), 404
         else:
             task.comment = comment
             task.save()
@@ -207,23 +190,20 @@ class TaskController(Resource):
         if data is None:
             print('The request data is empty')
             api.abort(404)
+            return error_message(EINVAL, 'The request data is empty'), 400
 
         task_id = data.get('task_id', None)
         if task_id is None:
-            print('field task_id is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field task_id is required'), 400
         address = data.get('address', None)
         if address is None:
-            print('field address is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field address is required'), 400
         priority = data.get('priority', None)
         if priority is None:
-            print('field priority is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field priority is required'), 400
         status = data.get('status', None)
         if status is None:
-            print('field status is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field status is required'), 400
 
         event = Event()
         event.code = EVENT_CODE_CANCEL_TASK
@@ -233,5 +213,4 @@ class TaskController(Resource):
         event.save()
 
         if EventQueue.push(event) is None:
-            print('Pushing the event to event queue failed')
-            api.abort(404)
+            return error_message(EPERM, 'Pushing the event to event queue failed'), 403
