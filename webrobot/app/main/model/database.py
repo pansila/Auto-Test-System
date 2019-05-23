@@ -234,6 +234,32 @@ class EventQueue(Document):
         cls.release_lock()
         return True
 
+class Team(Document):
+    schema_version = StringField(max_length=10, default='1')
+    name = StringField(max_length=100, required=True)
+    email = EmailField()
+    registered_on = DateTimeField(default=datetime.datetime.utcnow)
+    members = ListField(ReferenceField('User'))
+    introduction = StringField(max_length=500)
+    avatar = StringField(max_length=100)
+
+    meta = {'collection': 'teams'}
+
+class Organization(Document):
+    schema_version = StringField(max_length=10, default='1')
+    name = StringField(max_length=50, required=True)
+    fullname = StringField(max_length=100)
+    email = EmailField()
+    registered_on = DateTimeField(default=datetime.datetime.utcnow)
+    teams = ListField(ReferenceField(Team))
+    introduction = StringField(max_length=500)
+    website = URLField()
+    owner = ReferenceField('User')
+    region = StringField()
+    avatar = StringField(max_length=100)
+
+    meta = {'collection': 'organizations'}
+
 class User(Document):
     schema_version = StringField(max_length=10, default='1')
     email = EmailField(required=True, unique=True)
@@ -243,6 +269,9 @@ class User(Document):
     roles = ListField(StringField(max_length=50))
     avatar = StringField(max_length=100)
     introduction = StringField(max_length=500)
+    organizations = ListField(ReferenceField(Organization))
+    teams = ListField(ReferenceField(Team))
+    region = StringField()
 
     meta = {'collection': 'users'}
 

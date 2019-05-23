@@ -59,10 +59,9 @@ class UserInfo(Resource):
                 user = User.objects(pk=payload['sub']).first()
                 if user:
                     return send_from_directory(Path(os.getcwd()) / USERS_ROOT / user.email, user.avatar)
-                else:
-                    return error_message(USER_NOT_EXIST), 401
-
-        return error_message(TOKEN_ILLEGAL), 401
+                return error_message(USER_NOT_EXIST), 401
+            return error_message(TOKEN_ILLEGAL, payload), 401
+        return error_message(TOKEN_REQUIRED), 400
 
 @api.route('/check')
 class UserInfoCheck(Resource):

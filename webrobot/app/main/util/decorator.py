@@ -13,10 +13,10 @@ def token_required(f):
         data, status = Auth.get_logged_in_user(request)
         token = data.get('data')
 
-        if data.get('code') != SUCCESS:
+        if data.get('code') != SUCCESS[0]:
             return data, status
 
-        return f(*args, **kwargs)
+        return f(*args, data['data'], **kwargs)
 
     return decorated
 
@@ -28,18 +28,12 @@ def admin_token_required(f):
         data, status = Auth.get_logged_in_user(request)
         token = data.get('data')
 
-        if data.get('code') != SUCCESS:
+        if data.get('code') != SUCCESS[0]:
             return data, status
 
         roles = token.get('roles')
         if 'admin' not in roles:
-            response_object = {
-                'code': ADMIN_TOKEN_REQUIRED,
-                'data': {
-                    'message': 'admin token required'
-                }
-            }
-            return response_object, 401
+            return error_message(ADMIN_TOKEN_REQUIRED), 401
 
         return f(*args, **kwargs)
 
