@@ -4,6 +4,7 @@ from flask_restplus import Resource
 from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                               QUEUE_PRIORITY_MIN, Task, TaskQueue, Test, Endpoint)
 from ..util.dto import EndpointDto
+from ..util.errors import *
 
 api = EndpointDto.api
 
@@ -50,8 +51,7 @@ class EndpointController(Resource):
     def delete(self):
         address = request.args.get('address', default=None)
         if address is None:
-            print('parameter address is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Parameter address is required'), 400
 
         for taskqueue in TaskQueue.objects(endpoint_address=address):
             taskqueue.delete()
@@ -67,46 +67,43 @@ class EndpointController(Resource):
 
         endpoint_address = data.get('endpoint_address', None)
         if endpoint_address is None or endpoint_address == '':
-            print('field endpoint_address is required')
-            api.abort(404)
+            return error_message(EINVAL, 'Field endpoint_address is required'), 400
 
         try:
             endpoint = Endpoint.objects(endpoint_address=endpoint_address).get()
-        except Endpoint.MultipleObjectsReturned:
-            print('multiple endpoints exists')
-            api.abort(404)
+        except Endpoint.MultipleObjectsReturned as e:
+            print(e)
+            return error_message(EPERM, 'Multiple endpoints exist'), 401
         except Endpoint.DoesNotExist:
             endpoint = Endpoint()
             endpoint.endpoint_address = endpoint_address
             endpoint.save()
             try:
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint_address).get()
-            except TaskQueue.MultipleObjectsReturned:
-                print('a task queues exists')
-                api.abort(404)
+            except TaskQueue.MultipleObjectsReturned as e:
+                print(e)
+                return error_message(EEXIST, 'Multiple task queues exist'), 401
             except TaskQueue.DoesNotExist:
                 for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
                     taskqueue = TaskQueue(endpoint_address=endpoint_address, priority=priority)
                     taskqueue.endpoint = endpoint
                     taskqueue.save()
             else:
-                print('a task queue exists')
-                api.abort(404)
+                return error_message(EEXIST, 'A task queues exists'), 401
 
         endpoint.name = data.get('endpoint_name', endpoint_address)
         endpoint.enable = data.get('enable', False)
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
-            print('tests is not a list')
-            api.abort(404)
+            return error_message(EINVAL, 'Tests is not a list'), 400
         endpoint.tests = []
         for t in tests:
             try:
                 tt = Test.objects(test_suite=t).get()
-            except Test.DoesNotExist:
-                print('test suite {} not found'.format(t))
-                api.abort(404)
+            except Test.DoesNotExist as e:
+                print(e)
+                return error_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             else:
                 endpoint.tests.append(tt)
         endpoint.save()
@@ -158,36 +155,29 @@ class EndpointController(Resource):
 
         for taskqueue in taskqueues:
             if 'address' not in taskqueue or 'priority' not in taskqueue:
-                print('task queue lacks the field address and field priority')
-                api.abort(404)
+                return error_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
             queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'])
             if queue.count() != 1:
-                print('task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority']))
-                api.abort(404)
+                return error_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
 
             for task in taskqueue['tasks']:
                 if 'task_id' not in task:
-                    print('task lacks the field task_id')
-                    api.abort(404)
+                    return error_message(EINVAL, 'Task lacks the field task_id'), 400
                 if task['priority'] != taskqueue['priority']:
-                    print('task\'s priority is not equal to taskqueue\'s')
-                    api.abort(404)
+                    return error_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'), 400
                 try:
                     t = Task.objects(pk=task['task_id']).get()
-                except Task.DoesNotExist:
-                    print('task not found for ' + task['task_id'])
-                    api.abort(404)
+                except Task.DoesNotExist as e:
+                    print(e)
+                    return error_message(ENOENT, 'task not found for ' + task['task_id']), 404
 
             q = queue[0]
             if not q.flush(q.endpoint_address, q.priority):
-                print('task queue {} {} flushing failed'.format(q.endpoint_address, q.priority))
-                api.abort(404)
-                break
+                return error_message(EPERM, 'task queue {} {} flushing failed'.format(q.endpoint_address, q.priority)), 401
 
             for task in taskqueue['tasks']:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
                 t = Task.objects(pk=task['task_id']).get()
                 if t.status == 'waiting':
                     if not q.push(t, q.endpoint_address, q.priority):
-                        print('pushing the task to task queue timed out')
-                        api.abort(404)
+                        return error_message(ETIME, 'pushing the task to task queue timed out'), 408

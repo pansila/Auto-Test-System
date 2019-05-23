@@ -9,6 +9,7 @@ from ..config import get_config
 from ..model.database import Test
 from ..util.dto import TestDto
 from ..util.tarball import make_tarfile, pack_files
+from ..util.errors import *
 
 api = TestDto.api
 
@@ -30,8 +31,7 @@ class ScriptDownload(Resource):
 
         script_file = BACKING_SCRIPT_ROOT / (test_suite + '.py')
         if not os.path.exists(script_file):
-            print("file {} does not exist".format(script_file))
-            api.abort(404)
+            return error_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
         for _ in range(3):
             tarball = pack_files(test_suite, BACKING_SCRIPT_ROOT, TARBALL_TEMP)
@@ -42,8 +42,7 @@ class ScriptDownload(Resource):
                 tarball = os.path.basename(tarball)
                 return send_from_directory(Path(os.getcwd()) / TARBALL_TEMP, tarball)
         else:
-            api.abort(404)
-            print("packaging files failed")
+            return error_message(EIO, "packaging files failed"), 404
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'the test suite to query')
@@ -52,9 +51,9 @@ class TestSuiteGet(Resource):
     def get(self, test_suite):
         try:
             test = Test.objects(test_suite=test_suite).get()
-        except Test.DoesNotExist:
-            print('Test {} not found'.format(test_suite))
-            api.abort(404)
+        except Test.DoesNotExist as e:
+            print(e)
+            return error_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
 
         return test.to_json()
 
