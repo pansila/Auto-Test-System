@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from app.main import db
-from app.main.model.database import User
+from app.main.model.database import User, Organization
 
 from ..config import get_config
 from ..util.errors import *
@@ -16,13 +16,13 @@ try:
 except FileExistsError:
     pass
 
-def save_new_user(data):
+def save_new_user(data, admin=None):
     user = User.objects(email=data['email']).first()
     if not user:
         new_user = User(
             # public_id=str(uuid.uuid4()),
             email=data['email'],
-            username=data.get('username', ''),
+            name=data.get('username', ''),
             registered_on=datetime.datetime.utcnow(),
             roles=data.get('roles', ['admin']),
             avatar=data.get('avatar', ''),
@@ -38,18 +38,26 @@ def save_new_user(data):
         user_root = USERS_ROOT / data['email']
         try:
             os.mkdir(user_root)
-        except Exception as e:
-            print(e)
+        except FileExistsError as e:
+            return error_message(EEXIST), 401
+        try:
+            os.mkdir(user_root / 'test_results')
+        except FileExistsError as e:
             return error_message(EEXIST), 401
 
         if new_user.avatar == '':
             img= render_identicon(hash(data['email']), 27)
             img.save(user_root / ('%s.png' % new_user.id))
             new_user.avatar = '%s.png' % new_user.id
-            new_user.save()
-        if new_user.username == '':
-            new_user.username = new_user.email.split('@')[0]
-            new_user.save()
+        if new_user.name == '':
+            new_user.name = new_user.email.split('@')[0]
+        if not admin:
+            organization = Organization(name='Personal')
+            organization.owner = new_user
+            organization.path = new_user.email
+            organization.save()
+            new_user.organizations = [organization]
+        new_user.save()
 
         return generate_token(new_user)
     else:

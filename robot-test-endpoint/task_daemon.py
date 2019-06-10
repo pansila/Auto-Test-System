@@ -99,8 +99,8 @@ class task_daemon(object):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
 
-        self._download_file('test/script/{}'.format(testcase), self.config["test_dir"])
-        if task_id and task_id != "":
+        self._download_file('test/script?id={}&test={}'.format(task_id, testcase), self.config["test_dir"])
+        if task_id:
             ObjectId(task_id)  # validate the task id
             self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 

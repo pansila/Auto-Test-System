@@ -1,8 +1,11 @@
 from flask import request
 from flask_restplus import Resource
 
-from ..model.database import (QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
-                              QUEUE_PRIORITY_MIN, Task, TaskQueue, Test, Endpoint)
+from app.main.util.decorator import token_required
+from app.main.util.request_parse import parse_organization_team
+from task_runner.runner import start_threads
+
+from ..model.database import *
 from ..util.dto import EndpointDto
 from ..util.errors import *
 
@@ -10,8 +13,9 @@ api = EndpointDto.api
 
 @api.route('/')
 class EndpointController(Resource):
+    @token_required
     @api.doc('get all test endpoints available')
-    def get(self):
+    def get(self, user):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
@@ -19,14 +23,22 @@ class EndpointController(Resource):
         page = int(page)
         limit = int(limit)
 
+        ret = parse_organization_team(user, request.args)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
         query = []
         if title:
-            query.append({'name__contains': title})
-            query.append({'endpoint_address__contains': title})
-        query.append({})
+            query.append({'name__contains': title, 'organization': organization})
+            query.append({'endpoint_address__contains': title, 'organization': organization})
+        else:
+            query.append({'organization': organization})
 
         ret = []
         for q in query:
+            if team:
+                q['team'] = team
             for ep in Endpoint.objects(**q):
                 tests = []
                 for t in ep.tests:
@@ -47,77 +59,99 @@ class EndpointController(Resource):
                 break
         return ret[(page-1)*limit:page*limit]
 
+    @token_required
     @api.doc('delete the test endpoint with the specified address')
-    def delete(self):
-        address = request.args.get('address', default=None)
+    def delete(self, user):
+        data = request.json
+
+        ret = parse_organization_team(user, request.json)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
+        address = data.get('address', None)
         if address is None:
             return error_message(EINVAL, 'Parameter address is required'), 400
 
-        for taskqueue in TaskQueue.objects(endpoint_address=address):
-            taskqueue.delete()
+        ret = TaskQueue.find(endpoint_address=address, organization=organization, team=team)
+        if not ret:
+            return error_message(ENOENT, 'Task queue not found'), 404
+        taskqueues, _ = ret
+        taskqueues.update(to_delete=True)
 
-        if address:
-            ep = Endpoint.objects(endpoint_address=address)
-            if ep:
-                ep.delete()
+        return error_message(SUCCESS)
 
+    @token_required
     @api.doc('create a task queue for the endpoint address')
-    def post(self):
+    def post(self, user):
         data = request.json
 
+        ret = parse_organization_team(user, request.json)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
         endpoint_address = data.get('endpoint_address', None)
-        if endpoint_address is None or endpoint_address == '':
+        if not endpoint_address:
             return error_message(EINVAL, 'Field endpoint_address is required'), 400
-
-        try:
-            endpoint = Endpoint.objects(endpoint_address=endpoint_address).get()
-        except Endpoint.MultipleObjectsReturned as e:
-            print(e)
-            return error_message(EPERM, 'Multiple endpoints exist'), 401
-        except Endpoint.DoesNotExist:
-            endpoint = Endpoint()
-            endpoint.endpoint_address = endpoint_address
-            endpoint.save()
-            try:
-                taskqueue = TaskQueue.objects(endpoint_address=endpoint_address).get()
-            except TaskQueue.MultipleObjectsReturned as e:
-                print(e)
-                return error_message(EEXIST, 'Multiple task queues exist'), 401
-            except TaskQueue.DoesNotExist:
-                for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
-                    taskqueue = TaskQueue(endpoint_address=endpoint_address, priority=priority)
-                    taskqueue.endpoint = endpoint
-                    taskqueue.save()
-            else:
-                return error_message(EEXIST, 'A task queues exists'), 401
-
-        endpoint.name = data.get('endpoint_name', endpoint_address)
-        endpoint.enable = data.get('enable', False)
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
             return error_message(EINVAL, 'Tests is not a list'), 400
-        endpoint.tests = []
+
+        endpoint_tests = []
         for t in tests:
-            try:
-                tt = Test.objects(test_suite=t).get()
-            except Test.DoesNotExist as e:
-                print(e)
+            query = {'test_suite': t, 'organization': organization}
+            if team:
+                query['team'] = team
+            tt = Test.objects(**query).first()
+            if not tt:
                 return error_message(ENOENT, 'Test suite {} not found'.format(t)), 404
+            endpoint_tests.append(tt)
+
+        ret = Endpoint.find(endpoint_address=endpoint_address, team=team, organization=organization)
+        if not ret:
+            endpoint = Endpoint(team=team, organization=organization, endpoint_address=endpoint_address)
+            endpoint.save()
+            ret = TaskQueue.find(endpoint_address=endpoint_address, team=team, organization=organization)
+            if not ret:
+                for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
+                    taskqueue = TaskQueue(endpoint_address=endpoint_address, priority=priority, team=team, organization=organization)
+                    taskqueue.endpoint = endpoint
+                    taskqueue.save()
             else:
-                endpoint.tests.append(tt)
+                return error_message(EEXIST, 'Task queues exist already'), 401
+        else:
+            endpoint, _ = ret
+
+        endpoint.name = data.get('endpoint_name', endpoint_address)
+        endpoint.enable = data.get('enable', False)
+        endpoint.tests = endpoint_tests
         endpoint.save()
 
-        return {'status': 0}
+        for organization in owner.organizations:
+            start_threads(organization=organization)
+            for team in owner.teams:
+                start_threads(organization=organization, team=team)
+
+        return error_message(SUCCESS), 200
 
 @api.route('/queue/')
 class EndpointController(Resource):
+    @token_required
     @api.doc('get queuing tasks of an endpoint')
-    def get(self):
-        query = {}
+    def get(self, user):
+        ret = parse_organization_team(user, request.args)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
+        query = {'organization': organization}
+        if team:
+            query['team'] = team
         address = request.args.get('address', default=None)
         if address:
-            query = {'endpoint_address': address}
+            query['endpoint_address'] = address
 
         ret = []
         for taskqueue in TaskQueue.objects(**query):
@@ -149,8 +183,9 @@ class EndpointController(Resource):
             ret.append(taskqueue_stat)
         return ret
 
+    @token_required
     @api.doc('update task queue of an endpoint')
-    def post(self):
+    def post(self, user):
         taskqueues = request.json
 
         for taskqueue in taskqueues:

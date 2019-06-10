@@ -2,7 +2,9 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.service.auth_helper import Auth
+from app.main.model.database import *
 from ..util.dto import AuthDto
+from task_runner.runner import start_threads
 
 api = AuthDto.api
 user_auth = AuthDto.user_auth
@@ -18,6 +20,11 @@ class UserLogin(Resource):
     def post(self):
         # get the post data
         post_data = request.json
+        user = User.objects(email=post_data.get('email')).first()
+        for organization in user.organizations:
+            start_threads(organization=organization)
+            for team in user.teams:
+                start_threads(organization=organization, team=team)
         return Auth.login_user(data=post_data)
 
 

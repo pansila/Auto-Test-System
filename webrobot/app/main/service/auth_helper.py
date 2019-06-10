@@ -15,12 +15,9 @@ class Auth:
                     auth_token = User.encode_auth_token(str(user.id))
                     if auth_token:
                         return error_message(SUCCESS, token=auth_token.decode()), 200
-                    else:
-                        return error_message(UNKNOWN_ERROR), 401
-                else:
-                    return error_message(PASSWORD_INCORRECT), 401
-            else:
-                return error_message(USER_NOT_EXIST), 401
+                    return error_message(UNKNOWN_ERROR), 401
+                return error_message(PASSWORD_INCORRECT), 401
+            return error_message(USER_NOT_EXIST), 404
         except Exception as e:
             print(e)
             return error_message(EAGAIN), 500
@@ -33,10 +30,8 @@ class Auth:
             if not isinstance(payload, str):
                 # mark the token as blacklisted
                 return save_token(token=auth_token)
-            else:
-                return error_message(UNKNOWN_ERROR, payload), 401
-        else:
-            return error_message(TOKEN_ILLEGAL), 403
+            return error_message(TOKEN_ILLEGAL, payload), 401
+        return error_message(TOKEN_REQUIRED), 401
 
     @staticmethod
     def get_logged_in_user(new_request):
@@ -50,7 +45,7 @@ class Auth:
                     return error_message(SUCCESS,
                             user_id=str(user.id),
                             email=user.email,
-                            username=user.username,
+                            username=user.name,
                             roles=user.roles,
                             registered_on=str(user.registered_on),
                             avatar=user.avatar,
