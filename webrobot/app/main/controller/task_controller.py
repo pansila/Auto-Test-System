@@ -1,13 +1,15 @@
 import os
 from pathlib import Path
+import datetime
 from datetime import date, datetime, timedelta
 
 from flask import request, Response
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
-from ..model.database import (EVENT_CODE_CANCEL_TASK, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
-                              QUEUE_PRIORITY_MIN, Task, TaskQueue, Test, Event, EventQueue)
+from app.main.util.decorator import token_required
+from app.main.util.request_parse import parse_organization_team, get_test_result_root
+from ..model.database import *
 from ..util.dto import TaskDto
 from ..config import get_config
 from ..util.errors import *
@@ -16,30 +18,30 @@ api = TaskDto.api
 
 @api.route('/result/<task_id>')
 class TaskStatistics(Resource):
+    @token_required
     @api.doc('get the detailed result for a task')
-    def get(self, task_id):
-        dirs = os.listdir(Path(get_config().TEST_RESULT_ROOT))
-        if task_id not in dirs:
-            return error_message(ENOENT, 'Task result directory not found'), 404
-
-        try:
-            task = Task.objects(id=task_id).get()
-        except Task.DoesNotExist as e:
-            print(e)
+    def get(self, task_id, user):
+        task = Task.objects(id=task_id).first()
+        if not task:
             return error_message(ENOENT, 'Task not found'), 404
 
-        with open(Path(get_config().TEST_RESULT_ROOT) / task_id / 'output.xml', encoding='utf-8') as f:
+        result_dir = get_test_result_root(task)
+        if not os.path.exists(result_dir):
+            return error_message(ENOENT, 'Task result directory not found'), 404
+
+        with open(result_dir / 'output.xml', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/xml')
 
 @api.route('/')
 class TaskController(Resource):
+    @token_required
     @api.doc('get the statistics for a task')
-    def get(self):
-        start_date = request.args.get('start_date', default=(datetime.utcnow().timestamp()-86300)*1000)
-        end_date = request.args.get('end_date', default=(datetime.utcnow().timestamp() * 1000))
+    def get(self, user):
+        start_date = request.args.get('start_date', default=(datetime.datetime.utcnow().timestamp()-86300)*1000)
+        end_date = request.args.get('end_date', default=(datetime.datetime.utcnow().timestamp() * 1000))
 
-        start_date = datetime.fromtimestamp(int(start_date)/1000)
-        end_date = datetime.fromtimestamp(int(end_date)/1000)
+        start_date = datetime.datetime.fromtimestamp(int(start_date)/1000)
+        end_date = datetime.datetime.fromtimestamp(int(end_date)/1000)
 
         if (start_date - end_date).days > 0:
             return error_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
@@ -80,9 +82,10 @@ class TaskController(Resource):
             end = start + timedelta(days=1)
         return stats
 
+    @token_required
     @api.response(201, 'Test suite successfully ran.')
     @api.doc('run a test suite')
-    def post(self):
+    def post(self, user):
         data = request.json
         if data is None:
             return error_message(EINVAL, 'The request data is empty'), 400
@@ -91,11 +94,19 @@ class TaskController(Resource):
         test_suite = data.get('test_suite', None)
         if test_suite == None:
             return error_message(EINVAL, 'Field test_suite is required'), 400
+
         task.test_suite = test_suite
 
-        try:
-            test = Test.objects(test_suite=task.test_suite).get()
-        except Test.DoesNotExist:
+        ret = parse_organization_team(user, request.json)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
+        query = {'test_suite': task.test_suite, 'organization': organization}
+        if team:
+            query['team'] = team
+        test = Test.objects(**query).first()
+        if not test:
             return error_message(ENOENT, 'The requested test suite is not found'), 404
 
         endpoint_list = data.get('endpoint_list', None)
@@ -125,17 +136,15 @@ class TaskController(Resource):
             return error_message(EINVAL, 'Testcases should be a list'), 400
         task.testcases = testcases
 
-        tester = data.get('tester', None)
-        if tester == None:
-            return error_message(EINVAL, 'Field tester should not be empty'), 400
-        task.tester = tester
-
+        task.tester = owner
         task.upload_dir = data.get('upload_dir', '')
-        task.test = test.id
+        task.test = test
+        task.organization = organization
+        task.team = team
         try:
             task.save()
         except ValidationError:
-            return error_message(EPERM, 'Task validation failed'), 400
+            return error_message(EINVAL, 'Task validation failed'), 400
 
         failed = []
         for endpoint in task.endpoint_list:
@@ -146,23 +155,32 @@ class TaskController(Resource):
                         new_task[name] = task[name]
                 else:
                     new_task.save()
-                    ret = TaskQueue.push(new_task, endpoint, task.priority)
+                    ret = TaskQueue.find(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team)
+                    if not ret:
+                        failed.append(endpoint)
+                    else:
+                        taskqueue, _ = ret
+                        ret = taskqueue.first().push(new_task)
+                        if ret == None:
+                            failed.append(endpoint)
+            else:
+                ret = TaskQueue.find(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team)
+                if not ret:
+                    failed.append(endpoint)
+                else:
+                    taskqueue, _ = ret
+                    ret = taskqueue.first().push(task)
                     if ret == None:
                         failed.append(endpoint)
-            else:
-                ret = TaskQueue.push(task, endpoint, task.priority)
-                if ret == None:
-                    failed.append(endpoint)
         else:
             if task.parallelization:
                 task.delete()
         if len(failed) != 0:
-            return error_message(EPERM, 'Task scheduling failed'), 403
+            return error_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
 
-        return {'status': 0, 'data': task.to_json()}
-
+    @token_required
     @api.doc('update a task')
-    def patch(self):
+    def patch(self, user):
         data = request.json
         if data is None:
             return error_message(EINVAL, 'The request data is empty'), 400
@@ -184,8 +202,9 @@ class TaskController(Resource):
             task.comment = comment
             task.save()
 
+    @token_required
     @api.doc('cancel a task')
-    def delete(self):
+    def delete(self, user):
         data = request.json
         if data is None:
             print('The request data is empty')
@@ -205,6 +224,10 @@ class TaskController(Resource):
         if status is None:
             return error_message(EINVAL, 'Field status is required'), 400
 
+        task = Task.objects(pk=task_id).first()
+        if not task:
+            return error_message(ENOENT, 'Task not found'), 404
+
         event = Event()
         event.code = EVENT_CODE_CANCEL_TASK
         event.message['address'] = address
@@ -212,5 +235,10 @@ class TaskController(Resource):
         event.message['task_id'] = task_id
         event.save()
 
-        if EventQueue.push(event) is None:
+        ret = EventQueue.find(organization=task.test.organization, team=task.test.team)
+        if not ret:
+            return error_message(ENOENT, 'Event queue not found'), 404
+
+        eventqueue, _ = ret
+        if not eventqueue.push(event):
             return error_message(EPERM, 'Pushing the event to event queue failed'), 403

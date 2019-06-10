@@ -10,7 +10,7 @@ import mistune
 from mongoengine import *
 
 sys.path.append('.')
-from app.main.model.database import Test
+from app.main.model.database import Test, User
 from app.main.config import get_config
 
 def filter_kw(item):
@@ -23,9 +23,10 @@ def filter_kw(item):
             item = item[0:-1]
     return item
 
-def update_test(scripts_dir=None, script=None):
+def db_update_test(scripts_dir=None, script=None, user=None, organization=None, team=None):
     if scripts_dir is None:
-        scripts_dir = get_config().USER_SCRIPT_ROOT
+        return 1
+    found = False
 
     test_suites = []
     for root, dirs, files in os.walk(scripts_dir):
@@ -36,11 +37,16 @@ def update_test(scripts_dir=None, script=None):
             if script and not str(Path(root) / md_file).endswith(script):
                 continue
 
+            if script:
+                found = True
+
             test_suite = md_file.split('.')[0]
             test = Test()
             test.test_suite = test_suite
-            test.author = 'John'
             test.test_cases = []
+            test.organization = organization
+            test.team = team
+            test.author = User.objects(email=user).first()
 
             test_suites.append(test_suite)
 
@@ -87,25 +93,31 @@ def update_test(scripts_dir=None, script=None):
                                         test.variables[dict_var][k] = v
                                 else:
                                     print('Unknown tag: ' + c[0])
-            try:
-                old_test = Test.objects(test_suite=test_suite).get()
-            except Test.DoesNotExist:
+            old_test = Test.objects(path=test.path).first()
+            if not old_test:
                 test.create_date = datetime.datetime.utcnow()
                 test.save()
                 print('Added new test suite {} to database'.format(test_suite))
                 continue
-            except Test.MultipleObjectsReturned:
-                test_suites.pop()
-                print('Found duplicate test suite in the datebase: {}, abort'.format(test_suite))
-                return 1
 
             if old_test != test:
-                for name in test:
-                    if name != 'id' and not name.startswith('_') and not callable(test[name]):
-                        old_test[name] = test[name]
                 print('Update test suite {}'.format(test_suite))
+                for name in test:
+                    if name == 'id' or name.startswith('_') or callable(test[name]):
+                        continue
+                    if name == 'author' or name == 'create_date' or name == 'update_date':
+                        continue
+                    print('    Updating key: ' + name)
+                    old_test[name] = test[name]
                 old_test.update_date = datetime.datetime.utcnow()
                 old_test.save()
+            if not old_test.author:
+                old_test.author = test.author
+                old_test.save()
+            if not old_test.create_date:
+                old_test.create_date = datetime.datetime.utcnow()
+                old_test.save()
+
 
     # clean up stale test suites
     for test_old in Test.objects({}):
@@ -117,6 +129,8 @@ def update_test(scripts_dir=None, script=None):
                 Test.objects(pk=test_old.id).modify(remove=True)
                 print('Remove stale test suite {}'.format(test_old.test_suite))
 
+    if script and not found:
+        return 1
     return 0
 
 if __name__ == '__main__':

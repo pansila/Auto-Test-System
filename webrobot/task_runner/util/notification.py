@@ -27,7 +27,7 @@ def send_email(task):
 
     msg = MIMEText(BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id), 'plain', 'utf-8')
     msg['From'] = _format_addr(from_addr)
-    msg['To'] = _format_addr(task.tester)
+    msg['To'] = _format_addr(task.tester.email)
     msg['cc'] = _format_addr(smtp_always_cc)
     msg['Subject'] = Header(SUBJECT_TEMPLATE.format(task.test.test_suite))
 
@@ -51,5 +51,5 @@ def send_email(task):
         print('SMTP authentication failed')
         server.quit()
         return
-    server.sendmail(from_addr, [task.tester], msg.as_string())
+    server.sendmail(from_addr, [task.tester.email], msg.as_string())
     server.quit()

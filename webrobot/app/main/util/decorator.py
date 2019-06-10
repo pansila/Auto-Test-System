@@ -15,8 +15,9 @@ def token_required(f):
 
         if data.get('code') != SUCCESS[0]:
             return data, status
+        kwargs['user'] = data['data']
 
-        return f(*args, data['data'], **kwargs)
+        return f(*args, **kwargs)
 
     return decorated
 
