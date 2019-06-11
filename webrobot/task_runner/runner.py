@@ -232,7 +232,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             task.save()
 
             result_dir = get_test_result_root(task)
-            args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
+            args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md', '--log', 'NONE', '--report', 'NONE']
             # args = ['--outputdir', str(result_dir), '--extension', 'md']
             os.makedirs(result_dir)
 

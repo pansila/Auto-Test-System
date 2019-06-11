@@ -3,12 +3,13 @@ from pathlib import Path
 import datetime
 from datetime import date, datetime, timedelta
 
-from flask import request, Response
+from flask import request, Response, send_from_directory
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required
 from app.main.util.request_parse import parse_organization_team, get_test_result_root
+from ..util.tarball import path_to_dict
 from ..model.database import *
 from ..util.dto import TaskDto
 from ..config import get_config
@@ -16,7 +17,7 @@ from ..util.errors import *
 
 api = TaskDto.api
 
-@api.route('/result/<task_id>')
+@api.route('/detail/<task_id>')
 class TaskStatistics(Resource):
     @token_required
     @api.doc('get the detailed result for a task')
@@ -32,10 +33,62 @@ class TaskStatistics(Resource):
         with open(result_dir / 'output.xml', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/xml')
 
+@api.route('/result_files')
+class ScriptManagement(Resource):
+    @token_required
+    def get(self, user):
+        task_id = request.args.get('task_id', default=None)
+        if not task_id:
+            return error_message(EINVAL, 'Field task_id is required'), 400
+
+        task = Task.objects(id=task_id).first()
+        if not task:
+            return error_message(ENOENT, 'Task not found'), 404
+
+        ret = parse_organization_team(user, request.args)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
+        if task.organization != organization or task.team != team:
+            return error_message(EPERM, 'Accessing resources that not belong to you is not allowed'), 403
+
+        result_dir = get_test_result_root(task)
+        result_files = path_to_dict(result_dir)
+
+        return error_message(SUCCESS, files=result_files)
+
+@api.route('/result_file')
+class ScriptManagement(Resource):
+    @token_required
+    def get(self, user):
+        file_path = request.args.get('file', default=None)
+        if not file_path:
+            return error_message(EINVAL, 'Field file is required'), 400
+
+        task_id = request.args.get('task_id', default=None)
+        if not task_id:
+            return error_message(EINVAL, 'Field task_id is required'), 400
+
+        task = Task.objects(id=task_id).first()
+        if not task:
+            return error_message(ENOENT, 'Task not found'), 404
+
+        ret = parse_organization_team(user, request.args)
+        if len(ret) != 3:
+            return ret
+        owner, team, organization = ret
+
+        if task.organization != organization or task.team != team:
+            return error_message(EPERM, 'Accessing resources that not belong to you is not allowed'), 403
+
+        result_dir = get_test_result_root(task)
+        return send_from_directory(Path(os.getcwd()) / result_dir, file_path)
+
 @api.route('/')
 class TaskController(Resource):
     @token_required
-    @api.doc('get the statistics for a task')
+    @api.doc('get the task statistics')
     def get(self, user):
         start_date = request.args.get('start_date', default=(datetime.datetime.utcnow().timestamp()-86300)*1000)
         end_date = request.args.get('end_date', default=(datetime.datetime.utcnow().timestamp() * 1000))
