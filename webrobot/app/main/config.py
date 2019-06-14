@@ -17,8 +17,6 @@ class DevelopmentConfig(Config):
     DEBUG = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_main.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    USER_SCRIPT_ROOT = 'robot_user_scripts'
-    BACKING_SCRIPT_ROOT = 'robot_backing_scripts'
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     MONGODB_URL = '127.0.0.1'
@@ -44,8 +42,6 @@ class ProductionConfig(Config):
     DEBUG = False
     # uncomment the line below to use postgres
     # SQLALCHEMY_DATABASE_URI = postgres_local_base
-    USER_SCRIPT_ROOT = 'robot_user_scripts'
-    BACKING_SCRIPT_ROOT = 'robot_backing_scripts'
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     MONGODB_URL = '127.0.0.1'

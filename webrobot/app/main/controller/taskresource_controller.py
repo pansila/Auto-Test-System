@@ -7,8 +7,8 @@ from flask import request, send_from_directory
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import get_test_result_root, get_upload_files_root
+from app.main.util.decorator import token_required, organization_team_required_by_args, task_required
+from app.main.util.get_path import get_test_result_root, get_upload_files_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TaskResourceDto
@@ -49,22 +49,16 @@ class TaskResourceController(Resource):
         tarball = os.path.basename(tarball)
         return send_from_directory(Path(os.getcwd()) / result_root / TARBALL_TEMP, tarball)
 
-@api.route('/list/<task_id>')
+@api.route('/list')
 @api.param('task_id', 'task id to process')
 class TaskResourceList(Resource):
     @token_required
-    @api.response(406, "Task resource doesn't exist.")
-    def get(self, task_id, user):
-        try:
-            task = Task.objects(pk=task_id).get()
-        except ValidationError as e:
-            print(e)
-            return error_message(EINVAL, 'Task ID incorrect'), 400
-        except Task.DoesNotExist:
-            return error_message(ENOENT, 'Task not found'), 404
-        
+    @organization_team_required_by_args
+    @task_required
+    def get(self, **kwargs):
+        task = kwargs['task']
         if not task.upload_dir:
-            return error_message(ENOENT, 'Upload directory is empty'), 406
+            return []
 
         upload_root = get_upload_files_root(task)
         if not os.path.exists(upload_root):

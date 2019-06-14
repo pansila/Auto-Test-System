@@ -11,10 +11,6 @@ from ..util.errors import *
 from ..util.identicon import *
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
-try:
-    os.mkdir(USERS_ROOT)
-except FileExistsError:
-    pass
 
 def save_new_user(data, admin=None):
     user = User.objects(email=data['email']).first()

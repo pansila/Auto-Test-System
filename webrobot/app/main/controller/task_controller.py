@@ -7,8 +7,8 @@ from flask import request, Response, send_from_directory
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import parse_organization_team, get_test_result_root
+from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
+from app.main.util.get_path import get_test_result_root
 from ..util.tarball import path_to_dict
 from ..model.database import *
 from ..util.dto import TaskDto
@@ -17,11 +17,15 @@ from ..util.errors import *
 
 api = TaskDto.api
 
-@api.route('/detail/<task_id>')
+@api.route('/detail')
 class TaskStatistics(Resource):
     @token_required
     @api.doc('get the detailed result for a task')
-    def get(self, task_id, user):
+    def get(self, user):
+        task_id = request.args.get('task_id', default=None)
+        if not task_id:
+            return error_message(EINVAL, 'Field task_id is required'), 400
+
         task = Task.objects(id=task_id).first()
         if not task:
             return error_message(ENOENT, 'Task not found'), 404
@@ -36,22 +40,10 @@ class TaskStatistics(Resource):
 @api.route('/result_files')
 class ScriptManagement(Resource):
     @token_required
-    def get(self, user):
-        task_id = request.args.get('task_id', default=None)
-        if not task_id:
-            return error_message(EINVAL, 'Field task_id is required'), 400
-
-        task = Task.objects(id=task_id).first()
-        if not task:
-            return error_message(ENOENT, 'Task not found'), 404
-
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
-
-        if task.organization != organization or task.team != team:
-            return error_message(EPERM, 'Accessing resources that not belong to you is not allowed'), 403
+    @organization_team_required_by_args
+    @task_required
+    def get(self, **kwargs):
+        task = kwargs['task']
 
         result_dir = get_test_result_root(task)
         result_files = path_to_dict(result_dir)
@@ -61,26 +53,14 @@ class ScriptManagement(Resource):
 @api.route('/result_file')
 class ScriptManagement(Resource):
     @token_required
-    def get(self, user):
+    @organization_team_required_by_args
+    @task_required
+    def get(self, **kwargs):
         file_path = request.args.get('file', default=None)
         if not file_path:
             return error_message(EINVAL, 'Field file is required'), 400
 
-        task_id = request.args.get('task_id', default=None)
-        if not task_id:
-            return error_message(EINVAL, 'Field task_id is required'), 400
-
-        task = Task.objects(id=task_id).first()
-        if not task:
-            return error_message(ENOENT, 'Task not found'), 404
-
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
-
-        if task.organization != organization or task.team != team:
-            return error_message(EPERM, 'Accessing resources that not belong to you is not allowed'), 403
+        task = kwargs['task']
 
         result_dir = get_test_result_root(task)
         return send_from_directory(Path(os.getcwd()) / result_dir, file_path)
@@ -136,9 +116,9 @@ class TaskController(Resource):
         return stats
 
     @token_required
-    @api.response(201, 'Test suite successfully ran.')
+    @organization_team_required_by_json
     @api.doc('run a test suite')
-    def post(self, user):
+    def post(self, **kwargs):
         data = request.json
         if data is None:
             return error_message(EINVAL, 'The request data is empty'), 400
@@ -150,17 +130,19 @@ class TaskController(Resource):
 
         task.test_suite = test_suite
 
-        ret = parse_organization_team(user, request.json)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
+        user = kwargs['user']
 
         query = {'test_suite': task.test_suite, 'organization': organization}
         if team:
             query['team'] = team
-        test = Test.objects(**query).first()
+        test = Test.objects(**query)
         if not test:
             return error_message(ENOENT, 'The requested test suite is not found'), 404
+        if test.count() != 1:
+            return error_message(EINVAL, 'Found duplicate test suites'), 401
+        test = test.first()
 
         endpoint_list = data.get('endpoint_list', None)
         if endpoint_list == None:
@@ -189,7 +171,7 @@ class TaskController(Resource):
             return error_message(EINVAL, 'Testcases should be a list'), 400
         task.testcases = testcases
 
-        task.tester = owner
+        task.tester = user
         task.upload_dir = data.get('upload_dir', '')
         task.test = test
         task.organization = organization
@@ -293,5 +275,5 @@ class TaskController(Resource):
             return error_message(ENOENT, 'Event queue not found'), 404
 
         eventqueue, _ = ret
-        if not eventqueue.push(event):
+        if not eventqueue.first().push(event):
             return error_message(EPERM, 'Pushing the event to event queue failed'), 403

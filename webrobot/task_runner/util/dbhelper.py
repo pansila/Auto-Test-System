@@ -82,6 +82,8 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                                         test.variables[list_var].extend(c[1:])
                                     elif dict_var:
                                         for i in c[1:]:
+                                            if not i:
+                                                continue
                                             k, v = i.split('=')
                                             test.variables[dict_var][k] = v
                                 elif c[0].startswith('&'):
@@ -89,6 +91,8 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                                     dict_var = filter_kw(c[0])
                                     test.variables[dict_var] = {}
                                     for i in c[1:]:
+                                        if not i:
+                                            continue
                                         k, v = i.split('=')
                                         test.variables[dict_var][k] = v
                                 else:
@@ -107,7 +111,9 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                         continue
                     if name == 'author' or name == 'create_date' or name == 'update_date':
                         continue
-                    print('    Updating key: ' + name)
+                    if old_test[name] == test[name]:
+                        continue
+                    print('    Updating key: {}, {} -> {}'.format(name, old_test[name], test[name]))
                     old_test[name] = test[name]
                 old_test.update_date = datetime.datetime.utcnow()
                 old_test.save()
