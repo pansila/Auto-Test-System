@@ -10,8 +10,8 @@ from flask import Flask, render_template, request, send_from_directory, url_for
 from flask_restplus import Resource
 from mongoengine import DoesNotExist, ValidationError
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import parse_organization_team
+from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
+from app.main.util.get_path import get_test_result_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestResultDto
@@ -25,7 +25,8 @@ USERS_ROOT = Path(get_config().USERS_ROOT)
 @api.route('/')
 class TestResultRoot(Resource):
     @token_required
-    def get(self, user):
+    @organization_team_required_by_args
+    def get(self, **kwargs):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
@@ -35,10 +36,8 @@ class TestResultRoot(Resource):
         start_date = request.args.get('start_date', None)
         end_date = request.args.get('end_date', None)
 
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
 
         if start_date:
             start_date = parser.parse(start_date)
@@ -74,8 +73,16 @@ class TestResultRoot(Resource):
             dirs = os.listdir(USERS_ROOT / organization.path / 'test_results')
         except FileNotFoundError:
             return {'items': [], 'total': 0}
+        ret = []
+        for d in dirs:
+            try:
+                ObjectId(d)
+            except ValidationError as e:
+                print(e)
+            else:
+                ret.append(d)
 
-        all_tasks = Task.objects(id__in=dirs, **query).order_by(sort)
+        all_tasks = Task.objects(id__in=ret, **query).order_by(sort)
         tasks = all_tasks[(page - 1) * limit : page * limit]
         ret = []
         for t in tasks:

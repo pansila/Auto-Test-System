@@ -21,7 +21,7 @@ from task_runner.util.dbhelper import db_update_test
 from app.main.util.tarball import make_tarfile
 from app.main.config import get_config
 from app.main.model.database import *
-from app.main.util.request_parse import get_test_result_root
+from app.main.util.get_path import get_test_result_root
 
 
 ROBOT_TASKS = []

@@ -5,8 +5,8 @@ from pathlib import Path
 from flask import Flask, send_from_directory, request
 from flask_restplus import Resource
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import parse_organization_team, get_test_result_root, get_backing_scripts_root
+from app.main.util.decorator import token_required, organization_team_required_by_args
+from app.main.util.get_path import get_test_result_root, get_back_scripts_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestDto
@@ -37,7 +37,7 @@ class ScriptDownload(Resource):
             test_suite = test_suite[0:-3]
 
         result_dir = get_test_result_root(task)
-        scripts_root = get_backing_scripts_root(task)
+        scripts_root = get_back_scripts_root(task)
 
         results_tmp = result_dir / 'temp'
         script_file = scripts_root / (test_suite + '.py')
@@ -60,16 +60,13 @@ class ScriptDownload(Resource):
 @api.response(404, 'Script not found.')
 class TestSuiteGet(Resource):
     @token_required
-    def get(self, test_suite, user):
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+    @organization_team_required_by_args
+    def get(self, test_suite, **kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
 
-        try:
-            test = Test.objects(test_suite=test_suite, organization=organization, team=team).get()
-        except Test.DoesNotExist as e:
-            print(e)
+        test = Test.objects(test_suite=test_suite, organization=organization, team=team).first()
+        if not test:
             return error_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
 
         return {
@@ -80,19 +77,20 @@ class TestSuiteGet(Resource):
 @api.route('/')
 class TestSuitesList(Resource):
     @token_required
-    def get(self, user):
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+    @organization_team_required_by_args
+    def get(self, **kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
         
         query = {'organization': organization}
         if team:
             query['team'] = team
         tests = Test.objects(**query)
+
         ret = []
         for t in tests:
             ret.append({
+                'id': str(t.id),
                 'test_suite': t.test_suite,
                 'test_cases': t.test_cases,
                 'variables': t.variables,

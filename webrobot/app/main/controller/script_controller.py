@@ -6,8 +6,8 @@ from pathlib import Path
 from flask import Flask, send_from_directory, request
 from flask_restplus import Resource
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import parse_organization_team
+from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
+from app.main.util.get_path import get_user_scripts_root, get_back_scripts_root
 from task_runner.util.dbhelper import db_update_test
 from ..config import get_config
 from ..model.database import *
@@ -17,46 +17,42 @@ from ..util.errors import *
 
 api = ScriptDto.api
 
-TARBALL_TEMP = Path('temp')
-USERS_ROOT = Path(get_config().USERS_ROOT)
-BACKING_SCRIPT_ROOT = Path(get_config().BACKING_SCRIPT_ROOT)
-USER_SCRIPT_ROOT = Path(get_config().USER_SCRIPT_ROOT)
 
 @api.route('/')
 @api.response(404, 'Scripts not found.')
 class ScriptManagement(Resource):
     @token_required
+    @organization_team_required_by_args
     @api.doc('compound get method for script file list and script file content')
-    def get(self, user):
+    def get(self, **kwargs):
         script_path = request.args.get('file', default=None)
         script_type = request.args.get('script_type', default=None)
 
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
-        
-        user_scripts_root = Path(os.getcwd()) / USERS_ROOT / organization.path / USER_SCRIPT_ROOT
-        backing_scripts_root = Path(os.getcwd()) / USERS_ROOT / organization.path / BACKING_SCRIPT_ROOT
+        organization = kwargs['organization']
+        team = kwargs['team']
+
+        back_scripts_root = get_back_scripts_root(team=team, organization=organization)
+        user_scripts_root = get_user_scripts_root(team=team, organization=organization)
 
         if script_path:
             if script_type is None:
                 return error_message(EINVAL, 'Field script_type is required'), 400
             if script_type == 'user_scripts':
-                return send_from_directory(user_scripts_root, script_path)
+                return send_from_directory(Path(os.getcwd()) / user_scripts_root, script_path)
             elif script_type == 'backing_scripts':
-                return send_from_directory(backing_scripts_root, script_path)
+                return send_from_directory(Path(os.getcwd()) / back_scripts_root, script_path)
             else:
                 return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
         elif script_type:
             return error_message(EINVAL, 'Field file is required'), 400
 
         user_scripts = path_to_dict(user_scripts_root)
-        backing_scripts = path_to_dict(backing_scripts_root)
-        return {'user_scripts': user_scripts, 'backing_scripts': backing_scripts}
+        back_scripts = path_to_dict(back_scripts_root)
+        return {'user_scripts': user_scripts, 'backing_scripts': back_scripts}
 
     @token_required
-    def post(self, user):
+    @organization_team_required_by_json
+    def post(self, **kwargs):
         script = request.json.get('file', None)
         if script is None or script == '':
             return error_message(EINVAL, 'Field file is required'), 400
@@ -76,23 +72,22 @@ class ScriptManagement(Resource):
         if content is None and new_name is None:
             return error_message(EINVAL, 'Field content is required'), 400
 
-        ret = parse_organization_team(user, request.json)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
+        user = kwargs['user']
         
+        if script_type == 'user_scripts':
+            root = get_user_scripts_root(team=team, organization=organization)
+        elif script_type == 'backing_scripts':
+            root = get_back_scripts_root(team=team, organization=organization)
+        else:
+            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
+
         if content:
             if script_type == 'user_scripts':
-                content = re.sub(r'\\', '', content)
+                content = re.sub(r'\\([{}_])', r'\1', content)
             elif script_type == 'backing_scripts':
                 content = re.sub(r'\r\n', '\n', content)
-
-            if script_type == 'user_scripts':
-                root = Path(os.getcwd()) / USERS_ROOT / organization.path / USER_SCRIPT_ROOT
-            elif script_type == 'backing_scripts':
-                root = Path(os.getcwd()) / USERS_ROOT / organization.path / BACKING_SCRIPT_ROOT
-            else:
-                return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
             dirname = os.path.dirname(script)
             try:
@@ -105,20 +100,19 @@ class ScriptManagement(Resource):
                     f.write(content)
 
         if new_name:
-            os.rename(USER_SCRIPT_ROOT / script, USER_SCRIPT_ROOT / os.path.dirname(script) / new_name)
+            os.rename(root / script, root / os.path.dirname(script) / new_name)
 
         if script_type == 'user_scripts':
             _script = str(Path(os.path.dirname(script)) / new_name) if new_name else script
-            ret = db_update_test(scripts_dir=root, script=_script, user=user['email'], organization=organization, team=team)
+            ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
             if ret:
                 return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
 
     @token_required
-    def delete(self, user):
-        ret = parse_organization_team(user, request.json)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+    @organization_team_required_by_json
+    def delete(self, *kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
         
         script = request.json.get('file', None)
         if script is None or script == '':
@@ -131,9 +125,9 @@ class ScriptManagement(Resource):
             return error_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
-            root = Path(os.getcwd()) / USERS_ROOT / organization.path / USER_SCRIPT_ROOT
+            root = get_user_scripts_root(team=team, organization=organization)
         elif script_type == 'backing_scripts':
-            root = Path(os.getcwd()) / USERS_ROOT / organization.path / BACKING_SCRIPT_ROOT
+            root = get_back_scripts_root(team=team, organization=organization)
         else:
             return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
@@ -161,14 +155,13 @@ class ScriptManagement(Resource):
 @api.route('/upload/')
 class ScriptUpload(Resource):
     @token_required
+    @organization_team_required_by_form
     @api.doc('upload the scripts')
-    def post(self, user):
+    def post(self, **kwargs):
         found = False
 
-        ret = parse_organization_team(user, request.form)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
         
         script_type = request.form.get('script_type', None)
         if script_type is None:
@@ -179,9 +172,9 @@ class ScriptUpload(Resource):
             return error_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
-            root = Path(os.getcwd()) / USERS_ROOT / organization.path / USER_SCRIPT_ROOT
+            root = get_user_scripts_root(team=team, organization=organization)
         elif script_type == 'backing_scripts':
-            root = Path(os.getcwd()) / USERS_ROOT / organization.path / BACKING_SCRIPT_ROOT
+            root = get_back_scripts_root(team=team, organization=organization)
         else:
             return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 

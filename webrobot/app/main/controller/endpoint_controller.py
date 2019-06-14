@@ -1,8 +1,7 @@
 from flask import request
 from flask_restplus import Resource
 
-from app.main.util.decorator import token_required
-from app.main.util.request_parse import parse_organization_team
+from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
 from task_runner.runner import start_threads
 
 from ..model.database import *
@@ -14,19 +13,18 @@ api = EndpointDto.api
 @api.route('/')
 class EndpointController(Resource):
     @token_required
+    @organization_team_required_by_args
     @api.doc('get all test endpoints available')
-    def get(self, user):
+    def get(self, **kwargs):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
 
+        organization = kwargs['organization']
+        team = kwargs['team']
+
         page = int(page)
         limit = int(limit)
-
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
 
         query = []
         if title:
@@ -61,13 +59,11 @@ class EndpointController(Resource):
 
     @token_required
     @api.doc('delete the test endpoint with the specified address')
-    def delete(self, user):
+    @organization_team_required_by_json
+    def delete(self, **kwargs):
         data = request.json
-
-        ret = parse_organization_team(user, request.json)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
 
         address = data.get('address', None)
         if address is None:
@@ -83,13 +79,12 @@ class EndpointController(Resource):
 
     @token_required
     @api.doc('create a task queue for the endpoint address')
-    def post(self, user):
+    @organization_team_required_by_json
+    def post(self, **kwargs):
         data = request.json
-
-        ret = parse_organization_team(user, request.json)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+        organization = kwargs['organization']
+        team = kwargs['team']
+        user = kwargs['user']
 
         endpoint_address = data.get('endpoint_address', None)
         if not endpoint_address:
@@ -129,9 +124,9 @@ class EndpointController(Resource):
         endpoint.tests = endpoint_tests
         endpoint.save()
 
-        for organization in owner.organizations:
+        for organization in user.organizations:
             start_threads(organization=organization)
-            for team in owner.teams:
+            for team in user.teams:
                 start_threads(organization=organization, team=team)
 
         return error_message(SUCCESS), 200
@@ -139,12 +134,11 @@ class EndpointController(Resource):
 @api.route('/queue/')
 class EndpointController(Resource):
     @token_required
+    @organization_team_required_by_args
     @api.doc('get queuing tasks of an endpoint')
-    def get(self, user):
-        ret = parse_organization_team(user, request.args)
-        if len(ret) != 3:
-            return ret
-        owner, team, organization = ret
+    def get(self, **kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
 
         query = {'organization': organization}
         if team:
