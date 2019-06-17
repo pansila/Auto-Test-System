@@ -110,7 +110,7 @@ class ScriptManagement(Resource):
 
     @token_required
     @organization_team_required_by_json
-    def delete(self, *kwargs):
+    def delete(self, **kwargs):
         organization = kwargs['organization']
         team = kwargs['team']
         
@@ -162,6 +162,7 @@ class ScriptUpload(Resource):
 
         organization = kwargs['organization']
         team = kwargs['team']
+        user = kwargs['user']
         
         script_type = request.form.get('script_type', None)
         if script_type is None:
@@ -192,6 +193,6 @@ class ScriptUpload(Resource):
             return error_message(ENOENT, 'No files are found in the request'), 404
 
         if script_type == 'user_scripts':
-            ret = db_update_test(scripts_dir=root, script=file.filename, user=user['email'], organization=organization, team=team)
+            ret = db_update_test(scripts_dir=root, script=file.filename, user=user.email, organization=organization, team=team)
             if ret:
                 return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401

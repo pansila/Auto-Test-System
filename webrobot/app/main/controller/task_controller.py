@@ -63,7 +63,7 @@ class ScriptManagement(Resource):
         task = kwargs['task']
 
         result_dir = get_test_result_root(task)
-        return send_from_directory(Path(os.getcwd()) / result_dir, file_path)
+        return send_from_directory(Path(os.getcwd()) / result_dir, file_path, as_attachment=True)
 
 @api.route('/')
 class TaskController(Resource):
