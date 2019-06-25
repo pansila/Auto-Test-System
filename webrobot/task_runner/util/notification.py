@@ -9,7 +9,10 @@ from socket import timeout
 # sys.path.append('.')
 from app.main.config import get_config
 
-BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:5000/testresult/{}/log.html'
+notification_chain = []
+
+
+BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:9527/#/test-report/test-detail?task_id={}&organization={}{}'
 SUBJECT_TEMPLATE = 'Test Report for {}'
 
 
@@ -25,7 +28,8 @@ def send_email(task):
     smtp_server_port = get_config().SMTP_SERVER_PORT
     smtp_always_cc = get_config().SMTP_ALWAYS_CC
 
-    msg = MIMEText(BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id), 'plain', 'utf-8')
+    body_msg = BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id, task.test.organization.id, '&team=' + task.test.team.id if task.test.team else '')
+    msg = MIMEText(body_msg, 'plain', 'utf-8')
     msg['From'] = _format_addr(from_addr)
     msg['To'] = _format_addr(task.tester.email)
     msg['cc'] = _format_addr(smtp_always_cc)
@@ -53,3 +57,10 @@ def send_email(task):
         return
     server.sendmail(from_addr, [task.tester.email], msg.as_string())
     server.quit()
+
+def notification_chain_init():
+    notification_chain.append(send_email)
+
+def notification_chain_call(task):
+    for caller in notification_chain:
+        caller(task)

@@ -23,10 +23,10 @@ _organization = OrganizationDto.organization
 class OrganizationList(Resource):
     @token_required
     @api.doc('List all organizations associated with the user')
-    def get(self, user):
+    def get(self, **kwargs):
         ret = []
         check = []
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
@@ -56,13 +56,13 @@ class OrganizationList(Resource):
     @token_required
     @api.response(201, 'Organization successfully created.')
     @api.doc('create a new organization')
-    def post(self, user):
+    def post(self, **kwargs):
         data = request.json
         name = data.get('name', None)
         if not name:
             return error_message(EINVAL, 'Field name is required'), 400
         
-        user = User.objects(pk=user['user_id']).first()
+        user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
 
@@ -107,8 +107,7 @@ class OrganizationAvatar(Resource):
 class OrganizationMember(Resource):
     @token_required
     @api.doc('remove a member from the organization')
-    def delete(self, user):
-        user_id = user['user_id']
+    def delete(self, **kwargs):
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
             return error_message(EINVAL, "Field organization_id is required"), 400
@@ -117,7 +116,7 @@ class OrganizationMember(Resource):
         if not org_to_quit:
             return error_message(ENOENT, "Organization not found"), 404
 
-        user = User.objects(pk=user_id).first()
+        user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, "User not found"), 404
 
@@ -136,7 +135,7 @@ class OrganizationMember(Resource):
 class OrganizationListAll(Resource):
     @token_required
     @api.doc('List all organizations registered')
-    def get(self, user):
+    def get(self, **kwargs):
         ret = []
 
         organizations = Organization.objects(name__not__exact='Personal')
@@ -154,10 +153,10 @@ class OrganizationListAll(Resource):
 class OrganizationListAll(Resource):
     @token_required
     @api.doc('List all organizations registered')
-    def get(self, user):
+    def get(self, **kwargs):
         ret = []
         check = []
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
@@ -212,12 +211,12 @@ class OrganizationListAll(Resource):
 class OrganizationJoin(Resource):
     @token_required
     @api.doc('join an organization')
-    def post(self, user):
+    def post(self, **kwargs):
         org_id = request.json.get('id', None)
         if not org_id:
             return error_message(EINVAL, "Field id is required"), 400
 
-        user = User.objects(pk=user['user_id']).first()
+        user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
 
@@ -229,3 +228,46 @@ class OrganizationJoin(Resource):
             organization.modify(push__members=user)
         if organization not in user.organizations:
             user.modify(push__organizations=organization)
+
+@api.route('/users')
+class OrganizationUsers(Resource):
+    @token_required
+    @api.doc('List all users of the specified organization')
+    def get(self, **kwargs):
+        organization_id = request.args.get('organization', None)
+        if organization_id:
+            organization = Organization.objects(pk=organization_id).first()
+            if not organization:
+                return error_message(ENOENT, 'Organization not found'), 404
+            return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
+
+        team_id = request.args.get('team', None)
+        if team_id:
+            team = Team.objects(pk=team_id).first()
+            if not team:
+                return error_message(ENOENT, 'Team not found'), 404
+            return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in team.members]
+
+@api.route('/transfer')
+class OrganizationTransfer(Resource):
+    @token_required
+    @api.doc('Transfer ownership of an organization to another authorized user')
+    def post(self, **kwargs):
+        organization_id = request.json.get('organization', None)
+        if not organization_id:
+            return error_message(EINVAL, 'Field organization is required'), 401
+
+        organization = Organization.objects(pk=organization_id).first()
+        if not organization:
+            return error_message(ENOENT, 'Organization not found'), 404
+
+        owner = request.json.get('new_owner', None)
+        if not owner:
+            return error_message(EINVAL, 'Field new_owner is required'), 401
+
+        user = User.objects(pk=owner).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
+        organization.owner = user
+        organization.save()

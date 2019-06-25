@@ -13,10 +13,11 @@ import time
 from pathlib import Path
 
 import robot
+import mongoengine
 from bson import DBRef, ObjectId
 from mongoengine import connect
 
-from task_runner.util.notification import send_email
+from task_runner.util.notification import notification_chain_call, notification_chain_init
 from task_runner.util.dbhelper import db_update_test
 from app.main.util.tarball import make_tarfile
 from app.main.config import get_config
@@ -28,6 +29,7 @@ ROBOT_TASKS = []
 
 
 def event_handler_cancel_task(event):
+    global ROBOT_TASKS
     address = event.message['address']
     priority = event.message['priority']
     task_id = event.message['task_id']
@@ -46,14 +48,16 @@ def event_handler_cancel_task(event):
         taskqueue.modify(pull__tasks=task)
         task.modify(status='cancelled')
     elif task.status == 'running':
-        taskqueue.modify(running_task=None)
         for idx, proc in enumerate(ROBOT_TASKS):
             if str(proc['task_id']) == task_id:
+                taskqueue.modify(running_task=None)
+                task.modify(status='cancelled')
+
                 proc['process'].terminate()
                 del ROBOT_TASKS[idx]
                 break
         else:
-            print('task to cancel not found for ' + task_id)
+            print('task to cancel not found for id ' + task_id)
 
 def event_handler_update_user_script(event):
     script = event.message['script']
@@ -67,7 +71,6 @@ EVENT_HANDLERS = {
 }
 
 def event_loop(organization=None, team=None):
-    global ROBOT_TASKS # todo
     ret = EventQueue.find(organization, team)
     if not ret:
         print('Error: event queue not found')
@@ -88,8 +91,8 @@ def event_loop(organization=None, team=None):
             except KeyError:
                 print('Unknown message: %s' % event.code)
 
-
-        if q.first().to_delete:
+        if eventqueue.to_delete:
+            eventqueue.delete()
             print('Exit the event loop')
             break
         time.sleep(1)
@@ -185,19 +188,21 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
         print('Taskqueue not found')
         return
     taskqueues, role = ret
+    taskqueue_first = taskqueues.first()
 
     ret = Endpoint.find(endpoint_address=endpoint_address, organization=organization, team=team)
     if not ret:
         print('Endpoint not found')
         return
-    eps, _ = ret
+    endpoints, _ = ret
 
     print('Start task loop: {} - {}'.format(role.name, endpoint_address))
 
     while True:
-        if taskqueues.first().to_delete:
+        taskqueue_first.reload('to_delete')
+        if taskqueue_first.to_delete:
             taskqueues.delete()
-            eps.delete()
+            endpoints.delete()
             print('Exit task loop: {} - {}'.format(role.name, endpoint_address))
             break
         # TODO: lower priority tasks will take precedence if higher priority queue is empty first
@@ -206,6 +211,8 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             for taskqueue in taskqueues:
                 if taskqueue.priority == priority:
                     break
+            else:
+                print('Error: Found task queue with unknown priority')
 
             # "continue" to search for tasks in the lower priority task queue
             # "break" to start over to search for tasks from top priority task queue
@@ -293,8 +300,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             if os.path.exists(result_dir_tmp):
                 shutil.rmtree(result_dir_tmp)
 
-            # TODO: notification chain
-            send_email(task)
+            notification_chain_call(task)
             break
         time.sleep(1)
 
@@ -379,6 +385,8 @@ def monitor_threads(organization=None, team=None):
     # ret = prepare_to_run(organization, team)
     # if ret:
     #     return ret
+
+    notification_chain_init()
 
     ret = EventQueue.find(organization, team)
     if not ret:
