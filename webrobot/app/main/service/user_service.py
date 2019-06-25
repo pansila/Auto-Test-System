@@ -6,6 +6,7 @@ from pathlib import Path
 from app.main import db
 from app.main.model.database import User, Organization
 
+from task_runner.runner import start_threads
 from ..config import get_config
 from ..util.errors import *
 from ..util.identicon import *
@@ -42,7 +43,7 @@ def save_new_user(data, admin=None):
             return error_message(EEXIST), 401
 
         if new_user.avatar == '':
-            img= render_identicon(hash(data['email']), 27)
+            img = render_identicon(hash(data['email']), 27)
             img.save(user_root / ('%s.png' % new_user.id))
             new_user.avatar = '%s.png' % new_user.id
         if new_user.name == '':
@@ -54,6 +55,11 @@ def save_new_user(data, admin=None):
             organization.save()
             new_user.organizations = [organization]
         new_user.save()
+
+        for organization in new_user.organizations:
+            start_threads(organization=organization)
+            for team in new_user.teams:
+                start_threads(organization=organization, team=team)
 
         return generate_token(new_user)
     else:
