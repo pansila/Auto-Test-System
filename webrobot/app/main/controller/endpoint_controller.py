@@ -28,15 +28,13 @@ class EndpointController(Resource):
 
         query = []
         if title:
-            query.append({'name__contains': title, 'organization': organization})
-            query.append({'endpoint_address__contains': title, 'organization': organization})
+            query.append({'name__contains': title, 'organization': organization, 'team': team})
+            query.append({'endpoint_address__contains': title, 'organization': organization, 'team': team})
         else:
-            query.append({'organization': organization})
+            query.append({'organization': organization, 'team': team})
 
         ret = []
         for q in query:
-            if team:
-                q['team'] = team
             for ep in Endpoint.objects(**q):
                 tests = []
                 for t in ep.tests:
@@ -69,10 +67,9 @@ class EndpointController(Resource):
         if address is None:
             return error_message(EINVAL, 'Parameter address is required'), 400
 
-        ret = TaskQueue.find(endpoint_address=address, organization=organization, team=team)
-        if not ret:
+        taskqueues = TaskQueue.objects(endpoint_address=address, organization=organization, team=team)
+        if taskqueues.count() == 0:
             return error_message(ENOENT, 'Task queue not found'), 404
-        taskqueues, _ = ret
         taskqueues.update(to_delete=True)
 
         return error_message(SUCCESS)
@@ -104,30 +101,26 @@ class EndpointController(Resource):
                 return error_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             endpoint_tests.append(tt)
 
-        ret = Endpoint.find(endpoint_address=endpoint_address, team=team, organization=organization)
-        if not ret:
+        endpoint = Endpoint.objects(endpoint_address=endpoint_address, team=team, organization=organization).first()
+        if not endpoint:
             endpoint = Endpoint(team=team, organization=organization, endpoint_address=endpoint_address)
             endpoint.save()
-            ret = TaskQueue.find(endpoint_address=endpoint_address, team=team, organization=organization)
-            if not ret:
+
+            taskqueue = TaskQueue.objects(endpoint_address=endpoint_address, team=team, organization=organization).first()
+            if not taskqueue:
                 for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
                     taskqueue = TaskQueue(endpoint_address=endpoint_address, priority=priority, team=team, organization=organization)
                     taskqueue.endpoint = endpoint
                     taskqueue.save()
             else:
                 return error_message(EEXIST, 'Task queues exist already'), 401
-        else:
-            endpoint, _ = ret
 
         endpoint.name = data.get('endpoint_name', endpoint_address)
         endpoint.enable = data.get('enable', False)
         endpoint.tests = endpoint_tests
         endpoint.save()
 
-        for organization in user.organizations:
-            start_threads(organization=organization)
-            for team in user.teams:
-                start_threads(organization=organization, team=team)
+        start_threads(user)
 
         return error_message(SUCCESS), 200
 
@@ -178,14 +171,19 @@ class EndpointController(Resource):
         return ret
 
     @token_required
+    @organization_team_required_by_json
     @api.doc('update task queue of an endpoint')
-    def post(self, user):
-        taskqueues = request.json
+    def post(self, **kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
+        taskqueues = request.json.get('taskqueues', None)
+        if not taskqueues:
+            return error_message(EINVAL, 'Field taskqueues is required'), 400
 
         for taskqueue in taskqueues:
             if 'address' not in taskqueue or 'priority' not in taskqueue:
                 return error_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
-            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'])
+            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'], team=team, organization=organization)
             if queue.count() != 1:
                 return error_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
 
@@ -194,19 +192,17 @@ class EndpointController(Resource):
                     return error_message(EINVAL, 'Task lacks the field task_id'), 400
                 if task['priority'] != taskqueue['priority']:
                     return error_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'), 400
-                try:
-                    t = Task.objects(pk=task['task_id']).get()
-                except Task.DoesNotExist as e:
-                    print(e)
+                t = Task.objects(pk=task['task_id']).first()
+                if not t:
                     return error_message(ENOENT, 'task not found for ' + task['task_id']), 404
 
-            q = queue[0]
-            if not q.flush(q.endpoint_address, q.priority):
+            q = queue.first()
+            if not q.flush():
                 return error_message(EPERM, 'task queue {} {} flushing failed'.format(q.endpoint_address, q.priority)), 401
 
             for task in taskqueue['tasks']:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
-                t = Task.objects(pk=task['task_id']).get()
+                t = Task.objects(pk=task['task_id']).first()
                 if t.status == 'waiting':
-                    if not q.push(t, q.endpoint_address, q.priority):
-                        return error_message(ETIME, 'pushing the task to task queue timed out'), 408
+                    if not q.push(t):
+                        print('pushing the task to task queue timed out')

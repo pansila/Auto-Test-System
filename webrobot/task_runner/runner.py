@@ -22,7 +22,7 @@ from task_runner.util.dbhelper import db_update_test
 from app.main.util.tarball import make_tarfile
 from app.main.config import get_config
 from app.main.model.database import *
-from app.main.util.get_path import get_test_result_root
+from app.main.util.get_path import get_test_result_path
 
 
 ROBOT_TASKS = []
@@ -57,7 +57,9 @@ def event_handler_cancel_task(event):
                 del ROBOT_TASKS[idx]
                 break
         else:
-            print('task to cancel not found for id ' + task_id)
+            print('task to cancel not found for id %s in the task threads' % task_id)
+            taskqueue.modify(running_task=None)
+            task.modify(status='cancelled')
 
 def event_handler_update_user_script(event):
     script = event.message['script']
@@ -71,12 +73,12 @@ EVENT_HANDLERS = {
 }
 
 def event_loop(organization=None, team=None):
-    ret = EventQueue.find(organization, team)
-    if not ret:
+    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+    if not eventqueue:
         print('Error: event queue not found')
-    q, role = ret
-    eventqueue = q.first()
-    print('Start event loop: {}'.format(role.name))
+
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+    print('Start event loop: {}'.format(org_name))
 
     while True:
         event = eventqueue.pop()
@@ -85,25 +87,27 @@ def event_loop(organization=None, team=None):
                 print('event {} has been deleted, ignore it'.format(event.id))
                 continue
 
-            print('\nStart to process event {} ...'.format(event.code))
+            print('\n{}: Start to process event {} ...'.format(org_name, event.code))
             try:
                 EVENT_HANDLERS[event.code](event)
             except KeyError:
                 print('Unknown message: %s' % event.code)
 
+        # to_delete is roloaded implicitly in eventqueue.pop()
         if eventqueue.to_delete:
             eventqueue.delete()
-            print('Exit the event loop')
+            print('Exit the event loop: {}'.format(org_name))
             break
         time.sleep(1)
 
 def event_loop_helper(organization=None, team=None):
-    ret = EventQueue.find(organization, team)
-    if not ret:
+    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+    if not eventqueue:
         return
-    eventqueue, selector = ret
 
-    thread = threading.Thread(target=event_loop, name='event_loop_' + selector.name, args=(organization, team))
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+
+    thread = threading.Thread(target=event_loop, name='event_loop_' + org_name, args=(organization, team))
     thread.daemon = True
     thread.start()
 
@@ -112,7 +116,6 @@ def event_loop_helper(organization=None, team=None):
         if thread.is_alive():
             eventqueue.modify(test_alive=True)
         else:
-            eventqueue.modify(test_alive=False)
             break
 
 def convert_json_to_robot_variable(args, variables, variable_file):
@@ -183,27 +186,32 @@ def run_robot_task(queue, args):
 def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     global ROBOT_TASKS
 
-    ret = TaskQueue.find(organization, team, endpoint_address)
-    if not ret:
+    if not organization and not team:
+        print('Argument organization and team must neither be None')
+        return
+
+    taskqueues = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address)
+    if taskqueues.count() == 0:
         print('Taskqueue not found')
         return
-    taskqueues, role = ret
-    taskqueue_first = taskqueues.first()
+    taskqueus = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
+    taskqueue_first = taskqueues[0]
 
-    ret = Endpoint.find(endpoint_address=endpoint_address, organization=organization, team=team)
-    if not ret:
+    endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
+    if endpoints.count() == 0:
         print('Endpoint not found')
         return
-    endpoints, _ = ret
 
-    print('Start task loop: {} - {}'.format(role.name, endpoint_address))
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+    print('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
     while True:
         taskqueue_first.reload('to_delete')
         if taskqueue_first.to_delete:
-            taskqueues.delete()
+            for taskqueue in taskqueues:
+                taskqueue.delete()
             endpoints.delete()
-            print('Exit task loop: {} - {}'.format(role.name, endpoint_address))
+            print('Exit task loop: {} @ {}'.format(org_name, endpoint_address))
             break
         # TODO: lower priority tasks will take precedence if higher priority queue is empty first
         # but filled then when thread is searching for tasks in the lower priority task queues
@@ -238,7 +246,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             task.endpoint_run = endpoint_address
             task.save()
 
-            result_dir = get_test_result_root(task)
+            result_dir = get_test_result_path(task)
             args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md', '--log', 'NONE', '--report', 'NONE']
             # args = ['--outputdir', str(result_dir), '--extension', 'md']
             os.makedirs(result_dir)
@@ -280,15 +288,12 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
 
             taskqueue.modify(running_task=None)
 
-            try:
-                ep = Endpoint.objects(endpoint_address=endpoint_address).get()
-            except Endpoint.DoesNotExist:
+            endpoint = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team).first()
+            if not endpoint:
                 print('No endpoint found with the address {}'.format(endpoint_address))
-            except Endpoint.MultipleObjectsReturned:
-                print('Multiple endpoints found with the address {}'.format(endpoint_address))
             else:
-                ep.last_run_date = datetime.datetime.utcnow()
-                ep.save()
+                endpoint.last_run_date = datetime.datetime.utcnow()
+                endpoint.save()
 
             if task.upload_dir:
                 resource_dir_tmp = get_upload_files_root(task)
@@ -305,13 +310,14 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
         time.sleep(1)
 
 def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None):
-    ret = TaskQueue.find(organization, team, endpoint_address, priority=QUEUE_PRIORITY_DEFAULT)
-    if not ret:
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+
+    taskqueue = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address, priority=QUEUE_PRIORITY_DEFAULT).first()
+    if not taskqueue:
         return
-    taskqueue, selector = ret
 
     thread = threading.Thread(target=task_loop_per_endpoint,
-                              name='task_loop_{}_{}'.format(endpoint_address, selector.name),
+                              name='task_loop_{}@{}'.format(org_name, endpoint_address),
                               args=(endpoint_address, organization, team))
     thread.daemon = True
     thread.start()
@@ -321,7 +327,6 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
         if thread.is_alive():
             taskqueue.modify(test_alive=True)
         else:
-            taskqueue.modify(test_alive=False)
             break
 
 def restart_interrupted_tasks(organization=None, team=None):
@@ -331,13 +336,8 @@ def restart_interrupted_tasks(organization=None, team=None):
     pass
 
 def reset_event_queue_status(organization=None, team=None):
-    for k, v in {'team': team, 'organization': organization}.items():
-        if not v:
-            continue
-        queues = EventQueue.objects(**{k: v})
-        if queues.count() > 0:
-            break
-    else:
+    queues = EventQueue.objects(organization=organization, team=team)
+    if queues.count() == 0:
         print('Error: Event queue has not been created')
         return 1
 
@@ -348,13 +348,8 @@ def reset_event_queue_status(organization=None, team=None):
     return 0
 
 def reset_task_queue_status(organization=None, team=None):
-    for k, v in {'team': team, 'organization': organization}.items():
-        if not v:
-            continue
-        queues = TaskQueue.objects(**{k: v})
-        if queues.count() > 0:
-            break
-    else:
+    queues = TaskQueue.objects(organization=organization, team=team)
+    if queues.count() == 0:
         print('Error: Task queue has not been created')
         return 1
     
@@ -380,50 +375,57 @@ def prepare_to_run(organization=None, team=None):
     return 0
 
 def monitor_threads(organization=None, team=None):
-    print('Start monitoring tasks for organization/team: {}/{}'.format(organization.name if organization else '',
-                                                            team.name if team else ''))
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+    print('Start monitoring tasks for {}'.format(org_name))
     # ret = prepare_to_run(organization, team)
     # if ret:
     #     return ret
 
-    notification_chain_init()
-
-    ret = EventQueue.find(organization, team)
-    if not ret:
+    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+    if not eventqueue:
         eventqueue = EventQueue(organization=organization, team=team)
         eventqueue.save()
-        ret = EventQueue.find(organization, team)
-        if not ret:
-            print('Error: event queue not found')
-            return
-    eventqueue, selector = ret
     eventqueue.modify(test_alive=False)
     time.sleep(3) # test_alive will be set to True in a second if it's alive
-    if not eventqueue.first().test_alive:
+    eventqueue.reload('test_alive')
+    if not eventqueue.test_alive:
         reset_event_queue_status(organization, team)
-        task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper' + selector.name, args=(organization, team))
+        task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper_' + org_name, args=(organization, team))
         task_thread.daemon = True
         task_thread.start()
 
-    ret = TaskQueue.find(organization, team, priority=QUEUE_PRIORITY_DEFAULT)
-    if not ret:
+    taskqueues = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT)
+    if taskqueues.count() == 0:
         return
-    taskqueues, selector = ret
     taskqueues.update(test_alive=False)
     time.sleep(3) # test_alive will be set to True in a second if it's alive
-    for q in taskqueues:
-        if not q.test_alive:
+    for taskqueue in taskqueues:
+        taskqueue.reload('test_alive')
+        if not taskqueue.test_alive:
             reset_task_queue_status(organization, team)
             task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
-                                           name='task_loop_helper_{}_{}'.format(q.endpoint_address, selector.name),
-                                           args=(q.endpoint_address, organization, team))
+                                           name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
+                                           args=(taskqueue.endpoint_address, organization, team))
             task_thread.daemon = True
             task_thread.start()
 
-def start_threads(organization=None, team=None):
+def _start_threads(organization=None, team=None):
     task_thread = threading.Thread(target=monitor_threads, name="monitor_threads", args=(organization, team))
     task_thread.daemon = True
     task_thread.start()
+
+def start_threads(user):
+    teams = []
+    for organization in user.organizations:
+        _start_threads(organization=organization)
+        for team in organization.teams:
+            _start_threads(organization=team.organization, team=team)
+            teams.append(team)
+    for team in user.teams:
+        if team not in teams:
+            _start_threads(organization=team.organization, team=team)
+
+    notification_chain_init()
 
 if __name__ == '__main__':
     pass

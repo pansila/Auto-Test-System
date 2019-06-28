@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from flask import request, send_from_directory
 from flask_restplus import Resource
@@ -6,6 +7,7 @@ from bson import ObjectId
 
 from app.main.util.decorator import token_required
 from app.main.model.database import *
+from task_runner.runner import start_threads
 
 from ..service.auth_helper import Auth
 from ..util.dto import OrganizationDto
@@ -84,6 +86,50 @@ class OrganizationList(Resource):
         img.save(org_root / ('%s.png' % org.id))
         org.avatar = '%s.png' % org.id
         org.save()
+
+    @token_required
+    @api.doc('Delete a organization')
+    def delete(self, **kwargs):
+        organization_id = request.json.get('organization_id', None)
+        if not organization_id:
+            return error_message(EINVAL, "Field organization_id is required"), 400
+
+        organization = Organization.objects(pk=organization_id).first()
+        if not organization:
+            return error_message(ENOENT, "Team not found"), 404
+
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, "User not found"), 404
+
+        if organization.owner != user:
+            return error_message(EINVAL, 'You are not the organization owner'), 403
+
+        EventQueue.objects(organization=organization).update(to_delete=True, organization=None, team=None)
+
+        try:
+            shutil.rmtree(USERS_ROOT / organization.path)
+        except FileNotFoundError:
+            pass
+
+        User.objects.update(pull__organizations=organization)
+
+        # Tests belong to teams of the organization will be deleted as well by this query
+        tests = Test.objects(organization=organization)
+        for test in tests:
+            tasks = Task.objects(test=test)
+            for task in tasks:
+                TestResult.objects(task=task).delete()
+            tasks.delete()
+        tests.delete()
+        TaskQueue.objects(organization=organization).update(to_delete=True, organization=None, team=None)
+        
+        teams = Team.objects(organization=organization)
+        for team in teams:
+            User.objects.update(pull__teams=team)
+            team.delete()
+
+        organization.delete()
 
 @api.route('/avatar/<org_id>')
 class OrganizationAvatar(Resource):
@@ -228,6 +274,8 @@ class OrganizationJoin(Resource):
             organization.modify(push__members=user)
         if organization not in user.organizations:
             user.modify(push__organizations=organization)
+
+        start_threads(user)
 
 @api.route('/users')
 class OrganizationUsers(Resource):

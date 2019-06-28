@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 from flask import request, send_from_directory
 from flask_restplus import Resource
@@ -6,6 +7,7 @@ from bson import ObjectId
 
 from app.main.util.decorator import token_required
 from app.main.model.database import *
+from task_runner.runner import start_threads
 
 from ..service.auth_helper import Auth
 from ..util.dto import TeamDto
@@ -56,10 +58,13 @@ class TeamList(Resource):
         return ret
 
     @token_required
-    @api.response(201, 'Team successfully created.')
-    @api.doc('create a new team')
+    @api.doc('Create a new team')
     def post(self, user):
         data = request.json
+        user = User.objects(pk=user['user_id']).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
         name = data.get('name', None)
         if not name:
             return error_message(EINVAL, 'Field name is required'), 400
@@ -72,13 +77,12 @@ class TeamList(Resource):
         if not organization:
             return error_message(ENOENT, 'Organization not found'), 404
 
+        if organization.owner != user:
+            return error_message(EINVAL, 'Your are not the organization\'s owner'), 403
+
         team = Team.objects(name=name, organization=organization).first()
         if team:
             return error_message(EEXIST, 'Team has been registered'), 403
-
-        user = User.objects(pk=user['user_id']).first()
-        if not user:
-            return error_message(ENOENT, 'User not found'), 404
 
         team = Team(name=name, organization=organization, owner=user)
         team.members.append(user)
@@ -88,7 +92,8 @@ class TeamList(Resource):
         organization.teams.append(team)
         organization.save()
 
-        team_root = USERS_ROOT / organization.path / name
+        team.path = name + '#' + str(team.id)
+        team_root = USERS_ROOT / organization.path / team.path
         try:
             os.mkdir(team_root)
         except FileExistsError as e:
@@ -98,6 +103,45 @@ class TeamList(Resource):
         img.save(team_root / ('%s.png' % team.id))
         team.avatar = '%s.png' % team.id
         team.save()
+
+    @token_required
+    @api.doc('Delete a team')
+    def delete(self, **kwargs):
+        team_id = request.json.get('team_id', None)
+        if not team_id:
+            return error_message(EINVAL, "Field team_id is required"), 400
+
+        team = Team.objects(pk=team_id).first()
+        if not team:
+            return error_message(ENOENT, "Team not found"), 404
+
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, "User not found"), 404
+
+        if team.owner != user:
+            return error_message(EINVAL, 'You are not the team owner'), 403
+
+        team.organization.modify(pull__teams=team)
+
+        EventQueue.objects(team=team).update(to_delete=True, organization=None, team=None)
+
+        try:
+            shutil.rmtree(USERS_ROOT / team.organization.path / team.path)
+        except FileNotFoundError:
+            pass
+
+        User.objects.update(pull__teams=team)
+
+        tests = Test.objects(team=team)
+        for test in tests:
+            tasks = Task.objects(test=test)
+            for task in tasks:
+                TestResult.objects(task=task).delete()
+            tasks.delete()
+        tests.delete()
+        TaskQueue.objects(team=team).update(to_delete=True, organization=None, team=None)
+        team.delete()
 
 @api.route('/avatar/<team_id>')
 class TeamAvatar(Resource):
@@ -111,7 +155,7 @@ class TeamAvatar(Resource):
                 if user:
                     team = Team.objects(pk=team_id).first()
                     if team:
-                        return send_from_directory(Path(os.getcwd()) / USERS_ROOT / team.organization.path / team.name, team.avatar)
+                        return send_from_directory(Path(os.getcwd()) / USERS_ROOT / team.organization.path / team.path, team.avatar)
                     return error_message(USER_NOT_EXIST, 'Team not found'), 404
                 return error_message(USER_NOT_EXIST), 404
             return error_message(TOKEN_ILLEGAL, payload), 401
@@ -185,3 +229,5 @@ class TeamJoin(Resource):
             team.modify(push__members=user)
         if team not in user.teams:
             user.modify(push__teams=team)
+
+        start_threads(user)

@@ -190,10 +190,7 @@ class UserAccount(Resource):
         teams = Team.objects(owner=user)
 
         for org in organizations:
-            ret = EventQueue.find(organization=org)
-            if ret:
-                q, _ = ret
-                q.modify(to_delete=True, organization=None)
+            EventQueue.objects(organization=org).update(to_delete=True, organization=None, team=None)
 
             try:
                 shutil.rmtree(USERS_ROOT / org.path)
@@ -209,25 +206,11 @@ class UserAccount(Resource):
                     TestResult.objects(task=task).delete()
                 tasks.delete()
             tests.delete()
-            TaskQueue.objects(organization=org).update(to_delete=True, organization=None)
+            TaskQueue.objects(organization=org).update(to_delete=True, organization=None, team=None)
             org.delete()
 
         for team in teams:
-            ret = EventQueue.find(team=team)
-            if ret:
-                q, _ = ret
-                q.modify(to_delete=True, team=None)
-
             User.objects.update(pull__teams=team)
-
-            tests = Test.objects(team=team)
-            for test in tests:
-                tasks = Task.objects(test=test)
-                for task in tasks:
-                    TestResult.objects(task=task).delete()
-                tasks.delete()
-            tests.delete()
-            TaskQueue.objects(team=team).update(to_delete=True, team=None)
             team.delete()
 
         user.delete()

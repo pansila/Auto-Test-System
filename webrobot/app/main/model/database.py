@@ -36,7 +36,7 @@ class Organization(Document):
 
 class Team(Document):
     schema_version = StringField(max_length=10, default='1')
-    name = StringField(max_length=100, required=True, unique=True)
+    name = StringField(max_length=100, required=True)
     email = EmailField()
     registered_on = DateTimeField(default=datetime.datetime.utcnow)
     owner = ReferenceField('User')
@@ -44,6 +44,7 @@ class Team(Document):
     introduction = StringField(max_length=500)
     avatar = StringField(max_length=100)
     organization = ReferenceField(Organization)
+    path = StringField()
 
     meta = {'collection': 'teams'}
 
@@ -164,19 +165,6 @@ class Test(Document):
                 return False
         return True
 
-    @classmethod
-    def find(cls, organization=None, team=None):
-        query = {}
-        for k, v in {'team': team, 'organization': organization}.items():
-            if not v:
-                continue
-            query[k] = v
-            queue = cls.objects(**query)
-            if queue.count() > 0:
-                return queue, v
-        else:
-            return None
-
 class Task(Document):
     schema_version = StringField(max_length=10, default='1')
     test = ReferenceField(Test)
@@ -212,22 +200,6 @@ class Endpoint(Document):
     team = ReferenceField(Team)
 
     meta = {'collection': 'endpoints'}
-
-    @classmethod
-    def find(cls, organization=None, team=None, endpoint_address=None, priority=None):
-        query = {}
-        if endpoint_address:
-            query['endpoint_address'] = endpoint_address
-
-        for k, v in {'team': team, 'organization': organization}.items():
-            if not v:
-                continue
-            query[k] = v
-            queue = cls.objects(**query)
-            if queue.count() > 0:
-                return queue, v
-        else:
-            return None
 
 class TaskQueue(Document):
     '''
@@ -281,31 +253,13 @@ class TaskQueue(Document):
         self.release_lock()
         return ret
     
-    def flush(self, endpoint_address, priority):
+    def flush(self):
         if not self.acquire_lock():
             return False
         self.tasks = []
         self.save()
         self.release_lock()
         return True
-
-    @classmethod
-    def find(cls, organization=None, team=None, endpoint_address=None, priority=None):
-        query = {}
-        if endpoint_address:
-            query['endpoint_address'] = endpoint_address
-        if priority:
-            query['priority'] = priority
-
-        for k, v in {'team': team, 'organization': organization}.items():
-            if not v:
-                continue
-            query[k] = v
-            queue = cls.objects(**query)
-            if queue.count() > 0:
-                return queue, v
-        else:
-            return None
 
     # @classmethod
     # def __getitem__(cls, index, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address):
@@ -383,16 +337,3 @@ class EventQueue(Document):
         self.save()
         self.release_lock()
         return True
-
-    @classmethod
-    def find(cls, organization=None, team=None):
-        query = {}
-        for k, v in {'team': team, 'organization': organization}.items():
-            if not v:
-                continue
-            query[k] = str(v.id)
-            queue = cls.objects(**query)
-            if queue.count() > 0:
-                return queue, v
-        else:
-            return None

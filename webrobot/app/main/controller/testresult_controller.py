@@ -11,7 +11,7 @@ from flask_restplus import Resource
 from mongoengine import DoesNotExist, ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
-from app.main.util.get_path import get_test_result_root
+from app.main.util.get_path import get_test_results_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestResultDto
@@ -70,7 +70,7 @@ class TestResultRoot(Resource):
             query['endpoint_run'] = endpoint
 
         try:
-            dirs = os.listdir(USERS_ROOT / organization.path / 'test_results')
+            dirs = os.listdir(get_test_results_root(team=team, organization=organization))
         except FileNotFoundError:
             return {'items': [], 'total': 0}
         ret = []
