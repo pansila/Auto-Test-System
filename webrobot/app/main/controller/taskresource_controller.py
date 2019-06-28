@@ -8,7 +8,7 @@ from flask_restplus import Resource
 from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, task_required
-from app.main.util.get_path import get_test_result_root, get_upload_files_root
+from app.main.util.get_path import get_test_result_path, get_upload_files_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TaskResourceDto
@@ -37,7 +37,7 @@ class TaskResourceController(Resource):
             return error_message(SUCCESS, 'Upload directory is empty'), 406
 
         upload_root = get_upload_files_root(task)
-        result_root = get_test_result_root(task)
+        result_root = get_test_result_path(task)
 
         if request.args.get('file', None):
             return send_from_directory(Path(os.getcwd()) / upload_root, request.args['file'])

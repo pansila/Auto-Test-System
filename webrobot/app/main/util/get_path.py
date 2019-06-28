@@ -5,6 +5,7 @@ from pathlib import Path
 from ..model.database import *
 from .errors import *
 
+TEST_RESULTS_ROOT = 'test_results'
 USER_SCRIPT_ROOT = 'user_scripts'
 BACK_SCRIPT_ROOT = 'back_scripts'
 USERS_ROOT = Path(get_config().USERS_ROOT)
@@ -19,38 +20,48 @@ except FileExistsError:
     pass
 
 
-def get_test_result_root(task):
-    result_dir = USERS_ROOT / task.organization.path
-    if task.team:
-        result_dir = result_dir / task.team.name
-    result_dir = result_dir / 'test_results' / str(task.id)
-    return result_dir
+def get_test_result_path(task):
+    return get_test_results_root(task) / str(task.id)
 
-def get_back_scripts_root(task=None, team=None, organization=None):
+def get_test_results_root(task=None, team=None, organization=None):
     if task:
         if team or organization:
-            print('task or team or/and organization')
+            print('team or organization should not used along wite task')
             return None
         organization = task.organization
         team = task.team
 
     result_dir = USERS_ROOT / organization.path
     if team:
-        result_dir = result_dir / team.name
+        result_dir = result_dir / team.path
+    result_dir = result_dir / TEST_RESULTS_ROOT
+    return result_dir
+
+def get_back_scripts_root(task=None, team=None, organization=None):
+    if task:
+        if team or organization:
+            print('team or organization should not used along wite task')
+            return None
+        organization = task.organization
+        team = task.team
+
+    result_dir = USERS_ROOT / organization.path
+    if team:
+        result_dir = result_dir / team.path
     result_dir = result_dir / BACK_SCRIPT_ROOT
     return result_dir
 
 def get_user_scripts_root(task=None, team=None, organization=None):
     if task:
         if team or organization:
-            print('task or team or/and organization')
+            print('team or organization should not used along wite task')
             return None
         organization = task.organization
         team = task.team
 
     result_dir = USERS_ROOT / organization.path
     if team:
-        result_dir = result_dir / team.name
+        result_dir = result_dir / team.path
     result_dir = result_dir / USER_SCRIPT_ROOT
     return result_dir
 

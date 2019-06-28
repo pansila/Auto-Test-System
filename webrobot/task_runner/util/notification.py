@@ -28,7 +28,7 @@ def send_email(task):
     smtp_server_port = get_config().SMTP_SERVER_PORT
     smtp_always_cc = get_config().SMTP_ALWAYS_CC
 
-    body_msg = BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id, task.test.organization.id, '&team=' + task.test.team.id if task.test.team else '')
+    body_msg = BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id, task.test.organization.id, '&team=%s' % task.test.team.id if task.test.team else '')
     msg = MIMEText(body_msg, 'plain', 'utf-8')
     msg['From'] = _format_addr(from_addr)
     msg['To'] = _format_addr(task.tester.email)
@@ -59,7 +59,8 @@ def send_email(task):
     server.quit()
 
 def notification_chain_init():
-    notification_chain.append(send_email)
+    if send_email not in notification_chain:
+        notification_chain.append(send_email)
 
 def notification_chain_call(task):
     for caller in notification_chain:

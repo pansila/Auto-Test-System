@@ -26,10 +26,8 @@ class UserLogin(Resource):
             return msg, status
 
         user = User.objects(email=post_data.get('email')).first()
-        for organization in user.organizations:
-            start_threads(organization=organization)
-            for team in user.teams:
-                start_threads(organization=organization, team=team)
+        start_threads(user)
+
         return msg, status
 
 

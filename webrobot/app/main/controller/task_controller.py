@@ -8,7 +8,7 @@ from flask_restplus import Resource
 from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
-from app.main.util.get_path import get_test_result_root
+from app.main.util.get_path import get_test_result_path
 from ..util.tarball import path_to_dict
 from ..model.database import *
 from ..util.dto import TaskDto
@@ -30,7 +30,7 @@ class TaskStatistics(Resource):
         if not task:
             return error_message(ENOENT, 'Task not found'), 404
 
-        result_dir = get_test_result_root(task)
+        result_dir = get_test_result_path(task)
         if not os.path.exists(result_dir):
             return error_message(ENOENT, 'Task result directory not found'), 404
 
@@ -45,7 +45,7 @@ class ScriptManagement(Resource):
     def get(self, **kwargs):
         task = kwargs['task']
 
-        result_dir = get_test_result_root(task)
+        result_dir = get_test_result_path(task)
         result_files = path_to_dict(result_dir)
 
         return error_message(SUCCESS, files=result_files)
@@ -62,14 +62,18 @@ class ScriptManagement(Resource):
 
         task = kwargs['task']
 
-        result_dir = get_test_result_root(task)
+        result_dir = get_test_result_path(task)
         return send_from_directory(Path(os.getcwd()) / result_dir, file_path, as_attachment=True)
 
 @api.route('/')
 class TaskController(Resource):
     @token_required
+    @organization_team_required_by_args
     @api.doc('get the task statistics')
-    def get(self, user):
+    def get(self, **kwargs):
+        organization = kwargs['organization']
+        team = kwargs['team']
+
         start_date = request.args.get('start_date', default=(datetime.datetime.utcnow().timestamp()-86300)*1000)
         end_date = request.args.get('end_date', default=(datetime.datetime.utcnow().timestamp() * 1000))
 
@@ -88,21 +92,31 @@ class TaskController(Resource):
         start = start_date
         end = start + timedelta(days=1) 
 
+        query = {'organization': organization, 'team': team}
+        query2 = {'status': 'waiting', 'organization': organization, 'team': team}
+
         for d in range(days):
             if d == (days - 1):
                 end = end_date
+            query['run_date__gte'] = start
+            query2['schedule_date__gte'] = start
+            query['run_date__lte'] = end
+            query2['schedule_date__lte'] = end
 
-            tasks = Task.objects(status='successful', run_date__lte=end, run_date__gte=start)
-            succeeded = len(tasks)
+            query['status'] = 'successful'
+            tasks = Task.objects(**query)
+            succeeded = tasks.count()
 
-            tasks = Task.objects(status='failed', run_date__lte=end, run_date__gte=start)
-            failed = len(tasks)
+            query['status'] = 'failed'
+            tasks = Task.objects(**query)
+            failed = tasks.count()
 
-            tasks = Task.objects(status='running', run_date__lte=end, run_date__gte=start)
-            running = len(tasks)
+            query['status'] = 'running'
+            tasks = Task.objects(**query)
+            running = tasks.count()
 
-            tasks = Task.objects(status='waiting', schedule_date__lte=end, schedule_date__gte=start)
-            waiting = len(tasks)
+            tasks = Task.objects(**query2)
+            waiting = tasks.count()
             
             stats.append({
                 'succeeded': succeeded,
@@ -190,21 +204,19 @@ class TaskController(Resource):
                         new_task[name] = task[name]
                 else:
                     new_task.save()
-                    ret = TaskQueue.find(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team)
-                    if not ret:
+                    taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
+                    if not taskqueue:
                         failed.append(endpoint)
                     else:
-                        taskqueue, _ = ret
-                        ret = taskqueue.first().push(new_task)
+                        ret = taskqueue.push(new_task)
                         if ret == None:
                             failed.append(endpoint)
             else:
-                ret = TaskQueue.find(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team)
-                if not ret:
+                taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
+                if not taskqueue:
                     failed.append(endpoint)
                 else:
-                    taskqueue, _ = ret
-                    ret = taskqueue.first().push(task)
+                    ret = taskqueue.push(task)
                     if ret == None:
                         failed.append(endpoint)
         else:
@@ -270,10 +282,9 @@ class TaskController(Resource):
         event.message['task_id'] = task_id
         event.save()
 
-        ret = EventQueue.find(organization=task.test.organization, team=task.test.team)
-        if not ret:
+        eventqueue = EventQueue.objects(organization=task.test.organization, team=task.test.team).first()
+        if not eventqueue:
             return error_message(ENOENT, 'Event queue not found'), 404
 
-        eventqueue, _ = ret
-        if not eventqueue.first().push(event):
+        if not eventqueue.push(event):
             return error_message(EPERM, 'Pushing the event to event queue failed'), 403

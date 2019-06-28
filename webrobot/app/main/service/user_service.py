@@ -56,10 +56,7 @@ def save_new_user(data, admin=None):
             new_user.organizations = [organization]
         new_user.save()
 
-        for organization in new_user.organizations:
-            start_threads(organization=organization)
-            for team in new_user.teams:
-                start_threads(organization=organization, team=team)
+        start_threads(new_user)
 
         return generate_token(new_user)
     else:

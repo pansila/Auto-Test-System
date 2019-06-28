@@ -6,7 +6,7 @@ from flask import Flask, send_from_directory, request
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args
-from app.main.util.get_path import get_test_result_root, get_back_scripts_root
+from app.main.util.get_path import get_test_result_path, get_back_scripts_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestDto
@@ -36,7 +36,7 @@ class ScriptDownload(Resource):
         if test_suite.endswith('.py'):
             test_suite = test_suite[0:-3]
 
-        result_dir = get_test_result_root(task)
+        result_dir = get_test_result_path(task)
         scripts_root = get_back_scripts_root(task)
 
         results_tmp = result_dir / 'temp'
