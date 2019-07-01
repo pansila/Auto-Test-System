@@ -20,15 +20,11 @@ api = TaskDto.api
 @api.route('/detail')
 class TaskStatistics(Resource):
     @token_required
-    @api.doc('get the detailed result for a task')
-    def get(self, user):
-        task_id = request.args.get('task_id', default=None)
-        if not task_id:
-            return error_message(EINVAL, 'Field task_id is required'), 400
-
-        task = Task.objects(id=task_id).first()
-        if not task:
-            return error_message(ENOENT, 'Task not found'), 404
+    @organization_team_required_by_args
+    @task_required
+    @api.doc('Get the detailed result for a task')
+    def get(self, **kwargs):
+        task = kwargs['task']
 
         result_dir = get_test_result_path(task)
         if not os.path.exists(result_dir):
@@ -38,23 +34,28 @@ class TaskStatistics(Resource):
             return Response(f.read(), mimetype='text/xml')
 
 @api.route('/result_files')
-class ScriptManagement(Resource):
+class ScriptDownloadList(Resource):
     @token_required
     @organization_team_required_by_args
     @task_required
+    @api.doc('Get the file list generated during the test')
     def get(self, **kwargs):
         task = kwargs['task']
 
         result_dir = get_test_result_path(task)
+        if not os.path.exists(result_dir):
+            return error_message(ENOENT, 'Task result directory not found'), 404
+
         result_files = path_to_dict(result_dir)
 
         return error_message(SUCCESS, files=result_files)
 
 @api.route('/result_file')
-class ScriptManagement(Resource):
+class ScriptDownload(Resource):
     @token_required
     @organization_team_required_by_args
     @task_required
+    @api.doc('Get the file generated during the test')
     def get(self, **kwargs):
         file_path = request.args.get('file', default=None)
         if not file_path:
@@ -69,7 +70,7 @@ class ScriptManagement(Resource):
 class TaskController(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('get the task statistics')
+    @api.doc('Get the task statistics')
     def get(self, **kwargs):
         organization = kwargs['organization']
         team = kwargs['team']
@@ -131,7 +132,7 @@ class TaskController(Resource):
 
     @token_required
     @organization_team_required_by_json
-    @api.doc('run a test suite')
+    @api.doc('Run a test suite')
     def post(self, **kwargs):
         data = request.json
         if data is None:
@@ -226,41 +227,32 @@ class TaskController(Resource):
             return error_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
 
     @token_required
-    @api.doc('update a task')
-    def patch(self, user):
+    @organization_team_required_by_json
+    @task_required
+    @api.doc('Update a task')
+    def patch(self, **kwargs):
+        task = kwargs['task']
         data = request.json
-        if data is None:
+        if not data:
             return error_message(EINVAL, 'The request data is empty'), 400
-
-        task_id = data.get('_id', None)
-        task_id = task_id['$oid']
-        if task_id == None:
-            return error_message(EINVAL, 'Field _id is required'), 400
 
         comment = data.get('comment', None)
-        if comment == None:
+        if not comment:
             return error_message(EINVAL, 'Field comment is required'), 400
 
-        try:
-            task = Task.objects(id=task_id).get()
-        except Task.DoesNotExist:
-            return error_message(ENOENT, 'The requested task is not found'), 404
-        else:
-            task.comment = comment
-            task.save()
+        task.comment = comment
+        task.save()
 
     @token_required
-    @api.doc('cancel a task')
-    def delete(self, user):
+    @organization_team_required_by_json
+    @task_required
+    @api.doc('Cancel a task')
+    def delete(self, **kwargs):
+        task = kwargs['task']
         data = request.json
         if data is None:
-            print('The request data is empty')
-            api.abort(404)
             return error_message(EINVAL, 'The request data is empty'), 400
 
-        task_id = data.get('task_id', None)
-        if task_id is None:
-            return error_message(EINVAL, 'Field task_id is required'), 400
         address = data.get('address', None)
         if address is None:
             return error_message(EINVAL, 'Field address is required'), 400
@@ -271,15 +263,11 @@ class TaskController(Resource):
         if status is None:
             return error_message(EINVAL, 'Field status is required'), 400
 
-        task = Task.objects(pk=task_id).first()
-        if not task:
-            return error_message(ENOENT, 'Task not found'), 404
-
         event = Event()
         event.code = EVENT_CODE_CANCEL_TASK
         event.message['address'] = address
         event.message['priority'] = priority
-        event.message['task_id'] = task_id
+        event.message['task_id'] = str(task.id)
         event.save()
 
         eventqueue = EventQueue.objects(organization=task.test.organization, team=task.test.team).first()

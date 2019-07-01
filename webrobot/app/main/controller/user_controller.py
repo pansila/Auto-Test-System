@@ -127,8 +127,7 @@ class UserAccount(Resource):
     def post(self, **kwargs):
         data = request.json
 
-        user = kwargs['user']
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
 
         user = User.objects(pk=user_id).first()
         if not user:
@@ -160,8 +159,7 @@ class UserAccount(Resource):
     def delete(self, **kwargs):
         data = request.json
 
-        user = kwargs['user']
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
 
         user = User.objects(pk=user_id).first()
         if not user:
@@ -226,8 +224,7 @@ class UserAccount(Resource):
     def post(self, **kwargs):
         data = request.json
 
-        user = kwargs['user']
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
 
         user = User.objects(pk=user_id).first()
         if not user:

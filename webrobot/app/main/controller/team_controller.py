@@ -25,10 +25,10 @@ _team = TeamDto.team
 class TeamList(Resource):
     @token_required
     @api.doc('List all teams associated with the user')
-    def get(self, user):
+    def get(self, **kwargs):
         ret = []
         check = []
-        user_id = user['user_id']
+        user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
@@ -59,9 +59,9 @@ class TeamList(Resource):
 
     @token_required
     @api.doc('Create a new team')
-    def post(self, user):
+    def post(self, **kwargs):
         data = request.json
-        user = User.objects(pk=user['user_id']).first()
+        user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
 
@@ -145,7 +145,7 @@ class TeamList(Resource):
 
 @api.route('/avatar/<team_id>')
 class TeamAvatar(Resource):
-    @api.doc('get the avatar for an team')
+    @api.doc('Get the avatar of a team')
     def get(self, team_id):
         auth_token = request.cookies.get('Admin-Token')
         if auth_token:
@@ -164,9 +164,9 @@ class TeamAvatar(Resource):
 @api.route('/member')
 class TeamMember(Resource):
     @token_required
-    @api.doc('remove a member from the team')
-    def delete(self, user):
-        user_id = user['user_id']
+    @api.doc('Quit the team')
+    def delete(self, **kwargs):
+        user_id = kwargs['user']['user_id']
         team_id = request.json.get('team_id', None)
         if not team_id:
             return error_message(EINVAL, "Field team_id is required"), 400
@@ -194,7 +194,7 @@ class TeamMember(Resource):
 class TeamListAll(Resource):
     @token_required
     @api.doc('List all teams registered')
-    def get(self, user):
+    def get(self, **kwargs):
         ret = []
 
         teams = Team.objects(name__not__exact='Personal')
@@ -211,7 +211,7 @@ class TeamListAll(Resource):
 @api.route('/join')
 class TeamJoin(Resource):
     @token_required
-    @api.doc('join an team')
+    @api.doc('Join a team')
     def post(self, user):
         team_id = request.json.get('id', None)
         if not team_id:

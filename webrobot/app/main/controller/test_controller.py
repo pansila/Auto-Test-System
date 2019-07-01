@@ -61,6 +61,7 @@ class ScriptDownload(Resource):
 class TestSuiteGet(Resource):
     @token_required
     @organization_team_required_by_args
+    @api.doc('Get the test cases of a test suite')
     def get(self, test_suite, **kwargs):
         organization = kwargs['organization']
         team = kwargs['team']
@@ -78,14 +79,12 @@ class TestSuiteGet(Resource):
 class TestSuitesList(Resource):
     @token_required
     @organization_team_required_by_args
+    @api.doc('Get the test suite list which contains some necessary test details')
     def get(self, **kwargs):
         organization = kwargs['organization']
         team = kwargs['team']
         
-        query = {'organization': organization}
-        if team:
-            query['team'] = team
-        tests = Test.objects(**query)
+        tests = Test.objects(organization=organization, team=team)
 
         ret = []
         for t in tests:

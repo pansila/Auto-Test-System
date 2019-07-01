@@ -99,8 +99,6 @@ class TestResultRoot(Resource):
 
         return {'items': ret, 'total': all_tasks.count()}
 
-@api.route('/')
-class TestResultCreate(Resource):
     # @token_required
     @api.doc('create the test result for the task in the database')
     def post(self):

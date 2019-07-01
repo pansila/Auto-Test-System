@@ -22,7 +22,7 @@ from task_runner.util.dbhelper import db_update_test
 from app.main.util.tarball import make_tarfile
 from app.main.config import get_config
 from app.main.model.database import *
-from app.main.util.get_path import get_test_result_path
+from app.main.util.get_path import get_test_result_path, get_upload_files_root
 
 
 ROBOT_TASKS = []
@@ -299,7 +299,6 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
                 resource_dir_tmp = get_upload_files_root(task)
                 if os.path.exists(resource_dir_tmp):
                     make_tarfile(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
-                    shutil.rmtree(resource_dir_tmp)
 
             result_dir_tmp = result_dir / 'temp'
             if os.path.exists(result_dir_tmp):
