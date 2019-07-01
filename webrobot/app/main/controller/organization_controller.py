@@ -56,8 +56,7 @@ class OrganizationList(Resource):
         return ret
 
     @token_required
-    @api.response(201, 'Organization successfully created.')
-    @api.doc('create a new organization')
+    @api.doc('Create a new organization')
     def post(self, **kwargs):
         data = request.json
         name = data.get('name', None)
@@ -152,7 +151,7 @@ class OrganizationAvatar(Resource):
 @api.route('/member')
 class OrganizationMember(Resource):
     @token_required
-    @api.doc('remove a member from the organization')
+    @api.doc('Quit the organization')
     def delete(self, **kwargs):
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
@@ -301,6 +300,10 @@ class OrganizationTransfer(Resource):
     @token_required
     @api.doc('Transfer ownership of an organization to another authorized user')
     def post(self, **kwargs):
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
         organization_id = request.json.get('organization', None)
         if not organization_id:
             return error_message(EINVAL, 'Field organization is required'), 401
@@ -309,13 +312,16 @@ class OrganizationTransfer(Resource):
         if not organization:
             return error_message(ENOENT, 'Organization not found'), 404
 
-        owner = request.json.get('new_owner', None)
-        if not owner:
+        if organization.owner != user:
+            return error_message(EPERM, 'You are not the organization owner'), 403
+
+        owner_id = request.json.get('new_owner', None)
+        if not owner_id:
             return error_message(EINVAL, 'Field new_owner is required'), 401
 
-        user = User.objects(pk=owner).first()
-        if not user:
-            return error_message(ENOENT, 'User not found'), 404
+        owner = User.objects(pk=owner_id).first()
+        if not owner:
+            return error_message(ENOENT, 'New owner not found'), 404
 
-        organization.owner = user
+        organization.owner = owner
         organization.save()

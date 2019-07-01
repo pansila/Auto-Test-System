@@ -123,12 +123,16 @@ def organization_team_required_by_form(f):
     return decorated
 
 def task_required(f):
+    '''
+    Should used after organization_team_required_by_xxx series decorators to reuse field data in the kwargs
+    '''
     @wraps(f)
     def decorated(*args, **kwargs):
+        data = kwargs['data']
         organization = kwargs['organization']
         team = kwargs['team']
 
-        task_id = request.args.get('task_id', None)
+        task_id = data.get('task_id', None)
         if not task_id:
             return error_message(EINVAL, 'Field task_id is required'), 400
 
