@@ -132,8 +132,9 @@ class TaskController(Resource):
 
     @token_required
     @organization_team_required_by_json
-    @api.doc('Run a test suite')
+    @api.doc('run_a_test_suite')
     def post(self, **kwargs):
+        """Run a test suite"""
         data = request.json
         if data is None:
             return error_message(EINVAL, 'The request data is empty'), 400
@@ -181,7 +182,7 @@ class TaskController(Resource):
             return error_message(EINVAL, 'Variables should be a dictionary'), 400
         task.variables = variables
 
-        testcases = data.get('testcases', [])
+        testcases = data.get('test_cases', [])
         if not isinstance(testcases, list):
             return error_message(EINVAL, 'Testcases should be a list'), 400
         task.testcases = testcases
