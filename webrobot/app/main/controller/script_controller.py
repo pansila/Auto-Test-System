@@ -148,9 +148,9 @@ class ScriptManagement(Resource):
                 return error_message(EIO, 'Error happened while deleting a directory'), 401
 
         if script_type == 'user_scripts':
-            cnt = Test.objects(path=str(root / script)).delete()
+            cnt = Test.objects(path=os.path.abspath(root / script)).delete()
             if cnt == 0:
-                return error_message(ENOENT, 'Failed to delete test suite'), 404
+                return error_message(ENOENT, 'Test suite not found'), 404
 
 @api.route('/upload/')
 class ScriptUpload(Resource):
@@ -193,6 +193,7 @@ class ScriptUpload(Resource):
             return error_message(ENOENT, 'No files are found in the request'), 404
 
         if script_type == 'user_scripts':
-            ret = db_update_test(scripts_dir=root, script=file.filename, user=user.email, organization=organization, team=team)
-            if ret:
-                return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+            for name, file in request.files.items():
+                ret = db_update_test(scripts_dir=root, script=file.filename, user=user.email, organization=organization, team=team)
+                if ret:
+                    return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
