@@ -106,6 +106,17 @@ class iperftest(wifi_basic_test):
         if 'error' in result or 'ERROR' in result:
             raise AssertionError('Starting iperf UDP RX server on the DUT failed')
 
+    async def _io_read_log(self, io, timeout, loop):
+        start = time.time()
+        result = ''
+        while (time.time() - start) < timeout:
+            data = await loop.run_in_executor(None, io.readline)
+            if data:
+                result += data.decode()
+            if b'error' in data:
+                break
+        return result
+
     ## RX client
     def iperf_rx(self, deviceName, host, iperf, type, length, bandwidth, time, interval):
         '''
@@ -141,24 +152,30 @@ class iperftest(wifi_basic_test):
         if interval is not None and interval != 'None':
             arguments.extend(['-i', interval])
 
+        dut = self.configDut[deviceName]
         p = subprocess.Popen(arguments, stdout=PIPE, stderr=PIPE)
 
-        # First get the console log generated during the test.
-        # windows buffer size is 4k, it may lose log.
-        rx_log = self._serial_read(deviceName, int(time) + 10)[0]
+        timeout = int(time) + 5
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        loop = asyncio.get_event_loop()
+        tasks = [asyncio.ensure_future(self._io_read_log(p.stdout, timeout, loop)),
+                asyncio.ensure_future(self._io_read_log(p.stderr, timeout, loop)),
+                asyncio.ensure_future(self._io_read_log(dut['serialport'], timeout, loop))]
+        tx_log, tx_err_log, rx_log = loop.run_until_complete(asyncio.gather(*tasks))
+        loop.close()
+
+        print('==== Transmitter log ====')
+        print(tx_log)
+
         print('==== Receiver log ====')
         print(rx_log)
-
-        (tx_log, error) = p.communicate()
-        tx_log = tx_log.decode()
-        print('==== Transmitter log ====')
-        print('Command: {}'.format(' '.join(arguments)))
-        print(tx_log)
-        if error != b'':
-            if b'error' in error:
-                raise AssertionError('iperf test error: {}'.format(error))
+        if rx_log == None or tx_log == None or rx_log == '' or tx_log == '':
+            raise AssertionError('Running iperf test failed')
+        if tx_err_log != '':
+            if 'error' in tx_err_log:
+                raise AssertionError('iperf test error: {}'.format(tx_err_log))
             else:
-                print(error)
+                print(tx_err_log)
         if 'error' in tx_log:
             raise AssertionError('iperf test error: {}'.format(tx_log))
 
@@ -255,17 +272,19 @@ class iperftest(wifi_basic_test):
         return rc
 
     def _get_local_host_ip(self):
+        host_ips = []
         for i in netifaces.interfaces():
             if netifaces.AF_INET in netifaces.ifaddresses(i):
                 for address in netifaces.ifaddresses(i)[netifaces.AF_INET]:
                     addr = address['addr']
                     netmask = address['netmask']
+                    host_ips.append((addr, netmask))
                     # mask out subnet bits
                     network = ipaddress.IPv4Address(int(ipaddress.IPv4Address(addr)) & int(ipaddress.IPv4Address(netmask)))
                     if ipaddress.IPv4Address(self.ip_DUT) in ipaddress.IPv4Network('{}/{}'.format(network, netmask)):
                         return addr
         else:
-            raise AssertionError("Can't find an interface in the list {} falls in the same subnet of DUT {}".format(' '.join(host_ips), self.ip_DUT))
+            raise AssertionError("Can't find an interface in the list {} falls in the same subnet of DUT {}".format(host_ips, self.ip_DUT))
 
     def iperf_start_tx_server(self, deviceName, iperf, type=None):
         if iperf not in self.config:
