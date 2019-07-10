@@ -22,7 +22,7 @@ _user = OrganizationDto.user
 _organization = OrganizationDto.organization
 _new_organization = OrganizationDto.new_organization
 _organization_id = OrganizationDto.organization_id
-_organization_team = OrganizationDto.organization_team
+_organization_team_resp = OrganizationDto.organization_team_resp
 _transfer_ownership = OrganizationDto.transfer_ownership
 
 
@@ -223,7 +223,7 @@ class OrganizationListAll(Resource):
 class OrganizationListAll(Resource):
     @token_required
     @api.doc('list all organizations and teams registered')
-    @api.marshal_list_with(_organization_team)
+    @api.marshal_list_with(_organization_team_resp)
     def get(self, **kwargs):
         """List all organizations and teams registered"""
         ret = []
