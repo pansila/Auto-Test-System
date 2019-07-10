@@ -8,7 +8,7 @@ from app.main.service.auth_helper import Auth
 from app.main.util.decorator import admin_token_required, token_required
 from app.main.model.database import *
 
-from ..service.user_service import get_a_user, get_all_users, save_new_user
+from ..service.user_service import get_all_users, save_new_user
 from ..service.auth_helper import Auth
 from ..util.dto import UserDto
 from ..util.errors import *
@@ -19,36 +19,44 @@ USERS_ROOT = Path(get_config().USERS_ROOT)
 
 api = UserDto.api
 _user = UserDto.user
+_user_info_resp = UserDto.user_info_resp
+_avatar = UserDto.avatar
+_password = UserDto.password
+_password_update = UserDto.password_update
+_account = UserDto.account
 
 
 @api.route('/')
 class UserList(Resource):
     @api.doc('list_of_registered_users')
-    @admin_token_required
     @api.marshal_list_with(_user, envelope='data')
+    @admin_token_required
     def get(self):
         """List all registered users"""
         return get_all_users()
 
-    @api.expect(_user, validate=True)
+    @api.expect(_account)
     @api.response(201, 'User successfully created.')
-    @api.doc('create a new user')
+    @api.doc('create_a_new_user')
     def post(self):
-        """Creates a new User """
+        """Creates a new User"""
         data = request.json
         return save_new_user(data=data)
 
 
 @api.route('/info')
 class UserInfo(Resource):
-    @api.doc('get the information of a user')
+    @api.doc('get_user_info')
+    @api.marshal_with(_user_info_resp)
     def get(self):
+        """Get user information"""
         return Auth.get_logged_in_user(request)
 
 @api.route('/avatar')
 class UserInfo(Resource):
-    @api.doc('get the avatar of a user')
+    @api.doc('get_the_avatar')
     def get(self):
+        """Get the avatar of a user"""
         auth_token = request.cookies.get('Admin-Token')
         if auth_token:
             payload = User.decode_auth_token(auth_token)
@@ -60,9 +68,12 @@ class UserInfo(Resource):
             return error_message(TOKEN_ILLEGAL, payload), 401
         return error_message(TOKEN_REQUIRED), 400
 
-    @api.doc('upload the avatar of a user')
+    @api.doc('upload_the_avatar')
     @token_required
     def post(self, **kwargs):
+        """
+        Upload the avatar for a user
+        """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
@@ -72,9 +83,16 @@ class UserInfo(Resource):
             filename = USERS_ROOT / user.email / 'temp.png'
             file.save(str(filename))
 
-    @api.doc('change avatar to use the uploaded one or the default one')
+    @api.doc('change_avatar_type')
+    @api.expect(_avatar)
     @token_required
     def patch(self, **kwargs):
+        """
+        Change the avatar type
+
+        type: {custom | default}, where custom means using a custom avatar uploaded by user,
+        default means use an identicon generated from user's email
+        """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
@@ -109,8 +127,10 @@ class UserInfo(Resource):
 
 @api.route('/check')
 class UserInfoCheck(Resource):
-    @api.doc('Check User information for register')
+    @api.doc('Check_user_information')
+    @api.param('email', description='The email address to check')
     def get(self):
+        """Check user information when registering"""
         email = request.args.get('email', None)
         if email:
             user = User.objects(email=email).first()
@@ -122,9 +142,11 @@ class UserInfoCheck(Resource):
 
 @api.route('/account')
 class UserAccount(Resource):
-    @api.doc('Update user account information')
+    @api.doc('update_user_account')
+    @api.expect(_account)
     @token_required
     def post(self, **kwargs):
+        """Update the user account information"""
         data = request.json
 
         user_id = kwargs['user']['user_id']
@@ -154,9 +176,11 @@ class UserAccount(Resource):
         except ValidationError:
             return error_message(EINVAL, 'Failed to update the user account'), 401
 
-    @api.doc('Delete user account information')
+    @api.doc('delete_user_account')
+    @api.expect(_password)
     @token_required
     def delete(self, **kwargs):
+        """Delete the user account"""
         data = request.json
 
         user_id = kwargs['user']['user_id']
@@ -219,9 +243,11 @@ class UserAccount(Resource):
 
 @api.route('/password')
 class UserAccount(Resource):
-    @api.doc('Update user password')
+    @api.doc('update_user_password')
+    @api.expect(_password_update)
     @token_required
     def post(self, **kwargs):
+        """Update the user password"""
         data = request.json
 
         user_id = kwargs['user']['user_id']

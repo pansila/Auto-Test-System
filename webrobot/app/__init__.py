@@ -1,4 +1,5 @@
-from flask_restplus import Api
+import os
+from flask_restplus import Api, fields
 from flask import Blueprint
 
 from .main.controller.user_controller import api as user_ns
@@ -14,13 +15,24 @@ from .main.controller.team_controller import api as team_ns
 
 blueprint = Blueprint('api', __name__)
 
+authorizations = {
+    'apikey': {
+        'type': 'apiKey',
+        'in': 'header',
+        'name': 'X-Token'
+    }
+}
+
 api = Api(blueprint,
-          title='FLASK RESTPLUS API BOILER-PLATE WITH JWT',
+          title='Test Automation Backend',
           version='1.0',
-          description='a boilerplate for flask restplus web service'
+          description='A backend for the Test Automation web service',
+          authorizations = authorizations,
+          security='apikey',
+          doc='/' if os.getenv('BOILERPLATE_ENV') != 'prod' else False
           )
 
-api.add_namespace(user_ns, path='/user')
+api.add_namespace(user_ns)
 api.add_namespace(auth_ns)
 api.add_namespace(test_ns)
 api.add_namespace(task_ns)

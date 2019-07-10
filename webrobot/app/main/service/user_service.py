@@ -64,7 +64,7 @@ def save_new_user(data, admin=None):
 
 
 def get_all_users():
-    return User.objects()
+    return [user for user in User.objects()]
 
 
 def get_a_user(user_id):

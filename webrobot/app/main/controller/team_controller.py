@@ -18,14 +18,19 @@ from ..util.identicon import *
 USERS_ROOT = Path(get_config().USERS_ROOT)
 
 api = TeamDto.api
+_user = TeamDto.user
 _team = TeamDto.team
+_new_team = TeamDto.new_team
+_team_id = TeamDto.team_id
 
 
 @api.route('/')
 class TeamList(Resource):
     @token_required
-    @api.doc('List all teams associated with the user')
+    @api.doc('list all teams')
+    @api.marshal_list_with(_team)
     def get(self, **kwargs):
+        """List all teams joined by the logged in user"""
         ret = []
         check = []
         user_id = kwargs['user']['user_id']
@@ -58,8 +63,14 @@ class TeamList(Resource):
         return ret
 
     @token_required
-    @api.doc('Create a new team')
+    @api.doc('create a new team')
+    @api.expect(_new_team)
     def post(self, **kwargs):
+        """
+        Create a new team
+
+        Note: The logged in user performing the operation will become the owner of the team
+        """
         data = request.json
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
@@ -105,8 +116,14 @@ class TeamList(Resource):
         team.save()
 
     @token_required
-    @api.doc('Delete a team')
+    @api.doc('delete a team')
+    @api.expect(_team_id)
     def delete(self, **kwargs):
+        """
+        Delete an team
+
+        Note: Only the owner of the team or the organization that the team belongs to could perform this operation
+        """
         team_id = request.json.get('team_id', None)
         if not team_id:
             return error_message(EINVAL, "Field team_id is required"), 400
@@ -120,7 +137,8 @@ class TeamList(Resource):
             return error_message(ENOENT, "User not found"), 404
 
         if team.owner != user:
-            return error_message(EINVAL, 'You are not the team owner'), 403
+            if team.organization.owner != user:
+                return error_message(EINVAL, 'You are not the team owner'), 403
 
         team.organization.modify(pull__teams=team)
 
@@ -145,8 +163,9 @@ class TeamList(Resource):
 
 @api.route('/avatar/<team_id>')
 class TeamAvatar(Resource):
-    @api.doc('Get the avatar of a team')
+    @api.doc('get the avatar of a team')
     def get(self, team_id):
+        """Get the avatar of a team"""
         auth_token = request.cookies.get('Admin-Token')
         if auth_token:
             payload = User.decode_auth_token(auth_token)
@@ -164,8 +183,14 @@ class TeamAvatar(Resource):
 @api.route('/member')
 class TeamMember(Resource):
     @token_required
-    @api.doc('Quit the team')
+    @api.doc('quit the team')
+    @api.expect(_team_id)
     def delete(self, **kwargs):
+        """
+        Quit the team
+        
+        The user logged in will quit the team
+        """
         user_id = kwargs['user']['user_id']
         team_id = request.json.get('team_id', None)
         if not team_id:
@@ -193,27 +218,34 @@ class TeamMember(Resource):
 @api.route('/all')
 class TeamListAll(Resource):
     @token_required
-    @api.doc('List all teams registered')
+    @api.doc('list all teams of an organization')
+    @api.param('organization_id', description='The organization ID')
+    @api.marshal_list_with(_team)
     def get(self, **kwargs):
+        """List all teams of an organization"""
         ret = []
 
-        teams = Team.objects(name__not__exact='Personal')
-        for team in teams:
-            r = {
+        organization_id = request.args.get('organization_id', None)
+        if not organization_id:
+            return error_message(EINVAL, 'Field organization_id is required'), 400
+
+        teams = Team.objects(organization=ObjectId(organization_id))
+        return [{
                 'label': team.name,
                 'owner': team.owner.name,
                 'owner_email': team.owner.email,
+                'organization_id': organization_id,
                 'value': str(team.id)
-            }
-            ret.append(r)
-        return ret
+            } for team in teams]
 
 @api.route('/join')
 class TeamJoin(Resource):
     @token_required
     @api.doc('Join a team')
+    @api.expect(_team_id)
     def post(self, user):
-        team_id = request.json.get('id', None)
+        """The logged in user joins a team"""
+        team_id = request.json.get('team_id', None)
         if not team_id:
             return error_message(EINVAL, "Field id is required"), 400
 
@@ -231,3 +263,31 @@ class TeamJoin(Resource):
             user.modify(push__teams=team)
 
         start_threads(user)
+
+@api.route('/users')
+class OrganizationUsers(Resource):
+    @token_required
+    @api.doc('list all users')
+    @api.param('team_id', description='The team ID')
+    @api.marshal_list_with(_user)
+    def get(self, **kwargs):
+        """
+        List all users of a team
+        """
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
+        team_id = request.args.get('team_id', None)
+        if not team_id:
+            return error_message(EINVAL, 'Field team_id is required'), 401
+
+        team = Team.objects(pk=team_id).first()
+        if not team:
+            return error_message(ENOENT, 'Team not found'), 404
+
+        if user not in team.members:
+            if user not in team.organization.members:
+                return error_message(EPERM, 'You are not in the organization'), 403
+
+        return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in team.members]

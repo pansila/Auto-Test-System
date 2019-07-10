@@ -17,6 +17,7 @@ from ..util.tarball import make_tarfile, pack_files
 from ..util.errors import *
 
 api = TaskResourceDto.api
+_task_resource = TaskResourceDto.task_resource
 
 TARBALL_TEMP = Path('temp')
 UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
@@ -26,7 +27,14 @@ UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
 @api.param('task_id', 'task id to process')
 class TaskResourceController(Resource):
     # @token_required
+    @api.doc('return the test result files')
     def get(self, task_id):
+        """
+        Return the test result files
+        
+        If a file name specified, a file in the upload directory will be returned
+        If a file name is not specified, return the bundled file that contains all result files
+        """
         try:
             task = Task.objects(pk=task_id).get() 
         except ValidationError as e:
@@ -41,8 +49,9 @@ class TaskResourceController(Resource):
         upload_root = get_upload_files_root(task)
         result_root = get_test_result_path(task)
 
-        if request.args.get('file', None):
-            return send_from_directory(Path(os.getcwd()) / upload_root, request.args['file'])
+        upload_file = request.args.get('file', None)
+        if upload_file:
+            return send_from_directory(Path(os.getcwd()) / upload_root, upload_file)
 
         tarball = pack_files(task_id, upload_root, result_root / TARBALL_TEMP)
         if not tarball:
@@ -57,8 +66,12 @@ class TaskResourceList(Resource):
     @token_required
     @organization_team_required_by_args
     @task_required
-    @api.doc('Get the file list in the upload directory')
+    @api.doc('get the upload file list')
+    @api.param('organization', description='The organization ID')
+    @api.param('team', description='The team ID')
+    @api.param('task_id', description='The task ID')
     def get(self, **kwargs):
+        """Get the file list in the upload directory"""
         task = kwargs['task']
         if not task.upload_dir:
             return []
@@ -73,8 +86,14 @@ class TaskResourceList(Resource):
 class TaskResourceUpload(Resource):
     @token_required
     @organization_team_required_by_form
-    @api.doc('Upload resource files that will to be used by a task later, if no files uploaded yet, a temporary directory will be created')
+    @api.doc('upload resource files')
+    @api.expect(_task_resource)
     def post(self, **kwargs):
+        """
+        Upload resource files
+        
+        If no files uploaded yet, a temporary directory will be created to accommodate the files
+        """
         organization = kwargs['organization']
         team = kwargs['team']
         found = False

@@ -47,7 +47,7 @@ class Auth:
                             email=user.email,
                             username=user.name,
                             roles=user.roles,
-                            registered_on=str(user.registered_on),
+                            registered_on=user.registered_on,
                             avatar=user.avatar,
                             introduction=user.introduction,
                             region=user.region

@@ -18,6 +18,9 @@ from ..util.dto import TestResultDto
 from ..util.errors import *
 
 api = TestResultDto.api
+_test_report = TestResultDto.test_report
+_record_test_result = TestResultDto.record_test_result
+_test_result = TestResultDto.test_result
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
 
@@ -26,7 +29,18 @@ USERS_ROOT = Path(get_config().USERS_ROOT)
 class TestResultRoot(Resource):
     @token_required
     @organization_team_required_by_args
+    @api.doc('get_task_report_list')
+    @api.param('page', description='The page number of the whole test report list')
+    @api.param('limit', description='The item number of a page')
+    @api.param('title', description='The test suite name')
+    @api.param('priority', description='The priority of the task')
+    @api.param('endpoint', description='The endpoint that runs the test')
+    @api.param('sort', default='-run_date', description='The sort field')
+    @api.param('start_date', description='The start date')
+    @api.param('end_date', description='The end date')
+    @api.marshal_list_with(_test_report)
     def get(self, **kwargs):
+        """Get the task report list"""
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
@@ -92,7 +106,7 @@ class TestResultRoot(Resource):
                 'testcases': t.testcases,
                 'comment': t.comment,
                 'priority': t.priority,
-                'run_date': t.run_date.timestamp() * 1000,
+                'run_date': t.run_date,
                 'tester': t.tester.name,
                 'status': t.status
             })
@@ -100,8 +114,10 @@ class TestResultRoot(Resource):
         return {'items': ret, 'total': all_tasks.count()}
 
     # @token_required
-    @api.doc('create the test result for the task in the database')
+    @api.doc('record_the_test_case')
+    @api.expect(_record_test_result)
     def post(self):
+        """Record the test case result in the database for a task"""
         data = request.json
         if data is None:
             return error_message(EINVAL, "Payload of the request is empty"), 400
@@ -109,10 +125,9 @@ class TestResultRoot(Resource):
         task_id = data.get('task_id', None)
         if task_id == None:
             return error_message(EINVAL, "Field task_id is required"), 400
-        try:
-            task = Task.objects(pk=task_id).get()
-        except Task.DoesNotExist as e:
-            print(e)
+
+        task = Task.objects(pk=task_id).first()
+        if not task:
             return error_message(ENOENT, "Task not found"), 404
 
         test_case = data.get('test_case', None)
@@ -132,11 +147,17 @@ class TestResultRoot(Resource):
         task.save()
 
 @api.route('/<task_id>')
-@api.param('task_id', 'id of the task for which to upload the results')
+@api.param('task_id', 'id of the task for which to update the result')
 class TestResultUpload(Resource):
     # @token_required
-    @api.doc('update the test results')
+    @api.doc('update the test result')
+    @api.expect(_test_result)
     def post(self, task_id):
+        """
+        Update the test result for the test case of a test suite
+
+        Any items in the field more_result in the payload will be filled to the field more_result in the test result recorded in the database
+        """
         data = request.json
         if data is None:
             return error_message(EINVAL, "Payload of the request is empty"), 400
