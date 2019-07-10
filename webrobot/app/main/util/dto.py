@@ -244,7 +244,7 @@ class OrganizationDto:
     })
 
     # we could have inherited the model organization, but swagger UI has a problem to show it correctly, thus we embed organization definition here.
-    organization_team = api.model('organization_team', {
+    organization_team_resp = api.model('organization_team_resp', {
         'label': fields.String(description='The organization name'),
         'owner': fields.String(description='The organization owner\'s name'),
         'owner_email': fields.String(description='The organization owner\'s email'),
