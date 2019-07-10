@@ -1,3 +1,5 @@
+from flask_restplus import marshal, fields
+
 SUCCESS = (20000, 'Success')
 
 USER_NOT_EXIST = (50000, 'User does not exist')
@@ -143,15 +145,20 @@ EKEYREJECTED = (129, 'Key was rejected by service')
 EOWNERDEAD = (130, 'Owner died')
 ENOTRECOVERABLE = (131, 'State not recoverable')
 
-def error_message(error, message=None, **payload):
-	errno, msg = error[:]
+response = {
+    'code': fields.Integer(),
+    'message': fields.String(),
+	'data': fields.Raw
+}
+
+def error_message(error, message=None, model=response, **payload):
+	errno, msg = error
 	# print(msg)
 	ret = {
 		'code': errno,
-		'data': {
-			'message': message if message else msg
-		}
+		'message': message if message else msg,
+		'data': {}
 	}
 	for k in payload:
 		ret['data'][k] = payload[k]
-	return ret
+	return marshal(ret, model)

@@ -16,15 +16,26 @@ from ..util.tarball import path_to_dict
 from ..util.errors import *
 
 api = ScriptDto.api
-
+_update_script = ScriptDto.update_script
+_delete_script = ScriptDto.delete_script
+_upload_scripts = ScriptDto.upload_scripts
 
 @api.route('/')
 @api.response(404, 'Scripts not found.')
 class ScriptManagement(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('compound get method for script file list and script file content')
+    @api.doc('return script list or script file')
+    @api.param('organization', description='The organization ID')
+    @api.param('team', description='The team ID')
+    @api.param('file', description='Path to the queried file')
+    @api.param('script_type', description='File type {user_scripts | backing_scripts}')
     def get(self, **kwargs):
+        """
+        A compound get method for returning script file list or script file content
+        
+        When field file is None, return the file list as per script_type, otherwise return the specified file.
+        """
         script_path = request.args.get('file', default=None)
         script_type = request.args.get('script_type', default=None)
 
@@ -52,7 +63,10 @@ class ScriptManagement(Resource):
 
     @token_required
     @organization_team_required_by_json
+    @api.doc('update file content')
+    @api.expect(_update_script)
     def post(self, **kwargs):
+        """Update the script file content"""
         script = request.json.get('file', None)
         if script is None or script == '':
             return error_message(EINVAL, 'Field file is required'), 400
@@ -110,7 +124,10 @@ class ScriptManagement(Resource):
 
     @token_required
     @organization_team_required_by_json
+    @api.doc('delete the file')
+    @api.expect(_delete_script)
     def delete(self, **kwargs):
+        """Delete the script file"""
         organization = kwargs['organization']
         team = kwargs['team']
         
@@ -150,24 +167,28 @@ class ScriptManagement(Resource):
         if script_type == 'user_scripts':
             cnt = Test.objects(path=os.path.abspath(root / script)).delete()
             if cnt == 0:
-                return error_message(ENOENT, 'Test suite not found'), 404
+                return error_message(ENOENT, 'Test suite not found in the database'), 404
 
 @api.route('/upload/')
 class ScriptUpload(Resource):
     @token_required
     @organization_team_required_by_form
     @api.doc('upload the scripts')
+    @api.expect(_upload_scripts)
     def post(self, **kwargs):
+        """
+        Upload the scripts
+
+        Note: Files in the form request payload are tuples of file name and file content
+        which can't be explicitly listed here. Please check out the form data format on the web.
+        Usually browser will take care of it.
+        """
         found = False
 
         organization = kwargs['organization']
         team = kwargs['team']
         user = kwargs['user']
         
-        script_type = request.form.get('script_type', None)
-        if script_type is None:
-            return error_message(EINVAL, 'Field script_type is required'), 400
-
         script_type = request.form.get('script_type', None)
         if script_type is None:
             return error_message(EINVAL, 'Field script_type is required'), 400

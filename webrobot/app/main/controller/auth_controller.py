@@ -19,7 +19,9 @@ class UserLogin(Resource):
     @api.doc('user login')
     @api.expect(user_auth, validate=True)
     def post(self):
-        # get the post data
+        """
+        User login interface
+        """
         post_data = request.json
         msg, status = Auth.login_user(data=post_data)
         if status != 200:
@@ -39,6 +41,8 @@ class LogoutAPI(Resource):
     """
     @api.doc('logout a user')
     def post(self):
-        # get auth token
+        """
+        User logout interface
+        """
         auth_header = request.headers.get('X-Token')
         return Auth.logout_user(data=auth_header)

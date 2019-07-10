@@ -18,14 +18,21 @@ from ..util.identicon import *
 USERS_ROOT = Path(get_config().USERS_ROOT)
 
 api = OrganizationDto.api
+_user = OrganizationDto.user
 _organization = OrganizationDto.organization
+_new_organization = OrganizationDto.new_organization
+_organization_id = OrganizationDto.organization_id
+_organization_team = OrganizationDto.organization_team
+_transfer_ownership = OrganizationDto.transfer_ownership
 
 
 @api.route('/')
 class OrganizationList(Resource):
     @token_required
-    @api.doc('List all organizations associated with the user')
+    @api.doc('list all organizations')
+    @api.marshal_list_with(_organization)
     def get(self, **kwargs):
+        """List all organizations joined by the logged in user"""
         ret = []
         check = []
         user_id = kwargs['user']['user_id']
@@ -56,8 +63,14 @@ class OrganizationList(Resource):
         return ret
 
     @token_required
-    @api.doc('Create a new organization')
+    @api.doc('create a new organization')
+    @api.expect(_new_organization)
     def post(self, **kwargs):
+        """
+        Create a new organization
+
+        Note: The logged in user performing the operation will become the owner of the organization
+        """
         data = request.json
         name = data.get('name', None)
         if not name:
@@ -87,8 +100,14 @@ class OrganizationList(Resource):
         org.save()
 
     @token_required
-    @api.doc('Delete a organization')
+    @api.doc('delete an organization')
+    @api.expect(_organization_id)
     def delete(self, **kwargs):
+        """
+        Delete an organization
+
+        Note: Only the owner of the organization could perform this operation
+        """
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
             return error_message(EINVAL, "Field organization_id is required"), 400
@@ -132,8 +151,9 @@ class OrganizationList(Resource):
 
 @api.route('/avatar/<org_id>')
 class OrganizationAvatar(Resource):
-    @api.doc('get the avatar for an organization')
+    @api.doc('get the avatar of an organization')
     def get(self, org_id):
+        """Get the avatar of an organization"""
         auth_token = request.cookies.get('Admin-Token')
         if auth_token:
             payload = User.decode_auth_token(auth_token)
@@ -151,8 +171,14 @@ class OrganizationAvatar(Resource):
 @api.route('/member')
 class OrganizationMember(Resource):
     @token_required
-    @api.doc('Quit the organization')
+    @api.doc('quit the organization')
+    @api.expect(_organization_id)
     def delete(self, **kwargs):
+        """
+        Quit the organization
+        
+        The user logged in will quit the organization
+        """
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
             return error_message(EINVAL, "Field organization_id is required"), 400
@@ -179,26 +205,27 @@ class OrganizationMember(Resource):
 @api.route('/all')
 class OrganizationListAll(Resource):
     @token_required
-    @api.doc('List all organizations registered')
+    @api.doc('list all organizations registered')
+    @api.marshal_list_with(_organization)
     def get(self, **kwargs):
+        """List all organizations registered"""
         ret = []
 
         organizations = Organization.objects(name__not__exact='Personal')
-        for organization in organizations:
-            r = {
+        return [{
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
                 'value': str(organization.id)
-            }
-            ret.append(r)
-        return ret
+            } for organization in organizations]
 
 @api.route('/include_team')
 class OrganizationListAll(Resource):
     @token_required
-    @api.doc('List all organizations registered')
+    @api.doc('list all organizations and teams registered')
+    @api.marshal_list_with(_organization_team)
     def get(self, **kwargs):
+        """List all organizations and teams registered"""
         ret = []
         check = []
         user_id = kwargs['user']['user_id']
@@ -256,10 +283,12 @@ class OrganizationListAll(Resource):
 class OrganizationJoin(Resource):
     @token_required
     @api.doc('join an organization')
+    @api.expect(_organization_id)
     def post(self, **kwargs):
-        org_id = request.json.get('id', None)
+        """The logged in user joins an organization"""
+        org_id = request.json.get('organization_id', None)
         if not org_id:
-            return error_message(EINVAL, "Field id is required"), 400
+            return error_message(EINVAL, "Field organization_id is required"), 400
 
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
@@ -279,34 +308,89 @@ class OrganizationJoin(Resource):
 @api.route('/users')
 class OrganizationUsers(Resource):
     @token_required
-    @api.doc('List all users of the specified organization')
+    @api.doc('list all users')
+    @api.param('organization_id', description='The organization ID')
+    @api.marshal_list_with(_user)
     def get(self, **kwargs):
-        organization_id = request.args.get('organization', None)
-        if organization_id:
-            organization = Organization.objects(pk=organization_id).first()
-            if not organization:
-                return error_message(ENOENT, 'Organization not found'), 404
-            return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
+        """
+        List all users of an organization
 
-        team_id = request.args.get('team', None)
-        if team_id:
-            team = Team.objects(pk=team_id).first()
-            if not team:
-                return error_message(ENOENT, 'Team not found'), 404
-            return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in team.members]
-
-@api.route('/transfer')
-class OrganizationTransfer(Resource):
-    @token_required
-    @api.doc('Transfer ownership of an organization to another authorized user')
-    def post(self, **kwargs):
+        Note: Users in a team of the organization will not be counted.
+        """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
             return error_message(ENOENT, 'User not found'), 404
 
-        organization_id = request.json.get('organization', None)
+        organization_id = request.args.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization is required'), 401
+            return error_message(EINVAL, 'Field organization_id is required'), 401
+
+        organization = Organization.objects(pk=organization_id).first()
+        if not organization:
+            return error_message(ENOENT, 'Organization not found'), 404
+
+        if user not in organization.members:
+            return error_message(EPERM, 'You are not in the organization'), 403
+
+        return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
+
+@api.route('/all_users')
+class OrganizationUsers(Resource):
+    @token_required
+    @api.doc('list all users')
+    @api.param('organization_id', description='The organization ID')
+    @api.marshal_list_with(_user)
+    def get(self, **kwargs):
+        """
+        List all users of an organization
+
+        Note: Users in a team of the organization will be counted.
+        """
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
+        organization_id = request.args.get('organization_id', None)
+        if not organization_id:
+            return error_message(EINVAL, 'Field organization_id is required'), 401
+
+        organization = Organization.objects(pk=organization_id).first()
+        if not organization:
+            return error_message(ENOENT, 'Organization not found'), 404
+
+        if user not in organization.members:
+            return error_message(EPERM, 'You are not in the organization'), 403
+
+        ret = [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
+        check_list = [str(m.id) for m in organization.members]
+
+        for team in organization.teams:
+            for user in team.members:
+                user_id = str(user.id)
+                if user_id not in check_list:
+                    ret.append({'value': user_id, 'label': user.name, 'email': user.email})
+                    check_list.append(user_id)
+
+        return ret
+
+@api.route('/transfer')
+class OrganizationTransfer(Resource):
+    @token_required
+    @api.doc('transfer ownership of an organization')
+    @api.expect(_transfer_ownership)
+    def post(self, **kwargs):
+        """
+        Transfer the ownership of an organization to another authorized user.
+
+        Note: The new owner should have joined the organization or a team of the organization
+        """
+        user = User.objects(pk=kwargs['user']['user_id']).first()
+        if not user:
+            return error_message(ENOENT, 'User not found'), 404
+
+        organization_id = request.json.get('organization_id', None)
+        if not organization_id:
+            return error_message(EINVAL, 'Field organization_id is required'), 401
 
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
@@ -323,5 +407,21 @@ class OrganizationTransfer(Resource):
         if not owner:
             return error_message(ENOENT, 'New owner not found'), 404
 
+        if owner not in organization.members:
+            for team in organization.teams:
+                if owner in team.members:
+                    break
+            else:
+                return error_message(EPERM, 'New owner should be a member of the organization'), 403
+
         organization.owner = owner
+        if owner not in organization.members:
+            organization.members.append(owner)
         organization.save()
+
+        for team in organization.teams:
+            if team.owner == user:
+                team.owner = owner
+                if owner not in team.members:
+                    team.members.append(owner)
+                team.save()

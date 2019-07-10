@@ -9,13 +9,25 @@ from ..util.dto import EndpointDto
 from ..util.errors import *
 
 api = EndpointDto.api
+_endpoint_list = EndpointDto.endpoint_list
+_endpoint_del = EndpointDto.endpoint_del
+_endpoint = EndpointDto.endpoint
+_queuing_tasks = EndpointDto.queuing_tasks
+_queue_update = EndpointDto.queue_update
 
 @api.route('/')
 class EndpointController(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('get all test endpoints available')
+    @api.doc('get all test endpoints')
+    @api.param('organization', description='The organization ID')
+    @api.param('team', description='The team ID')
+    @api.param('page', default=1, description='The page number of the whole test report list')
+    @api.param('limit', default=10, description='The item number of a page')
+    @api.param('title', description='The test suite name')
+    @api.marshal_list_with(_endpoint_list)
     def get(self, **kwargs):
+        """Get all test endpoints available"""
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
@@ -56,9 +68,11 @@ class EndpointController(Resource):
         return ret[(page-1)*limit:page*limit]
 
     @token_required
-    @api.doc('delete the test endpoint with the specified address')
     @organization_team_required_by_json
+    @api.doc('delete the test endpoint')
+    @api.expect(_endpoint_del)
     def delete(self, **kwargs):
+        """Delete the test endpoint with the specified address"""
         data = request.json
         organization = kwargs['organization']
         team = kwargs['team']
@@ -75,9 +89,11 @@ class EndpointController(Resource):
         return error_message(SUCCESS)
 
     @token_required
-    @api.doc('create a task queue for the endpoint address')
     @organization_team_required_by_json
+    @api.doc('create a task queue for the endpoint address')
+    @api.expect(_endpoint)
     def post(self, **kwargs):
+        """Create a task queue for the endpoint address"""
         data = request.json
         organization = kwargs['organization']
         team = kwargs['team']
@@ -93,10 +109,7 @@ class EndpointController(Resource):
 
         endpoint_tests = []
         for t in tests:
-            query = {'test_suite': t, 'organization': organization}
-            if team:
-                query['team'] = team
-            tt = Test.objects(**query).first()
+            tt = Test.objects(test_suite=t, organization=organization, team=team).first()
             if not tt:
                 return error_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             endpoint_tests.append(tt)
@@ -128,14 +141,17 @@ class EndpointController(Resource):
 class EndpointController(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('get queuing tasks of an endpoint')
+    @api.doc('get queuing tasks')
+    @api.param('organization', description='The organization ID')
+    @api.param('team', description='The team ID')
+    @api.param('address', description='The endpoint address')
+    @api.marshal_list_with(_queuing_tasks)
     def get(self, **kwargs):
+        """Get the queuing tasks of an endpoint"""
         organization = kwargs['organization']
         team = kwargs['team']
 
-        query = {'organization': organization}
-        if team:
-            query['team'] = team
+        query = {'organization': organization, 'team': team}
         address = request.args.get('address', default=None)
         if address:
             query['endpoint_address'] = address
@@ -172,13 +188,17 @@ class EndpointController(Resource):
 
     @token_required
     @organization_team_required_by_json
-    @api.doc('update task queue of an endpoint')
+    @api.doc('update task queue')
+    @api.expect(_queue_update)
     def post(self, **kwargs):
+        """Update the task queue of an endpoint"""
         organization = kwargs['organization']
         team = kwargs['team']
         taskqueues = request.json.get('taskqueues', None)
         if not taskqueues:
             return error_message(EINVAL, 'Field taskqueues is required'), 400
+        if not isinstance(taskqueues, list):
+            return error_message(EINVAL, 'Field taskqueues should be a list'), 400
 
         for taskqueue in taskqueues:
             if 'address' not in taskqueue or 'priority' not in taskqueue:

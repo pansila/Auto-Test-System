@@ -14,20 +14,31 @@ from ..util.tarball import make_tarfile, pack_files
 from ..util.errors import *
 
 api = TestDto.api
+_test_cases = TestDto.test_cases
+_test_suite = TestDto.test_suite
 
 
 @api.route('/script')
 @api.response(404, 'Script not found.')
+@api.response(200, 'Download the script successfully.')
 class ScriptDownload(Resource):
     # @token_required
+    @api.doc('get_test_script')
+    @api.param('id', description='The task id')
+    @api.param('test', description='The test suite name')
     def get(self):
+        """
+        Get the test script
+
+        Get the bundled file that contains all necessary test scripts that the test needs to run
+        """
         task_id = request.args.get('id', None)
         if not task_id:
             return error_message(EINVAL, 'Field id is required'), 400
 
         test_suite = request.args.get('test', None)
         if not test_suite:
-            return error_message(EINVAL, 'Field id is required'), 400
+            return error_message(EINVAL, 'Field test is required'), 400
 
         task = Task.objects(pk=task_id).first()
         if not task:
@@ -56,13 +67,15 @@ class ScriptDownload(Resource):
             return error_message(EIO, "packaging files failed"), 404
 
 @api.route('/<test_suite>')
-@api.param('test_suite', 'the test suite to query')
+@api.param('test_suite', 'The test suite to query')
 @api.response(404, 'Script not found.')
 class TestSuiteGet(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('Get the test cases of a test suite')
+    @api.doc('get_the_test_cases')
+    @api.marshal_with(_test_cases)
     def get(self, test_suite, **kwargs):
+        """Get the test cases of a test suite"""
         organization = kwargs['organization']
         team = kwargs['team']
 
@@ -79,8 +92,10 @@ class TestSuiteGet(Resource):
 class TestSuitesList(Resource):
     @token_required
     @organization_team_required_by_args
-    @api.doc('Get the test suite list which contains some necessary test details')
+    @api.doc('get_the_test_suite_list')
+    @api.marshal_list_with(_test_suite)
     def get(self, **kwargs):
+        """Get the test suite list which contains some necessary test details"""
         organization = kwargs['organization']
         team = kwargs['team']
         
