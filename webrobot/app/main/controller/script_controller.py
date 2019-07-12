@@ -68,7 +68,7 @@ class ScriptManagement(Resource):
     def post(self, **kwargs):
         """Update the script file content"""
         script = request.json.get('file', None)
-        if script is None or script == '':
+        if not script:
             return error_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
             return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
@@ -97,30 +97,37 @@ class ScriptManagement(Resource):
         else:
             return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
-        if content:
+        dirname = os.path.dirname(script)
+        basename = os.path.basename(script)
+        try:
+            os.makedirs(root / dirname)
+        except FileExistsError:
+            pass
+
+        if content or content == '':
             if script_type == 'user_scripts':
                 content = re.sub(r'\\([{}_])', r'\1', content)
             elif script_type == 'backing_scripts':
                 content = re.sub(r'\r\n', '\n', content)
 
-            dirname = os.path.dirname(script)
-            try:
-                os.makedirs(root / dirname)
-            except FileExistsError:
-                pass
-
-            if dirname != script:
+            if basename:
                 with open(root / script, 'w') as f:
                     f.write(content)
 
         if new_name:
-            os.rename(root / script, root / os.path.dirname(script) / new_name)
+            if basename:
+                Test.objects(path=os.path.abspath(root / script)).delete()
+                os.rename(root / script, root / dirname / new_name)
+            else:
+                os.rename(root / script, root / os.path.dirname(dirname) / new_name)
 
-        if script_type == 'user_scripts':
-            _script = str(Path(os.path.dirname(script)) / new_name) if new_name else script
+        if basename and script_type == 'user_scripts':
+            _script = str(Path(dirname) / new_name) if new_name else script
             ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
             if ret:
                 return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+
+        return error_message(SUCCESS)
 
     @token_required
     @organization_team_required_by_json
@@ -132,7 +139,7 @@ class ScriptManagement(Resource):
         team = kwargs['team']
         
         script = request.json.get('file', None)
-        if script is None or script == '':
+        if not script:
             return error_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
             return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
@@ -149,25 +156,28 @@ class ScriptManagement(Resource):
             return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         if not os.path.exists(root / script):
-            return error_message(ENOENT, 'file/directory doesn\'t exist'), 404
+            return error_message(ENOENT, 'File/directory doesn\'t exist'), 404
 
         if os.path.isfile(root / script):
             try:
                 os.remove(root / script)
             except OSError as err:
                 print(err)
-                return error_message(EIO, 'Error happened while deleting a file: '), 401
+                return error_message(EIO, 'Error happened while deleting a file'), 401
+
+            if script_type == 'user_scripts':
+                cnt = Test.objects(path=os.path.abspath(root / script)).delete()
+                if cnt == 0:
+                    return error_message(ENOENT, 'Test suite not found in the database'), 404
         else:
             try:
+                Test.objects(path__contains=os.path.abspath(root / script)).delete()
                 shutil.rmtree(root / script)
             except OSError as err:
                 print(err)
                 return error_message(EIO, 'Error happened while deleting a directory'), 401
 
-        if script_type == 'user_scripts':
-            cnt = Test.objects(path=os.path.abspath(root / script)).delete()
-            if cnt == 0:
-                return error_message(ENOENT, 'Test suite not found in the database'), 404
+        return error_message(SUCCESS)
 
 @api.route('/upload/')
 class ScriptUpload(Resource):

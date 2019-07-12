@@ -34,8 +34,17 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
             if not md_file.endswith('.md'):
                 continue
 
-            if script and not str(Path(root) / md_file).endswith(script):
-                continue
+            if script:
+                match = True
+                file_path = str(Path(root) / md_file).split(os.path.sep)
+                file_path.reverse()
+                script_path = str(Path(script)).split(os.path.sep)
+                script_path.reverse()
+                for i in range(len(script_path)):
+                    if script_path[i] != file_path[i]:
+                        match = False
+                if not match:
+                    continue
 
             if script:
                 found = True
