@@ -53,7 +53,7 @@ def event_handler_cancel_task(event):
                 taskqueue.modify(running_task=None)
                 task.modify(status='cancelled')
 
-                proc['process'].terminate()
+                os.kill(proc['process'].pid, signal.SIGTERM)
                 del ROBOT_TASKS[idx]
                 break
         else:
