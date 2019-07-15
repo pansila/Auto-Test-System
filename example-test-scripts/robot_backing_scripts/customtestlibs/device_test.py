@@ -47,7 +47,7 @@ class device_test(rest_api):
         result = self._serial_read(deviceName, self.TIMEOUT, 'device opened')[0]
         print(result)
 
-    def download(self, deviceName, target=None):
+    def download(self, deviceName, firmwareName=None, flashAddr=None):
         dut = self.configDut[deviceName]
         if 'download' not in dut:
             raise AssertionError('Download method is not configured for {}'.format(deviceName))
@@ -66,36 +66,29 @@ class device_test(rest_api):
                 break
 
             if d['tool'].upper() == 'JLINK':
-                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1']
-                if os.name == 'nt':
-                    from pexpect import popen_spawn
-                    a = popen_spawn.PopenSpawn(' '.join(cmd), encoding='utf-8')
-                elif os.name == 'posix':
-                    a = pexpect.spawn(' '.join(cmd), encoding='utf-8')
-                else:
-                    raise AssertionError('Not supported OS {}'.format(os.name))
+                if not firmwareName:
+                    firmwareName = d['datafile']
+                if not flashAddr:
+                    flashAddr = d['flash_addr']
+                    if not isinstance(d['flash_addr'], str):
+                        flashAddr = '{:x}'.format(d['flash_addr'])
+                if flashAddr.startswith('0x'):
+                    flashAddr = flashAddr[2:]
 
-                try:
-                    a.expect_exact('J-Link>', timeout=5)
-                except:
-                    a.kill(9)
-                    raise AssertionError('J-Link running failed')
-
-                if os.path.isabs(d['datafile']):
-                    data_file = Path(d['datafile'])
-                else:
-                    data_file = Path(self.config["resource_dir"]) / d['datafile']
-
-                cmds = ['r', 'exec EnableEraseAllFlashBanks', 'erase', 'loadbin {} {:x} SWDSelect'.format(data_file, d['flash_addr']),
-                        'verifybin {} {:x}'.format(data_file, d['flash_addr']), 'r', 'g']
-                for c in cmds:
-                    a.sendline(c)
-                    idx = a.expect_list([re.compile('J-Link>'), re.compile('failed'), pexpect.TIMEOUT], timeout=120, searchwindowsize=10)
-                    if idx != 0:
-                        a.kill(9)
-                        raise AssertionError('JLink command "{}" failed:\n{}\n{}'.format(c, a.before, a.after))
-                a.sendline('qc')
-                a.expect(pexpect.EOF)
+                firmwarePath = Path(self.config["resource_dir"]) / firmwareName
+                script = Path(self.config["tmp_dir"]) / 'download_script.jlink'
+                script_contents = ("r\n"
+                                   "exec EnableEraseAllFlashBanks\n"
+                                   "erase\n"
+                                   "loadbin {} {} SWDSelect\n"
+                                   "verifybin {} {}\n"
+                                   "r\n"
+                                   "g\n"
+                                   "qc\n".format(firmwarePath, flashAddr, firmwarePath, flashAddr))
+                with open(script, 'w') as f:
+                    f.write(script_contents)
+                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1', '-CommanderScript', str(script)]
+                subprocess.run(cmd, check=True)
                 break
             print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
         else:

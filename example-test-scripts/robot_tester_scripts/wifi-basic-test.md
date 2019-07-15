@@ -18,15 +18,11 @@ Because it's a distributed test system compared to a local standalone test syste
 * Include the dynamic "Import Library <address:port>" to connect to the test library for the downloaded test case
 
 ## Test Plans
-
 1. [Ping Test](#Ping_Test)
-2. [WiFi Enable/Disable Test](#WiFi_Enable/Disable_Test)
-3. [Connect/Disconnect Test](#Connect/Disconnect_Test)
-4. [WiFi Password Test](#WiFi_Password_Test)
-5. [iperf TCP TX test](#iperf_TCP_TX_test)
-6. [iperf TCP RX test](#iperf_TCP_RX_test)
-7. [iperf UDP TX test](#iperf_UDP_TX_test)
-8. [iperf UDP RX test](#iperf_UDP_RX_test)
+2. [iperf TCP TX test](#iperf_TCP_TX_test)
+3. [iperf TCP RX test](#iperf_TCP_RX_test)
+4. [iperf UDP TX test](#iperf_UDP_TX_test)
+5. [iperf UDP RX test](#iperf_UDP_RX_test)
 
 ### Setup for all test cases
 
@@ -45,6 +41,8 @@ Because it's a distributed test system compared to a local standalone test syste
 | ${remote_test_address} | http://${address_daemon}:${port_test} |
 | ${ap_ssid} | Xiaomi3 |
 | ${ap_password} | 12345678 |
+| ${firmware} | firmware.bin |
+| ${flash_address} | 0x08000000 |
 
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
@@ -64,13 +62,14 @@ Notes:
 
 1. There is no need to open WiFi here as it has been opened at boot-up time, we do it here to warm up the serial port ISR code to work around the character missing issue.
 2. There might be a ping timeout error for the first request due to too long ARP handshake process, thus we require pass times one less than requests times at least to pass the test.
+3. firmware and other resource files are uploaded to a certain directory in the endpoint, just use it in a relative path after uploaded
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|
 | Ping test |
 | | [Setup] | Setup Remote | EndpointDaemon1 | pingtest.py | pingtestlib | ${dut1} |
 | | [Teardown] | Teardown Remote | EndpointDaemon1 | pingtestlib | ${dut1} |
-|#| pingtestlib.download | ${dut1} |
+| | pingtestlib.download | ${dut1} | ${firmware} | ${flash_address} |
 | | pingtestlib.open wifi | ${dut1} |
 | | pingtestlib.scan networks | ${dut1} |
 | | pingtestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |

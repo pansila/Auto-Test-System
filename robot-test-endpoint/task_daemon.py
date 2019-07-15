@@ -1,6 +1,7 @@
 import argparse
 import importlib
 import multiprocessing
+import os
 import os.path
 import shutil
 import signal
@@ -74,6 +75,12 @@ class task_daemon(object):
             self.task_id = None
 
     def _download_file(self, endpoint, download_dir):
+        try:
+            shutil.rmtree(download_dir)
+        except FileNotFoundError:
+            pass
+
+        temp_dir = Path(self.config['tmp_dir'])
         tarball = 'download.tar.gz'
         url = "{}:{}/{}".format(self.config["server_url"], self.config["server_port"], endpoint)
         print('Start to download file {} from {}'.format(tarball, url))
@@ -86,21 +93,27 @@ class task_daemon(object):
             print('No files need to download')
             return
 
-        output = Path(download_dir) / tarball
+        output = temp_dir / tarball
         with open(output, 'wb') as f:
             f.write(r.content)
         print('Downloading test file {} succeeded'.format(tarball))
 
         with tarfile.open(output) as tarFile:
-            tarFile.extractall(download_dir)
+            tarFile.extractall(temp_dir)
 
-        temp_dir = Path(download_dir) / TEMP_LIB
-        dir_util.copy_tree(temp_dir, download_dir)
-        shutil.rmtree(temp_dir)
+        package_temp_dir = temp_dir / TEMP_LIB
+        shutil.copytree(package_temp_dir, download_dir)
+        shutil.rmtree(package_temp_dir)
 
     def _download(self, testcase, task_id):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
+
+        try:
+            shutil.rmtree(self.config['tmp_dir'])
+        except FileNotFoundError:
+            pass
+        os.mkdir(self.config['tmp_dir'])
 
         self._download_file('test/script?id={}&test={}'.format(task_id, testcase), self.config["test_dir"])
         if task_id:
