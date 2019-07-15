@@ -109,7 +109,6 @@ output.xml
 report.html
 log.html
 .vscode/
-testlibs/
 *.tgz
 temp/
 .mypy_cache/
@@ -118,4 +117,6 @@ temp/
 webrobot/static/results/
 webrobot/static/users/
 webrobot/upload/
+robot-test-endpoint/testlibs/
 robot-test-endpoint/resources/
+robot-test-endpoint/tmp/

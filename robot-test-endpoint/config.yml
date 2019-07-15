@@ -14,6 +14,7 @@ server_port: 5000
 
 test_dir: testlibs
 resource_dir: resources
+tmp_dir: tmp
 
 ## Windows dependent configurations
 
@@ -32,12 +33,6 @@ DUT:
     # multiple download methods can be configured here, they will be tried one by one if previous one failed
     download:
       # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
-      - tool: MDK
-        path: C:\Keil_v5\UV4\UV4.exe
-        workdir: D:\demo-project\
-        project: demo.uvproj
-        target: demo-target
-      - tool: ISP
       - tool: JLink
         path: C:\Program Files (x86)\SEGGER\JLink_V640b\JLink.exe
         interface: SWD
@@ -45,6 +40,12 @@ DUT:
         datafile: firmware.bin  # relative to <resource_dir> if it's not an absolute path
         speed: 4000
         flash_addr: 0x08000000
+      - tool: MDK
+        path: C:\Keil_v5\UV4\UV4.exe
+        workdir: D:\demo-project\
+        project: demo.uvproj
+        target: demo-target
+      - tool: ISP
 
 # AP under test
 AP:
