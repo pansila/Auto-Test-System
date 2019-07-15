@@ -24,14 +24,16 @@ from ruamel import yaml
 DOWNLOAD_LIB = "testlibs"
 TEMP_LIB = "files"
 TERMINATE = 1
+TEST_END = 2
 
 g_config = {}
 
 class task_daemon(object):
 
     def __init__(self, config, task_id):
-        self.tests = {}
+        self.running_test = None
         self.config = config
+        self.task_id = None
 
         try:
             os.makedirs(self.config["test_dir"])
@@ -45,6 +47,9 @@ class task_daemon(object):
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
     def start_test(self, test_case, backing_file, task_id=None):
+        # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled
+        self.stop_test('', 'ABORT')
+
         if backing_file.endswith(".py"):
             backing_file = backing_file[0:-3]
 
@@ -57,18 +62,16 @@ class task_daemon(object):
                                     host=self.config["host_daemon"],
                                     port=self.config["port_test"],
                                     task_id=self.task_id)
-        self.tests[test_case] = {"queue": server_queue, "process": server_process}
+        self.running_test = {"queue": server_queue, "process": server_process}
         self._create_test_result(test_case)
 
     def stop_test(self, test_case, status):
-        self._update_test_result(status)
-        if test_case in self.tests:
-            self.tests[test_case]["queue"].put(TERMINATE)
-            del self.tests[test_case]["queue"]
-            del self.tests[test_case]
-            time.sleep(0.5)
-        # else:
-        #     print("test {} is not running".format(testcase))
+        if self.running_test:
+            self._update_test_result(status)
+            self.running_test["queue"].put(TERMINATE)
+            self.running_test["queue"].get()
+            self.running_test = None
+            self.task_id = None
 
     def _download_file(self, endpoint, download_dir):
         tarball = 'download.tar.gz'
@@ -127,6 +130,8 @@ class task_daemon(object):
         pass
 
     def _update_test_result(self, status):
+        if not self.task_id:
+            return
         data = {'status': status}
         ret = requests.post('{}:{}/testresult/{}'.format(self.config['server_url'],
                                                          self.config['server_port'],
@@ -136,6 +141,8 @@ class task_daemon(object):
             print('Updating the task result on the server failed')
 
     def _create_test_result(self, test_case):
+        if not self.task_id:
+            return
         data = {'task_id': self.task_id, 'test_case': test_case}
         ret = requests.post('{}:{}/testresult/'.format(self.config['server_url'],
                                                        self.config['server_port']),
@@ -149,6 +156,7 @@ def start_test_library(queue, backing_file, task_id, config, host, port):
     testlib = importlib.import_module(backing_file)
     # importlib.reload(testlib)
     test = getattr(testlib, backing_file)
+    timeout = 0
 
     server = RobotRemoteServer(test(config, task_id), host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
@@ -159,19 +167,25 @@ def start_test_library(queue, backing_file, task_id, config, host, port):
         try:
             item = queue.get()
         except KeyboardInterrupt:
-            server._server.shutdown()
+            server.stop()
             break
         else:
             if item == TERMINATE:
-                server._server.shutdown()
+                server.stop()
                 break
 
     while server_thread.is_alive():
         server_thread.join(0.1)
+        timeout = timeout + 0.1
+        if timeout > 2:
+            # force to break if some keyword runs too long blocking the terminate request
+            break
+
+    queue.put(TEST_END)
 
 def start_remote_server(backing_file, config, host, port=8270, task_id=None):
     queue = Queue()
-    server_process = multiprocessing.Process(target=start_test_library,
+    server_process = multiprocessing.Process(target=start_test_library, name='test_library',
                                              args=(queue, backing_file, task_id, config, host, port))
     server_process.start()
     return queue, server_process
