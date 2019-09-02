@@ -23,7 +23,7 @@ _task_update = TaskDto.task_update
 _task_cancel = TaskDto.task_cancel
 _task_stat = TaskDto.task_stat
 
-@api.route('/detail')
+@api.route('/result')
 class TaskStatistics(Resource):
     @token_required
     @organization_team_required_by_args
@@ -53,7 +53,7 @@ class ScriptDownloadList(Resource):
     @api.param('team', description='The team ID')
     @api.param('task_id', description='The task ID')
     def get(self, **kwargs):
-        """Get the result files generated during the test"""
+        """Get the test result file list"""
         task = kwargs['task']
 
         result_dir = get_test_result_path(task)
@@ -75,7 +75,7 @@ class ScriptDownload(Resource):
     @api.param('task_id', description='The task ID')
     @api.param('file', description='The file path')
     def get(self, **kwargs):
-        """Get a file generated during the test"""
+        """Get the test result file"""
         file_path = request.args.get('file', default=None)
         if not file_path:
             return error_message(EINVAL, 'Field file is required'), 400
