@@ -181,6 +181,9 @@ class EndpointDto:
         'priority': fields.Integer(),
         'task': fields.String(description="The test name"),
         'task_id': fields.String(description="The task id"),
+        'tester': fields.String(description="The task operator"),
+        'run_date': fields.DateTime(dt_format='rfc822', description="The task run date"),
+        'schedule_date': fields.DateTime(dt_format='rfc822', description="The task schedule date"),
         'status': fields.String(),
     })
     queuing_tasks = api.model('queuing_tasks', {

@@ -173,6 +173,8 @@ class EndpointController(Resource):
                     'priority': taskqueue.priority,
                     'task': taskqueue.running_task.test_suite,
                     'task_id': str(taskqueue.running_task.id),
+                    'tester': taskqueue.running_task.tester.name,
+                    'run_date': taskqueue.running_task.run_date,
                     'status': 'Running'
                 })
             for task in taskqueue.tasks:
@@ -182,6 +184,8 @@ class EndpointController(Resource):
                     'priority': task.priority,
                     'task': task.test_suite,
                     'task_id': str(task.id),
+                    'tester': task.tester.name,
+                    'schedule_date': task.schedule_date,
                     'status': 'Waiting'})
             ret.append(taskqueue_stat)
         return ret
