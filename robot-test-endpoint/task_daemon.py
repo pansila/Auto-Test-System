@@ -3,6 +3,7 @@ import importlib
 import multiprocessing
 import os
 import os.path
+import queue
 import shutil
 import signal
 import subprocess
@@ -70,7 +71,15 @@ class task_daemon(object):
         if self.running_test:
             self._update_test_result(status)
             self.running_test["queue"].put(TERMINATE)
-            self.running_test["queue"].get()
+            try:
+                ret = self.running_test["queue"].get(timeout=5)
+            except queue.Empty:
+                print('Failed to stop test, try killing it')
+                self.running_test["process"].kill()
+            else:
+                if ret != TEST_END:
+                    print('Failed to stop test due to wrong return {}, try killing it'.format(ret))
+                    self.running_test["process"].kill()
             self.running_test = None
             self.task_id = None
 
