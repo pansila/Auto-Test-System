@@ -1,6 +1,6 @@
 import argparse
 import datetime
-import multiprocessing
+import subprocess
 import os
 import re
 import queue
@@ -12,7 +12,6 @@ import threading
 import time
 from pathlib import Path
 
-import robot
 import mongoengine
 from bson import DBRef, ObjectId
 from mongoengine import connect
@@ -53,7 +52,8 @@ def event_handler_cancel_task(event):
                 taskqueue.modify(running_task=None)
                 task.modify(status='cancelled')
 
-                os.kill(proc['process'].pid, signal.SIGTERM)
+                # os.kill(proc['process'].pid, signal.SIGTERM)
+                proc['process'].kill()
                 del ROBOT_TASKS[idx]
                 break
         else:
@@ -168,20 +168,7 @@ def convert_json_to_robot_variable(args, variables, variable_file):
                         f.write('\'{}\': \'{}\', '.format(kk, v[kk]))
                 f.write('}\n')
 
-    args.extend(['--variablefile', variable_file])
-
-def run_robot_task(queue, args):
-    exit_orig = sys.exit
-    ret = 0
-    def exit_new(r):
-        nonlocal ret
-        ret = r
-    sys.exit = exit_new
-
-    robot.run_cli(args)
-
-    queue.put(ret)
-    sys.exit = exit_orig
+    args.extend(['--variablefile', str(variable_file)])
 
 def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     global ROBOT_TASKS
@@ -247,8 +234,8 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             task.save()
 
             result_dir = get_test_result_path(task)
-            args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
-            # args = ['--outputdir', str(result_dir), '--extension', 'md']
+            args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
+            # args = ['robot', '--outputdir', str(result_dir), '--extension', 'md']
             os.makedirs(result_dir)
 
             if hasattr(task, 'testcases'):
@@ -263,28 +250,35 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             args.extend(['-v', 'address_daemon:{}'.format(addr), '-v', 'port_daemon:{}'.format(port),
                         '-v', 'port_test:{}'.format(int(port)+1), '-v', 'task_id:{}'.format(task.id)])
             args.append(task.test.path)
+            print('Arguments: ' + str(args))
 
             taskqueue.modify(running_task=task)
 
-            print('Arguments: ' + str(args))
-            proc_queue_read = multiprocessing.Queue()
-            proc = multiprocessing.Process(target=run_robot_task, args=(proc_queue_read, args))
-            proc.daemon = True
-            proc.start()
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            ROBOT_TASKS.append({'task_id': task.id, 'process': p})
+            stdout, stderr = p.communicate()
+            print(stdout.decode())
 
-            ROBOT_TASKS.append({'task_id': task.id, 'process': proc, 'queue_read': proc_queue_read})
-            proc.join()
+            # tempstr = b''
+            # while p.poll() is None:
+            #     inchar = p.stdout.read(1)
+            #     if inchar:
+            #         try:
+            #             print(tempstr.decode(), end='', flush=True)
+            #             print(inchar.decode(), end='', flush=True)
+            #         except UnicodeDecodeError:
+            #             tempstr += inchar
+            #         else:
+            #             tempstr = b''
+            # else:
+            #     print(p.stdout.read().decode().rstrip())
+            #     break
 
-            try:
-                ret = proc_queue_read.get(timeout=1)
-            except queue.Empty:
-                pass
+            if p.returncode == 0:
+                task.status = 'successful'
             else:
-                if ret == 0:
-                    task.status = 'successful'
-                else:
-                    task.status = 'failed'
-                task.save()
+                task.status = 'failed'
+            task.save()
 
             taskqueue.modify(running_task=None)
 
