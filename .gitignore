@@ -116,6 +116,8 @@ temp/
 webrobot/static/results/
 webrobot/static/users/
 webrobot/upload/
-robot-test-endpoint/testlibs/
-robot-test-endpoint/resources/
-robot-test-endpoint/tmp/
+/robot-test-endpoint/testlibs/
+/robot-test-endpoint/resources/
+/robot-test-endpoint/tmp/
+/robot-test-endpoint/easy-rsa/Windows/keys
+/robot-test-endpoint/easy-rsa/Windows/vars.bat
