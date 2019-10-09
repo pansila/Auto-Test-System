@@ -114,10 +114,13 @@ class certificate_signing_request(Resource):
 
             cert_name = os.path.basename(filename).split('.')[0]
             child.sendline(line_begin + 'sign-req {}'.format(cert_name))
-            child.expect(']:')  # [y/n]: doesn't work somehow
+            child.expect(r'\[y/n\]:')
             child.sendline('y')
 
-            child.expect('[y/n]')
+            try:
+                child.expect('\[y/n\]', timeout=2)
+            except pexpect.exceptions.TIMEOUT:
+                return 'Signing certificate failed possibly due to repeated CSR requests', 404
             child.sendline('y')
 
             child.expect(line_end)
