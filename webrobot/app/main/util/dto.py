@@ -57,6 +57,12 @@ class AuthDto:
         'password': fields.String(required=True, description='The user password ')
     })
 
+class CertDto:
+    api = Namespace('cert', description='certificate/key related operations')
+    cert_key = api.model('cert_key', {
+        'test': fields.String(description='test'),
+    })
+
 class TestDto:
     api = Namespace('test', description='test management operations')
     test_cases = api.model('test_cases', {
