@@ -1,9 +1,13 @@
-import os, sys
+import argparse
+import os
+import sys
+import time
+from pathlib import Path
+
 import pexpect
 import requests
-from pathlib import Path
+
 from ruamel import yaml
-import argparse
 
 if os.name == 'nt':
     easy_rsa_path = Path('..') / 'easy-rsa' / 'Windows'
@@ -86,13 +90,15 @@ def build_req(cert_name, comm_name):
 
     child.expect(os.linesep)
 
+    time.sleep(1)        # to allow for .csr generating
+
     print('building csr completed')
 
 def certificate_signing_request(url, cert_name):
     files = {'file': open(keys_path / (cert_name + '.csr'), 'rb')}
     r = requests.post(url, files=files)
     if r.status_code != 200:
-        print('CSR failed')
+        print('CSR failed: ' + r.text)
         return
 
     if r.content:
