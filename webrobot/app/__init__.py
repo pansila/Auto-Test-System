@@ -4,6 +4,7 @@ from flask import Blueprint
 
 from .main.controller.user_controller import api as user_ns
 from .main.controller.auth_controller import api as auth_ns
+from .main.controller.cert_controller import api as cert_ns
 from .main.controller.test_controller import api as test_ns
 from .main.controller.task_controller import api as task_ns
 from .main.controller.testresult_controller import api as testresult_ns
@@ -34,6 +35,7 @@ api = Api(blueprint,
 
 api.add_namespace(user_ns)
 api.add_namespace(auth_ns)
+api.add_namespace(cert_ns)
 api.add_namespace(test_ns)
 api.add_namespace(task_ns)
 api.add_namespace(testresult_ns)
