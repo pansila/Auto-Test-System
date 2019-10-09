@@ -122,3 +122,4 @@ webrobot/upload/
 /robot-test-endpoint/tmp/
 /easy-rsa/Windows/keys
 /easy-rsa/Windows/vars.bat
+/easy-rsa/Linux/keys
