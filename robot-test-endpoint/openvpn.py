@@ -38,9 +38,9 @@ def build_req(cert_name, comm_name):
     if os.name == 'nt':
         child.sendline(line_begin + 'init-config')
         child.expect('copied.' + line_end)
-    elif os.name == 'posix':
-        child.sendline('find -not -name "*.cnf" -not -type d -exec chmod +x \{\} \\;')
-        child.expect(line_end)
+    #elif os.name == 'posix':
+    #    child.sendline('find -not -name "*.cnf" -not -type d -exec chmod +x \{\} \\;')
+    #    child.expect(line_end)
 
     if os.name == 'nt':
         child.sendline(line_begin + 'vars')
@@ -123,8 +123,8 @@ if __name__ == '__main__':
     with open('config.yml', 'r', encoding='utf-8') as f:
         g_config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
-    if force_to_build or not os.path.exists(keys_path / 'mycert1.key'):
+    if force_to_build or not os.path.exists(str(keys_path / 'mycert1.key')):
         build_req('mycert1', 'client11')
 
-    if force_to_build or not os.path.exists(keys_path / 'mycert1.crt'): 
+    if force_to_build or not os.path.exists(str(keys_path / 'mycert1.crt')):
         certificate_signing_request(g_config['server_url'] + ':' + str(g_config['server_port']) + '/cert/csr', 'mycert1')
