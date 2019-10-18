@@ -2,7 +2,9 @@ import argparse
 import os
 import sys
 import time
+import subprocess
 from pathlib import Path
+from shutil import copyfile
 
 import pexpect
 import requests
@@ -12,39 +14,46 @@ from ruamel import yaml
 if os.name == 'nt':
     easy_rsa_path = Path('..') / 'easy-rsa' / 'Windows'
     keys_path = easy_rsa_path / 'keys'
+    local_keys_path = Path('data') / 'keys'
+    line_begin = ''
+    line_end = os.linesep * 2
 elif os.name == 'posix':
     easy_rsa_path = Path('..') / 'easy-rsa' / 'Linux'
     keys_path = easy_rsa_path / 'keys'
+    local_keys_path = Path('data') / 'keys'
+    line_begin = './'
+    line_end = os.linesep
 else:
     print('Unsupported platform')
     sys.exit(1)
 
-def build_req(cert_name, comm_name):
+
+def get_pexpect_child():
     if os.name == 'nt':
         from pexpect import popen_spawn
 
-        line_begin = ''
-        line_end = os.linesep * 2
         shell = 'cmd.exe'
         child = popen_spawn.PopenSpawn(shell)
         child.expect('>')
         child.sendline('chcp 65001')
         child.expect(line_end)
     elif os.name == 'posix':
-        line_begin = './'
-        line_end = os.linesep
         shell = '/bin/bash'
         child = pexpect.spawn(shell)
 
+    return child
+
+def build_req(cert_name, comm_name):
+    child = get_pexpect_child()
     child.sendline('cd {}'.format(easy_rsa_path))
     child.expect(line_end)
 
     if os.name == 'nt':
         child.sendline(line_begin + 'init-config')
         child.expect('copied.' + line_end)
-    elif os.name == 'posix':
-        child.sendline('find -not -name "*.cnf" -not -type d -exec chmod +x \{\} \\;')
-        child.expect(line_end)
+    # elif os.name == 'posix':
+    #     child.sendline('find -not -name "*.cnf" -not -type d -exec chmod +x \{\} \\;')
+    #     child.expect(line_end)
 
     if os.name == 'nt':
         child.sendline(line_begin + 'vars')
@@ -54,6 +63,8 @@ def build_req(cert_name, comm_name):
 
     child.sendline(line_begin + 'clean-all')
     child.expect(line_end)
+
+    time.sleep(1)
 
     child.sendline(line_begin + 'build-req {}'.format(cert_name))
     child.expect(']:')  # Country Name
@@ -107,6 +118,16 @@ def certificate_signing_request(url, cert_name):
     else:
         print('CSR error')
 
+def start_vpn():
+    if os.name == 'nt':
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, "Software\\OpenVPN") as key:
+            value, type = winreg.QueryValueEx(key, '')
+            os.environ['PATH'] += ';' + value + '\\bin'
+            subprocess.run(['openvpn.exe', 'data\\Windows\\client.ovpn'], check=True)
+    elif os.name == 'posix':
+        subprocess.run(['openvpn', 'data/Linux/client.conf'], check=True)
+
 def str2bool(v):
     if isinstance(v, bool):
        return v
@@ -134,3 +155,17 @@ if __name__ == '__main__':
 
     if force_to_build or not os.path.exists(str(keys_path / 'mycert1.crt')):
         certificate_signing_request(g_config['server_url'] + ':' + str(g_config['server_port']) + '/cert/csr', 'mycert1')
+
+        if not os.path.exists(str(keys_path / 'mycert1.crt')):
+            print('Certificate signing failed')
+            sys.exit(1)
+        else:
+            print('Certificate signing succeeded')
+
+    if force_to_build or not os.path.exists(str(local_keys_path / 'mycert1.crt')):
+        print('Copying keys to the configuration folder')
+        copyfile(keys_path / 'mycert1.crt', local_keys_path / 'mycert1.crt')
+        copyfile(keys_path / 'ca.crt', local_keys_path / 'ca.crt')
+        copyfile(keys_path / 'mycert1.key', local_keys_path / 'mycert1.key')
+
+    start_vpn()

@@ -82,6 +82,20 @@ if not os.path.exists(keys_path / 'ca.key'):
 
     child.expect(os.linesep)
 
+# if not os.path.exists(keys_path / 'ta.key'):
+#     child = get_pexpect_child()
+#     child.sendline('cd {}'.format(easy_rsa_path))
+#     child.expect(line_end)
+
+#     if os.name == 'nt':
+#         child.sendline(line_begin + 'vars')
+#     elif os.name == 'posix':
+#         child.sendline('source vars')
+#     child.expect(line_end)
+
+#     child.sendline(line_begin + 'build-ta')
+#     child.expect(os.linesep)
+
 @api.route('/csr')
 class certificate_signing_request(Resource):
     @api.doc('certificate signing request')
