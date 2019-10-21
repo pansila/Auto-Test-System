@@ -118,6 +118,18 @@ def certificate_signing_request(url, cert_name):
     else:
         print('CSR error')
 
+def certificate_authority_request(url, cert_name):
+    r = requests.get(url)
+    if r.status_code != 200:
+        print('CA request failed: ' + r.text)
+        return
+
+    if r.content:
+        with open(keys_path / (cert_name + '.crt'), 'wb') as ff:
+            ff.write(r.content)
+    else:
+        print('CA request error')
+
 def start_vpn():
     if os.name == 'nt':
         import winreg
@@ -138,6 +150,9 @@ def str2bool(v):
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
 
+def is_file_valid(file):
+    return os.path.exists(file) and os.path.getsize(file) > 0
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--force', '-f', type=str2bool, nargs='?', const=True, default=False,
@@ -145,27 +160,44 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     force_to_build = args.force
+    update = False
 
     g_config = None
     with open('config.yml', 'r', encoding='utf-8') as f:
         g_config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
-    if force_to_build or not os.path.exists(str(keys_path / 'mycert1.key')):
+    if force_to_build or not is_file_valid(str(keys_path / 'mycert1.key')) or \
+            not is_file_valid(str(keys_path / 'mycert1.csr')):
         build_req('mycert1', 'client11')
+        if is_file_valid(str(keys_path / 'mycert1.key')) and is_file_valid(str(keys_path / 'mycert1.csr')):
+            print('Certificate request building succeeded')
+            update = True
+        else:
+            print('Certificate request building failed')
+            sys.exit(1)
 
-    if force_to_build or not os.path.exists(str(keys_path / 'mycert1.crt')):
+    if force_to_build or not is_file_valid(str(keys_path / 'mycert1.crt')):
         certificate_signing_request(g_config['server_url'] + ':' + str(g_config['server_port']) + '/cert/csr', 'mycert1')
-
-        if not os.path.exists(str(keys_path / 'mycert1.crt')):
+        if is_file_valid(str(keys_path / 'mycert1.crt')):
+            print('Certificate signing succeeded')
+            update = True
+        else:
             print('Certificate signing failed')
             sys.exit(1)
-        else:
-            print('Certificate signing succeeded')
 
-    if force_to_build or not os.path.exists(str(local_keys_path / 'mycert1.crt')):
+    if force_to_build or not is_file_valid(str(keys_path / 'ca1.crt')):
+        certificate_authority_request(g_config['server_url'] + ':' + str(g_config['server_port']) + '/cert/ca', 'ca1')
+        if is_file_valid(str(keys_path / 'ca1.crt')):
+            print('Certificate authority request succeeded')
+            update = True
+        else:
+            print('Certificate authority request failed')
+            sys.exit(1)
+
+    if force_to_build or update:
         print('Copying keys to the configuration folder')
         copyfile(keys_path / 'mycert1.crt', local_keys_path / 'mycert1.crt')
-        copyfile(keys_path / 'ca.crt', local_keys_path / 'ca.crt')
+        copyfile(keys_path / 'ca1.crt', local_keys_path / 'ca.crt')
         copyfile(keys_path / 'mycert1.key', local_keys_path / 'mycert1.key')
 
     start_vpn()
