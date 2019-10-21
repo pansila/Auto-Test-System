@@ -30,7 +30,7 @@ psycopg2 = {version = "==2.7.3.2",index = "piwheels"}
 pycparser = {version = "==2.18",index = "piwheels"}
 python-dateutil = {version = "==2.6.1",index = "piwheels"}
 python-editor = {version = "==1.0.3",index = "piwheels"}
-python-engineio = {version = "==2.0.2",index = "piwheels"}
+python-engineio = {version = "==3.8.2.post1",index = "piwheels"}
 python-socketio = {version = "==1.8.4",index = "piwheels"}
 pytz = {version = "==2017.3",index = "piwheels"}
 six = {version = "==1.11.0",index = "piwheels"}
