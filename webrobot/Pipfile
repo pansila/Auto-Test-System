@@ -54,7 +54,7 @@ requests = {index = "piwheels",version = "==2.21.0"}
 robotframework-excel = {index = "piwheels",version = "==1.0.0b4"}
 urllib3 = {index = "piwheels",version = "==1.24.2"}
 pymongo = {index = "piwheels",version = "==3.8.0"}
-pillow = {index = "piwheels",version = "==6.0.0"}
+pillow = {index = "piwheels",version = "==6.2.0"}
 pexpect = {index = "piwheels",version = "==4.7.0"}
 
 [requires]
