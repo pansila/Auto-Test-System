@@ -8,9 +8,11 @@ import shutil
 import signal
 import subprocess
 import sys
+import socket
 import tarfile
 import threading
 import time
+from contextlib import closing
 from distutils import dir_util
 from multiprocessing import Queue
 from pathlib import Path
@@ -48,8 +50,18 @@ class task_daemon(object):
 
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
+    def __check_port(self):
+        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            sock.settimeout(2)
+            result = sock.connect_ex((self.config["host_daemon"], self.config["port_test"]))
+            if result == 0:
+                return False
+            else:  # 10061 ususally
+                return True
+        return True
+
     def start_test(self, test_case, backing_file, task_id=None):
-        # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled
+        # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
         self.stop_test('', 'ABORT')
 
         if backing_file.endswith(".py"):
@@ -58,6 +70,9 @@ class task_daemon(object):
         self.task_id = task_id
         self._download(backing_file, self.task_id)
         self._verify(backing_file)
+
+        if not self.__check_port():
+            raise AssertionError('Port is used')
 
         server_queue, server_process = start_remote_server(backing_file,
                                     self.config,
@@ -75,11 +90,11 @@ class task_daemon(object):
                 ret = self.running_test["queue"].get(timeout=5)
             except queue.Empty:
                 print('Failed to stop test, try killing it')
-                self.running_test["process"].kill()
+                self.running_test["process"].terminate()
             else:
                 if ret != TEST_END:
                     print('Failed to stop test due to wrong return {}, try killing it'.format(ret))
-                    self.running_test["process"].kill()
+                    self.running_test["process"].terminate()
             self.running_test = None
             self.task_id = None
 
