@@ -106,12 +106,12 @@ class ScriptManagement(Resource):
 
         if content or content == '':
             if script_type == 'user_scripts':
-                content = re.sub(r'\\([{}_])', r'\1', content)
+                content = re.sub(r'\\([{}*_\.])', r'\1', content)
             elif script_type == 'backing_scripts':
                 content = re.sub(r'\r\n', '\n', content)
 
             if basename:
-                with open(root / script, 'w') as f:
+                with open(root / script, 'w', encoding='utf-8') as f:
                     f.write(content)
 
         if new_name:
@@ -123,9 +123,10 @@ class ScriptManagement(Resource):
 
         if basename and script_type == 'user_scripts':
             _script = str(Path(dirname) / new_name) if new_name else script
-            ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
-            if ret:
-                return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+            if _script.endswith('.md'):
+                ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
+                if ret:
+                    return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
 
         return error_message(SUCCESS)
 

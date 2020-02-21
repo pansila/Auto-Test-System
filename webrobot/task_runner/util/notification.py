@@ -46,6 +46,9 @@ def send_email(task):
     except ConnectionRefusedError:
         print('SMTP server connecting refused')
         return
+    except socket.gaierror:
+        print('Network is not available')
+        return
 
     # server.starttls()
     # server.set_debuglevel(1)

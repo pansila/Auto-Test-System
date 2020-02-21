@@ -8,9 +8,16 @@ def make_tarfile(output_filename, source_dir):
     if output_filename[-2:] != 'gz':
         output_filename = output_filename + '.tar.gz'
     with tarfile.open(output_filename, "w:gz") as tar:
-        tar.add(source_dir, arcname=os.path.basename(source_dir))
+        tar.add(source_dir, arcname='.')
 
     return output_filename
+
+def empty_folder(folder):
+    for root, dirs, files in os.walk(folder):
+        for f in files:
+            os.unlink(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
 
 def pack_files(filename, src, dst):
     if not isinstance(dst, Path):
@@ -22,12 +29,8 @@ def pack_files(filename, src, dst):
         print('Source files {} do not exist'.format(src))
         return None
 
-    tmp_dir = dst / 'files'
     try:
-        if (os.path.exists(tmp_dir)):
-            shutil.rmtree(tmp_dir)
-        shutil.copytree(src, tmp_dir)
-        output = make_tarfile(output, tmp_dir)
+        output = make_tarfile(output, src)
     except Exception as e:
         print(e)
         return None

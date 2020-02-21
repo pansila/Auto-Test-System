@@ -257,7 +257,10 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
             ROBOT_TASKS.append({'task_id': task.id, 'process': p})
             stdout, stderr = p.communicate()
-            print(stdout.decode())
+            try:
+                print(stdout.decode())
+            except UnicodeDecodeError:
+                print(stdout)
 
             # tempstr = b''
             # while p.poll() is None:

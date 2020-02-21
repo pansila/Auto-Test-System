@@ -110,12 +110,11 @@ report.html
 log.html
 .vscode/
 *.tgz
-temp/
+/temp/
 .mypy_cache/
 /migrations
-webrobot/static/results/
-webrobot/static/users/
-webrobot/upload/
+/webrobot/static/
+/webrobot/upload/
 /robot-test-endpoint/testlibs/
 /robot-test-endpoint/resources/
 /robot-test-endpoint/tmp/
