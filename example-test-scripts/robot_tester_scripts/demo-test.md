@@ -1,36 +1,28 @@
-This is a demo test, it demonstrates the potential to run a robot test in a markdown file.
+# This test demonstrates how you can run a robot test in a markdown file.
 
-### Setup for all test cases
-| Settings | Value | Value | Value | Value | Value |
-|---| ---|---|---|---|---|
-| Library | Remote | ${remote_daemon_address} | 10 | WITH NAME | EndpointDaemon1 |
+### Every test data file needs to include the `setup.robot` which does some magic work to be able to run the test
+| Settings | Value |
+| -------- | ----- |
+| Resource | setup.robot |
 
-| Variables | Value |
-|---|---|
-| ${task_id} | will be automatically filled by task runner |
-| ${address_daemon} | 127.0.0.1 |
-| ${port_daemon} | 8270 |
-| ${port_test} | 8271 |
-| ${remote_daemon_address} | http://${address_daemon}:${port_daemon} |
-| ${remote_test_address} | http://${address_daemon}:${port_test} |
-| ${echo_message} | goodbye |
+| Variables | Value | Value |
+| --------- | ----- | ----- |
+| ${echo_message} | goodbye |  |
+| ${asdfasdf} | goodbye |  |
+| @{test_list} | asdf | asdfa |
+| ... | wsesdf | sdfsdf |
+| &{test_dict} | asdf=1231 | asdfa=12312 |
+| ... | sdfsdf=11111 | sdfssdf=12312 |
 
-| Keywords | Value | Value | Value | Value | Value |
-|---| ---|---|---|---|---|
-| Setup Remote |
-| | [Arguments] | ${daemon} | ${backing file} | ${testlib} |
-| | Run Keyword | ${daemon}.start test | ${TEST NAME} | ${backing file} | ${task_id} |
-| | Import Library | Remote | ${remote_test_address} | WITH NAME | ${testlib} |
-| Teardown Remote |
-| | [Arguments] | ${daemon} |
-| | Run Keyword | ${daemon}.stop test | ${TEST NAME} | ${TEST STATUS} |
+### Every test case needs to include `Setup` and `Teardown` sections which ensure to import the test and start and stop it properly
 
-### Demo Test
+Keyword `Setup Remote` is introduced by `setup.robot`. It takes two arguments, the first one is the execution script that runs on the test endpoint, the second one is the test library alias which is used hereafter to call its keywords.
+Keyword `Teardown Remote` is also introduced by `setup.robot`. It closes the test with some necessary work in the background.
 
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
-|---|---|---|---|---|---|---|
-| hello world |
-| | [Setup] | Setup Remote | EndpointDaemon1 | demotest.py | testlib |
-| | [Teardown] | Teardown Remote | EndpointDaemon1 |
-| | ${ret} = | testlib.hello world | ${echo_message} |
-| | Should be equal | ${ret} | ${echo_message} |
+| ---------- | ------ | -------- | -------- | -------- | -------- | -------- |
+| hello world |  |  |  |  |  |  |
+|  | [Setup] | Setup Remote | demotest.py | testlib |  |  |
+|  | [Teardown] | Teardown Remote |  |  |  |  |
+|  | ${ret} = | testlib.hello world | ${echo_message} |  |  |  |
+|  | Should be equal | ${ret} | ${echo_message} |  |  |  |
