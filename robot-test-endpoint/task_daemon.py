@@ -13,9 +13,11 @@ import tarfile
 import threading
 import time
 from contextlib import closing
-from distutils import dir_util
+from io import BytesIO
 from multiprocessing import Queue
 from pathlib import Path
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
 import requests
 from bson.objectid import ObjectId
@@ -26,11 +28,32 @@ from robotremoteserver import RobotRemoteServer
 from ruamel import yaml
 
 DOWNLOAD_LIB = "testlibs"
-TEMP_LIB = "files"
 TERMINATE = 1
 TEST_END = 2
 
 g_config = {}
+
+def stop_process(queue, process):
+    if not queue or not process:
+        return
+    queue.put(TERMINATE)
+    time.sleep(0.1)
+    try:
+        ret = queue.get(timeout=5)
+    except queue.Empty:
+        print('Failed to stop test, try killing it')
+        process.terminate()
+    else:
+        if ret != TEST_END:
+            print('Failed to stop process due to wrong return {}, try killing it'.format(ret))
+            process.terminate()
+
+def empty_folder(folder):
+    for root, dirs, files in os.walk(folder):
+        for f in files:
+            os.unlink(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
 
 class task_daemon(object):
 
@@ -74,70 +97,46 @@ class task_daemon(object):
         if not self.__check_port():
             raise AssertionError('Port is used')
 
+        self._create_test_result(test_case)
         server_queue, server_process = start_remote_server(backing_file,
                                     self.config,
                                     host=self.config["host_daemon"],
                                     port=self.config["port_test"],
                                     task_id=self.task_id)
         self.running_test = {"queue": server_queue, "process": server_process}
-        self._create_test_result(test_case)
 
     def stop_test(self, test_case, status):
         if self.running_test:
             self._update_test_result(status)
-            self.running_test["queue"].put(TERMINATE)
-            try:
-                ret = self.running_test["queue"].get(timeout=5)
-            except queue.Empty:
-                print('Failed to stop test, try killing it')
-                self.running_test["process"].terminate()
-            else:
-                if ret != TEST_END:
-                    print('Failed to stop test due to wrong return {}, try killing it'.format(ret))
-                    self.running_test["process"].terminate()
+            stop_process(self.running_test["queue"], self.running_test["process"])
             self.running_test = None
             self.task_id = None
 
-    def _download_file(self, endpoint, download_dir):
-        try:
-            shutil.rmtree(download_dir)
-        except FileNotFoundError:
-            pass
+    def _download_file(self, endpoint, dest_dir):
+        empty_folder(dest_dir)
 
-        temp_dir = Path(self.config['tmp_dir'])
-        tarball = 'download.tar.gz'
         url = "{}:{}/{}".format(self.config["server_url"], self.config["server_port"], endpoint)
-        print('Start to download file {} from {}'.format(tarball, url))
+        print('Start to download file from {}'.format(url))
 
         r = requests.get(url)
         if r.status_code == 404:
-            raise AssertionError('Downloading file {} failed'.format(tarball))
+            raise AssertionError('Downloading file failed')
 
         if r.status_code == 406:
             print('No files need to download')
             return
 
-        output = temp_dir / tarball
-        with open(output, 'wb') as f:
-            f.write(r.content)
-        print('Downloading test file {} succeeded'.format(tarball))
+        temp = BytesIO()
+        temp.write(r.content)
+        print('Downloading test file succeeded')
 
-        with tarfile.open(output) as tarFile:
-            tarFile.extractall(temp_dir)
-
-        package_temp_dir = temp_dir / TEMP_LIB
-        shutil.copytree(package_temp_dir, download_dir)
-        shutil.rmtree(package_temp_dir)
+        temp.seek(0)
+        with tarfile.open(fileobj=temp) as tarFile:
+            tarFile.extractall(dest_dir)
 
     def _download(self, testcase, task_id):
         if testcase.endswith(".py"):
             testcase = testcase[0:-3]
-
-        try:
-            shutil.rmtree(self.config['tmp_dir'])
-        except FileNotFoundError:
-            pass
-        os.mkdir(self.config['tmp_dir'])
 
         self._download_file('test/script?id={}&test={}'.format(task_id, testcase), self.config["test_dir"])
         if task_id:
@@ -257,29 +256,46 @@ def start_daemon(config_file = "config.yml", host=None, port=None):
             g_config['server_url'] = g_config['server_url'][0:-1]
 
     server_queue, server_process = start_remote_server('task_daemon', g_config, host=g_config["host_daemon"], port=g_config["port_daemon"])
-    while server_process.is_alive():
-        try:
-            server_process.join(1)
-        except KeyboardInterrupt:
-            break
+    return server_queue, server_process
+
+class Config_Handler(FileSystemEventHandler):
+    def __init__(self, queue, process):
+        self.queue = queue
+        self.process = process
+
+    def on_modified(self, event):
+        if not event.is_directory and event.src_path.endswith("config.yml"):
+            stop_process(self.queue, self.process)
+            self.queue, self.process = start_daemon(host=host, port=port)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str,
                         help='the network interface for daemon to listen',
-                        default='127.0.0.1')
+                        default='0.0.0.0')
     parser.add_argument('--port', type=int,
                         help='the port for daemon to listen, the test port will be next it',
                         default=8270)
     args = parser.parse_args()
 
-    host, port = args.host, args.port
-
     try:
-        start_daemon(host=host, port=port)
+        queue, process = start_daemon(host=args.host, port=args.port)
     except OSError as err:
         print(err)
-        print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+        print("Please ensure IP {} is configured correctly".format(g_config["host_daemon"]))
+        sys.exit(1)
+
+    handler = Config_Handler(queue, process)
+    ob = Observer()
+    watch = ob.schedule(handler, path='.')
+    ob.start()
+
+    while ob.is_alive():
+        try:
+            ob.join(1)
+        except KeyboardInterrupt:
+            ob.stop()
+            break
 
     sys.exit(0)
 

@@ -87,7 +87,7 @@ class device_test(rest_api):
                                    "qc\n".format(firmwarePath, flashAddr, firmwarePath, flashAddr))
                 with open(script, 'w') as f:
                     f.write(script_contents)
-                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1', '-CommanderScript', str(script)]
+                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1', '-JTAGConf', '-1,-1', '-CommanderScript', str(script)]
                 subprocess.run(cmd, check=True)
                 break
             print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
