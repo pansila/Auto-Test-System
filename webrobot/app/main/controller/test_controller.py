@@ -51,7 +51,10 @@ class ScriptDownload(Resource):
         scripts_root = get_back_scripts_root(task)
 
         results_tmp = result_dir / 'temp'
-        os.mkdir(results_tmp)
+        try:
+            os.mkdir(results_tmp)
+        except FileExistsError:
+            pass
         script_file = scripts_root / (test_suite + '.py')
         if not os.path.exists(script_file):
             return error_message(ENOENT, "file {} does not exist".format(script_file)), 404

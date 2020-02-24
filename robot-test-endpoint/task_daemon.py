@@ -259,14 +259,16 @@ def start_daemon(config_file = "config.yml", host=None, port=None):
     return server_queue, server_process
 
 class Config_Handler(FileSystemEventHandler):
-    def __init__(self, queue, process):
+    def __init__(self, queue, process, host, port):
         self.queue = queue
         self.process = process
+        self.host = host
+        self.port = port
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith("config.yml"):
             stop_process(self.queue, self.process)
-            self.queue, self.process = start_daemon(host=host, port=port)
+            self.queue, self.process = start_daemon(host=self.host, port=self.port)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -285,7 +287,7 @@ if __name__ == '__main__':
         print("Please ensure IP {} is configured correctly".format(g_config["host_daemon"]))
         sys.exit(1)
 
-    handler = Config_Handler(queue, process)
+    handler = Config_Handler(queue, process, args.host, args.port)
     ob = Observer()
     watch = ob.schedule(handler, path='.')
     ob.start()
