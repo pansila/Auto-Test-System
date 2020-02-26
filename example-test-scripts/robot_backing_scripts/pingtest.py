@@ -20,7 +20,7 @@ class pingtest(wifi_basic_test):
 
         if elapsedTime == self.TIMEOUT:
             raise AssertionError('Ping timeout')
-        if len(groups) != 2:
+        if not groups or len(groups) != 2:
             raise AssertionError('Searching ping result failed')
         if groups[0] != times:
             raise AssertionError('Except pinging {0} times, but sent {1} packets only'.format(times, groups[0]))

@@ -14,7 +14,7 @@ import threading
 import time
 from contextlib import closing
 from io import BytesIO
-from multiprocessing import Queue
+from multiprocessing import Queue, Process, current_process
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
@@ -30,22 +30,23 @@ from ruamel import yaml
 DOWNLOAD_LIB = "testlibs"
 TERMINATE = 1
 TEST_END = 2
+HEARTBEAT = 3
 
 g_config = {}
 
-def stop_process(queue, process):
-    if not queue or not process:
+def stop_process(proc_queue, process):
+    if not proc_queue or not process or not process.is_alive():
         return
-    queue.put(TERMINATE)
+    proc_queue.put(TERMINATE)
     time.sleep(0.1)
     try:
-        ret = queue.get(timeout=5)
+        ret = proc_queue.get(timeout=5)
     except queue.Empty:
-        print('Failed to stop test, try killing it')
+        print('Failed to stop test, killing it')
         process.terminate()
     else:
         if ret != TEST_END:
-            print('Failed to stop process due to wrong return {}, try killing it'.format(ret))
+            print('Failed to stop process, wrong return {}, killing it'.format(ret))
             process.terminate()
 
 def empty_folder(folder):
@@ -55,12 +56,22 @@ def empty_folder(folder):
         for d in dirs:
             shutil.rmtree(os.path.join(root, d))
 
+def check_port(host, port):
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+        try:
+            result = sock.bind((host, port))
+        except OSError:
+            return False
+        else:
+            return True
+
 class task_daemon(object):
 
     def __init__(self, config, task_id):
         self.running_test = None
         self.config = config
         self.task_id = None
+        self.child_id = 0
 
         try:
             os.makedirs(self.config["test_dir"])
@@ -73,16 +84,6 @@ class task_daemon(object):
 
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
-    def __check_port(self):
-        with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-            sock.settimeout(2)
-            result = sock.connect_ex((self.config["host_daemon"], self.config["port_test"]))
-            if result == 0:
-                return False
-            else:  # 10061 ususally
-                return True
-        return True
-
     def start_test(self, test_case, backing_file, task_id=None):
         # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
         self.stop_test('', 'ABORT')
@@ -93,8 +94,9 @@ class task_daemon(object):
         self.task_id = task_id
         self._download(backing_file, self.task_id)
         self._verify(backing_file)
+        self.child_id += 1
 
-        if not self.__check_port():
+        if not check_port(self.config["host_daemon"], self.config["port_test"]):
             raise AssertionError('Port is used')
 
         self._create_test_result(test_case)
@@ -102,8 +104,11 @@ class task_daemon(object):
                                     self.config,
                                     host=self.config["host_daemon"],
                                     port=self.config["port_test"],
-                                    task_id=self.task_id)
+                                    task_id=self.task_id,
+                                    id=self.child_id)
         self.running_test = {"queue": server_queue, "process": server_process}
+
+        time.sleep(0.1)  # to avoid connection refuse issue
 
     def stop_test(self, test_case, status):
         if self.running_test:
@@ -187,21 +192,20 @@ class task_daemon(object):
             print('Creating the task result on the server failed')
 
 # Don't run RobotRemoteServer directly as there is a thread.lock pickling issue
-def start_test_library(queue, backing_file, task_id, config, host, port):
+def start_test_library(proc_queue, backing_file, task_id, config, host, port):
     # importlib.invalidate_caches()
     testlib = importlib.import_module(backing_file)
     # importlib.reload(testlib)
     test = getattr(testlib, backing_file)
-    timeout = 0
 
     server = RobotRemoteServer(test(config, task_id), host=host, serve=False, port=port)
     server_thread = threading.Thread(target=server.serve)
     server_thread.daemon = True
     server_thread.start()
 
-    while True:
+    while server_thread.is_alive():
         try:
-            item = queue.get()
+            item = proc_queue.get()
         except KeyboardInterrupt:
             server.stop()
             break
@@ -210,18 +214,11 @@ def start_test_library(queue, backing_file, task_id, config, host, port):
                 server.stop()
                 break
 
-    while server_thread.is_alive():
-        server_thread.join(0.1)
-        timeout = timeout + 0.1
-        if timeout > 2:
-            # force to break if some keyword runs too long blocking the terminate request
-            break
+    proc_queue.put(TEST_END)
 
-    queue.put(TEST_END)
-
-def start_remote_server(backing_file, config, host, port=8270, task_id=None):
+def start_remote_server(backing_file, config, host, port=8270, task_id=None, id=0):
     queue = Queue()
-    server_process = multiprocessing.Process(target=start_test_library, name='test_library',
+    server_process = Process(target=start_test_library, name='test_library {}'.format(id),
                                              args=(queue, backing_file, task_id, config, host, port))
     server_process.start()
     return queue, server_process
@@ -259,16 +256,12 @@ def start_daemon(config_file = "config.yml", host=None, port=None):
     return server_queue, server_process
 
 class Config_Handler(FileSystemEventHandler):
-    def __init__(self, queue, process, host, port):
-        self.queue = queue
-        self.process = process
-        self.host = host
-        self.port = port
+    def __init__(self):
+        self.restart = True
 
     def on_modified(self, event):
         if not event.is_directory and event.src_path.endswith("config.yml"):
-            stop_process(self.queue, self.process)
-            self.queue, self.process = start_daemon(host=self.host, port=self.port)
+            self.restart = True
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -280,24 +273,33 @@ if __name__ == '__main__':
                         default=8270)
     args = parser.parse_args()
 
-    try:
-        queue, process = start_daemon(host=args.host, port=args.port)
-    except OSError as err:
-        print(err)
-        print("Please ensure IP {} is configured correctly".format(g_config["host_daemon"]))
-        sys.exit(1)
-
-    handler = Config_Handler(queue, process, args.host, args.port)
+    proc_queue, process = None, None
+    handler = Config_Handler()
     ob = Observer()
     watch = ob.schedule(handler, path='.')
     ob.start()
 
+    dead = 0
     while ob.is_alive():
+        if handler.restart:
+            stop_process(proc_queue, process)
+            proc_queue, process = start_daemon(host=args.host, port=args.port)
+            handler.restart = False
+
         try:
-            ob.join(1)
+            process.join(1)
         except KeyboardInterrupt:
             ob.stop()
+            stop_process(proc_queue, process)
             break
+
+        if not process.is_alive():
+            print('Error: Daemon is dead, stopping')
+            ob.stop()
+            break
+    else:
+        ob.stop()
+        stop_process(proc_queue, process)
 
     sys.exit(0)
 
