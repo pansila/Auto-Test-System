@@ -53,7 +53,7 @@ def event_handler_cancel_task(event):
                 task.modify(status='cancelled')
 
                 # os.kill(proc['process'].pid, signal.SIGTERM)
-                proc['process'].kill()
+                proc['process'].terminate()
                 del ROBOT_TASKS[idx]
                 break
         else:
@@ -111,12 +111,9 @@ def event_loop_helper(organization=None, team=None):
     thread.daemon = True
     thread.start()
 
-    while True:
+    while thread.is_alive():
+        eventqueue.modify(test_alive=True)
         thread.join(1)
-        if thread.is_alive():
-            eventqueue.modify(test_alive=True)
-        else:
-            break
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -254,7 +251,8 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
 
             taskqueue.modify(running_task=task)
 
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0)
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
+                                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
             ROBOT_TASKS.append({'task_id': task.id, 'process': p})
             stdout, stderr = p.communicate()
             try:
