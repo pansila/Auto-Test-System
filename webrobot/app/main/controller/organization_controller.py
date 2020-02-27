@@ -7,7 +7,6 @@ from bson import ObjectId
 
 from app.main.util.decorator import token_required
 from app.main.model.database import *
-from task_runner.runner import start_threads
 
 from ..service.auth_helper import Auth
 from ..util.dto import OrganizationDto
@@ -302,8 +301,6 @@ class OrganizationJoin(Resource):
             organization.modify(push__members=user)
         if organization not in user.organizations:
             user.modify(push__organizations=organization)
-
-        start_threads(user)
 
 @api.route('/users')
 class OrganizationUsers(Resource):

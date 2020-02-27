@@ -2,7 +2,6 @@ from flask import request
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
-from task_runner.runner import start_threads
 
 from ..model.database import *
 from ..util.dto import EndpointDto
@@ -132,8 +131,6 @@ class EndpointController(Resource):
         endpoint.enable = data.get('enable', False)
         endpoint.tests = endpoint_tests
         endpoint.save()
-
-        start_threads(user)
 
         return error_message(SUCCESS), 200
 

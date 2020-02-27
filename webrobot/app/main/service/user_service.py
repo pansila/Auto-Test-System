@@ -6,7 +6,6 @@ from pathlib import Path
 from app.main import db
 from app.main.model.database import User, Organization
 
-from task_runner.runner import start_threads
 from ..config import get_config
 from ..util.errors import *
 from ..util.identicon import *
@@ -55,8 +54,6 @@ def save_new_user(data, admin=None):
             organization.save()
             new_user.organizations = [organization]
         new_user.save()
-
-        start_threads(new_user)
 
         return generate_token(new_user)
     else:

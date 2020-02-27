@@ -25,7 +25,7 @@ from app.main.util.get_path import get_test_result_path, get_upload_files_root
 
 
 ROBOT_TASKS = []
-
+QUIT_AFTER_IDLE_TIME = 1800  # seconds
 
 def event_handler_cancel_task(event):
     global ROBOT_TASKS
@@ -66,10 +66,15 @@ def event_handler_update_user_script(event):
     user = event.message['user']
     db_update_test(script=script, user=user)
 
+def event_handler_exit_event_task(event):
+    org_name = event.team.organization.name + '-' + event.team.name if event.team else event.organization.name
+    print('Exit the event loop due to idle: {}'.format(org_name))
+    return True
 
 EVENT_HANDLERS = {
     EVENT_CODE_CANCEL_TASK: event_handler_cancel_task,
-    EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script
+    EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script,
+    EVENT_CODE_EXIT_EVENT_TASK: event_handler_exit_event_task
 }
 
 def event_loop(organization=None, team=None):
@@ -81,23 +86,34 @@ def event_loop(organization=None, team=None):
     print('Start event loop: {}'.format(org_name))
 
     while True:
-        event = eventqueue.pop()
-        if event:
-            if isinstance(event, DBRef):
-                print('event {} has been deleted, ignore it'.format(event.id))
-                continue
-
-            print('\n{}: Start to process event {} ...'.format(org_name, event.code))
-            try:
-                EVENT_HANDLERS[event.code](event)
-            except KeyError:
-                print('Unknown message: %s' % event.code)
-
         # to_delete is roloaded implicitly in eventqueue.pop()
         if eventqueue.to_delete:
             eventqueue.delete()
             print('Exit the event loop: {}'.format(org_name))
             break
+
+        event = eventqueue.pop()
+        if not event:
+            continue
+
+        if isinstance(event, DBRef):
+            print('event {} has been deleted, ignore it'.format(event.id))
+            continue
+
+        event.organization = organization
+        event.team = team
+        event.save()
+
+        print('\n{}: Start to process event {} ...'.format(org_name, event.code))
+        try:
+            ret = EVENT_HANDLERS[event.code](event)
+            event.status = 'Processed'
+            event.save()
+        except KeyError:
+            print('Unknown message: %s' % event.code)
+        if ret:
+            break
+
         time.sleep(1)
 
 def event_loop_helper(organization=None, team=None):
@@ -186,6 +202,11 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
         print('Endpoint not found')
         return
 
+    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+    if not eventqueue:
+        print('Event queue not found')
+        return
+
     org_name = team.organization.name + '-' + team.name if team else organization.name
     print('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
@@ -210,7 +231,9 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             # "break" to start over to search for tasks from top priority task queue
             task = taskqueue.pop()
             if not task:
+                taskqueue.update(inc__idle_counter=1)
                 continue
+            taskqueue.update(idle_counter=0)
             if isinstance(task, DBRef):
                 print('task {} has been deleted, ignore it'.format(task.id))
                 break
@@ -301,6 +324,19 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
 
             notification_chain_call(task)
             break
+        else:
+            min_idle = sys.maxsize
+            for taskqueue in taskqueues:
+                if taskqueue.idle_counter < min_idle:
+                    min_idle = taskqueue.idle_counter
+            if min_idle > QUIT_AFTER_IDLE_TIME:
+                event = Event(code=EVENT_CODE_EXIT_EVENT_TASK)
+                event.save()
+                if not eventqueue.push(event):
+                    print('Failed to push the event')
+                    break
+                print('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
+                break
         time.sleep(1)
 
 def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None):
@@ -365,9 +401,10 @@ def prepare_to_run(organization=None, team=None):
 
     return 0
 
-def monitor_threads(organization=None, team=None):
+def monitor_threads(task=None, organization=None, team=None):
+    threads = []
     org_name = team.organization.name + '-' + team.name if team else organization.name
-    print('Start monitoring tasks for {}'.format(org_name))
+    print('Start monitoring threads for {}'.format(org_name))
     # ret = prepare_to_run(organization, team)
     # if ret:
     #     return ret
@@ -380,12 +417,14 @@ def monitor_threads(organization=None, team=None):
     time.sleep(3) # test_alive will be set to True in a second if it's alive
     eventqueue.reload('test_alive')
     if not eventqueue.test_alive:
+        eventqueue.events = []
+        eventqueue.save()
         reset_event_queue_status(organization, team)
         task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper_' + org_name, args=(organization, team))
         task_thread.daemon = True
         task_thread.start()
 
-    taskqueues = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT)
+    taskqueues = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list)
     if taskqueues.count() == 0:
         return
     taskqueues.update(test_alive=False)
@@ -399,9 +438,10 @@ def monitor_threads(organization=None, team=None):
                                            args=(taskqueue.endpoint_address, organization, team))
             task_thread.daemon = True
             task_thread.start()
+            taskqueue.update(idle_counter=0)
 
-def _start_threads(organization=None, team=None):
-    task_thread = threading.Thread(target=monitor_threads, name="monitor_threads", args=(organization, team))
+def _start_threads(task=None, organization=None, team=None):
+    task_thread = threading.Thread(target=monitor_threads, name="monitor_threads", args=(task, organization, team))
     task_thread.daemon = True
     task_thread.start()
 
@@ -417,7 +457,7 @@ def start_threads_by_user(user):
             _start_threads(organization=team.organization, team=team)
 
 def start_threads_by_task(task):
-    _start_threads(organization=task.organization, team=task.team)
+    _start_threads(task=task, organization=task.organization, team=task.team)
 
 def initialize_runner(user):
     notification_chain_init()
