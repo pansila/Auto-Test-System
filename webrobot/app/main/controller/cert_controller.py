@@ -47,6 +47,7 @@ def get_pexpect_child():
     elif os.name == 'posix':
         shell = '/bin/bash'
         child = pexpect.spawn(shell)
+    #child.logfile = sys.stdout.buffer
 
     return child
 
@@ -102,7 +103,7 @@ class build_keys(threading.Thread):
             else:
                 print('Failed to build CA key')
 
-        if not is_file_valid(KEYS_PATH / 'ta.key'):
+        if not is_file_valid(KEYS_PATH / 'ta.key') and os.name == 'nt':
             print('Start to build TA key')
             start = time.time()
             child = get_pexpect_child()
@@ -203,7 +204,7 @@ class build_keys(threading.Thread):
             child.expect(LINE_END)
 
             child.sendline(LINE_BEGIN + 'build-dh')
-            child.expect(LINE_END, timeout=600)
+            child.expect(r'[\.\+\*]{3}' + LINE_END, timeout=2000)
 
             time.sleep(1)
             child.kill(9)
