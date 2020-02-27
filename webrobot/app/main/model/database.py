@@ -14,6 +14,7 @@ EVENT_CODE_CANCEL_TASK = 200
 EVENT_CODE_UPDATE_USER_SCRIPT = 201
 EVENT_CODE_TASKQUEUE_UPDATE = 202
 EVENT_CODE_TASKQUEUE_DELETE = 203
+EVENT_CODE_EXIT_EVENT_TASK = 204
 
 LOCK_TIMEOUT = 5
 
@@ -216,6 +217,7 @@ class TaskQueue(Document):
     team = ReferenceField(Team)
     test_alive = BooleanField(default=False)
     to_delete = BooleanField(default=False)
+    idle_counter = IntField(default=0)
 
     meta = {'collection': 'task_queues'}
 
@@ -282,6 +284,9 @@ class Event(Document):
     schema_version = StringField(max_length=10, default='1')
     code = IntField(required=True)
     message = DictField()
+    organization = ReferenceField(Organization)
+    team = ReferenceField(Team)
+    status = StringField(max_length=10, default='Triggered')
 
     meta = {'collection': 'events'}
 

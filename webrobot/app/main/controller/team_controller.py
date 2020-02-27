@@ -7,7 +7,6 @@ from bson import ObjectId
 
 from app.main.util.decorator import token_required
 from app.main.model.database import *
-from task_runner.runner import start_threads
 
 from ..service.auth_helper import Auth
 from ..util.dto import TeamDto
@@ -261,8 +260,6 @@ class TeamJoin(Resource):
             team.modify(push__members=user)
         if team not in user.teams:
             user.modify(push__teams=team)
-
-        start_threads(user)
 
 @api.route('/users')
 class OrganizationUsers(Resource):
