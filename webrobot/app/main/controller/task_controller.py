@@ -15,6 +15,7 @@ from ..util.dto import TaskDto
 # from ..util.dto import Organization_team as _organization_team
 from ..config import get_config
 from ..util.errors import *
+from task_runner.runner import start_threads_by_task
 
 api = TaskDto.api
 _task = TaskDto.task
@@ -243,6 +244,8 @@ class TaskController(Resource):
                         ret = taskqueue.push(new_task)
                         if ret == None:
                             failed.append(endpoint)
+                        else:
+                            start_threads_by_task(new_task)
             else:
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
                 if not taskqueue:
@@ -251,6 +254,8 @@ class TaskController(Resource):
                     ret = taskqueue.push(task)
                     if ret == None:
                         failed.append(endpoint)
+                    else:
+                        start_threads_by_task(task)
         else:
             if task.parallelization:
                 task.delete()
