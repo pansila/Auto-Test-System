@@ -96,9 +96,6 @@ class task_daemon(object):
         self._verify(backing_file)
         self.child_id += 1
 
-        if not check_port(self.config["host_daemon"], self.config["port_test"]):
-            raise AssertionError('Port is used')
-
         self._create_test_result(test_case)
         server_queue, server_process = start_remote_server(backing_file,
                                     self.config,
