@@ -5,7 +5,7 @@ from app.main.service.auth_helper import Auth
 from app.main.model.database import *
 from ..util.dto import AuthDto
 from ..util.errors import *
-from task_runner.runner import start_threads
+from task_runner.runner import initialize_runner
 
 api = AuthDto.api
 user_auth = AuthDto.user_auth
@@ -28,7 +28,7 @@ class UserLogin(Resource):
             return msg, status
 
         user = User.objects(email=post_data.get('email')).first()
-        start_threads(user)
+        initialize_runner(user)
 
         return msg, status
 

@@ -178,7 +178,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     if taskqueues.count() == 0:
         print('Taskqueue not found')
         return
-    taskqueus = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
+    taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
     taskqueue_first = taskqueues[0]
 
     endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
@@ -316,12 +316,9 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
     thread.daemon = True
     thread.start()
 
-    while True:
+    while thread.is_alive():
+        taskqueue.modify(test_alive=True)
         thread.join(1)
-        if thread.is_alive():
-            taskqueue.modify(test_alive=True)
-        else:
-            break
 
 def restart_interrupted_tasks(organization=None, team=None):
     """
@@ -408,7 +405,7 @@ def _start_threads(organization=None, team=None):
     task_thread.daemon = True
     task_thread.start()
 
-def start_threads(user):
+def start_threads_by_user(user):
     teams = []
     for organization in user.organizations:
         _start_threads(organization=organization)
@@ -419,6 +416,10 @@ def start_threads(user):
         if team not in teams:
             _start_threads(organization=team.organization, team=team)
 
+def start_threads_by_task(task):
+    _start_threads(organization=task.organization, team=task.team)
+
+def initialize_runner(user):
     notification_chain_init()
 
 if __name__ == '__main__':
