@@ -218,6 +218,7 @@ class TaskQueue(Document):
     test_alive = BooleanField(default=False)
     to_delete = BooleanField(default=False)
     idle_counter = IntField(default=0)
+    alive_counter = IntField(default=0)
 
     meta = {'collection': 'task_queues'}
 
@@ -299,6 +300,7 @@ class EventQueue(Document):
     team = ReferenceField(Team)
     test_alive = BooleanField(default=False)
     to_delete = BooleanField(default=False)
+    alive_counter = IntField(default=0)
 
     meta = {'collection': 'event_queues'}
 

@@ -87,6 +87,7 @@ def event_loop(organization=None, team=None):
     print('Start event loop: {}'.format(org_name))
 
     while True:
+        eventqueue.update(inc__alive_counter=1)
         # to_delete is roloaded implicitly in eventqueue.pop()
         if eventqueue.to_delete:
             eventqueue.delete()
@@ -205,7 +206,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     if taskqueues.count() == 0:
         print('Taskqueue not found')
         return
-    taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
+    # taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
     taskqueue_first = taskqueues[0]
 
     endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
@@ -222,6 +223,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     print('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
     while True:
+        taskqueues.update(inc__alive_counter=1)
         taskqueue_first.reload('to_delete')
         if taskqueue_first.to_delete:
             for taskqueue in taskqueues:
@@ -341,7 +343,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
                 if taskqueue.idle_counter < min_idle:
                     min_idle = taskqueue.idle_counter
             if min_idle > QUIT_AFTER_IDLE_TIME:
-                taskqueue_first.modify(test_alive=False)
+                taskqueues.modify(test_alive=False)
                 print('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
                 break
         time.sleep(1)
@@ -411,7 +413,25 @@ def prepare_to_run(organization=None, team=None):
 
     return 0
 
-def monitor_threads(task=None, organization=None, team=None):
+def start_event_thread(eventqueue, organization, team):
+    eventqueue.events = []
+    eventqueue.save()
+    reset_event_queue_status(organization, team)
+    task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper_' + org_name, args=(organization, team))
+    task_thread.daemon = True
+    task_thread.start()
+    eventqueue.update(alive_counter=0)
+
+def start_task_thread(taskqueue, organization, team):
+    reset_task_queue_status(organization, team)
+    task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
+                                   name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
+                                   args=(taskqueue.endpoint_address, organization, team))
+    task_thread.daemon = True
+    task_thread.start()
+    taskqueue.update(idle_counter=0, alive_counter=0)
+
+def start_threads(task=None, organization=None, team=None):
     threads = []
     org_name = team.organization.name + '-' + team.name if team else organization.name
     print('Start monitoring threads for {}'.format(org_name))
@@ -419,35 +439,34 @@ def monitor_threads(task=None, organization=None, team=None):
     # if ret:
     #     return ret
 
-    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+    eventqueue = EventQueue.objects(organization=organization, team=team).modify(test_alive=True)
     if not eventqueue:
         eventqueue = EventQueue(organization=organization, team=team)
         eventqueue.save()
-    q = eventqueue.modify(test_alive=True)
-    if not q.test_alive:
-        eventqueue.events = []
-        eventqueue.save()
-        reset_event_queue_status(organization, team)
-        task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper_' + org_name, args=(organization, team))
-        task_thread.daemon = True
-        task_thread.start()
+    if not eventqueue.test_alive:
+        start_event_thread(eventqueue, organization, team)
+    else:
+        alive_counter = eventqueue.alive_counter
+        time.sleep(3)
+        eventqueue.reload('alive_counter')
+        if eventqueue.alive_counter == alive_counter:
+            start_event_thread(eventqueue, organization, team)
 
-    taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list).first()
+    taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list).modify(test_alive=True)
     if not taskqueue:
         print('Error: task queue not found')
         return
-    q = taskqueue.modify(test_alive=True)
-    if not q.test_alive:
-        reset_task_queue_status(organization, team)
-        task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
-                                       name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
-                                       args=(taskqueue.endpoint_address, organization, team))
-        task_thread.daemon = True
-        task_thread.start()
-        taskqueue.update(idle_counter=0)
+    if not taskqueue.test_alive:
+        start_task_thread(taskqueue, organization, team)
+    else:
+        alive_counter = taskqueue.alive_counter
+        time.sleep(3)
+        taskqueue.reload('alive_counter')
+        if taskqueue.alive_counter == alive_counter:
+            start_task_thread(taskqueue, organization, team)
 
 def _start_threads(task=None, organization=None, team=None):
-    task_thread = threading.Thread(target=monitor_threads, name="monitor_threads", args=(task, organization, team))
+    task_thread = threading.Thread(target=start_threads, name="start_threads", args=(task, organization, team))
     task_thread.daemon = True
     task_thread.start()
 
