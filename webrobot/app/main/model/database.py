@@ -287,6 +287,7 @@ class Event(Document):
     organization = ReferenceField(Organization)
     team = ReferenceField(Team)
     status = StringField(max_length=10, default='Triggered')
+    date = DateTimeField(default=datetime.datetime.utcnow)
 
     meta = {'collection': 'events'}
 
