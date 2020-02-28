@@ -1,4 +1,5 @@
 from flask_restplus import marshal, fields
+from flask import current_app
 
 SUCCESS = (20000, 'Success')
 
@@ -153,7 +154,10 @@ response = {
 
 def error_message(error, message=None, model=response, **payload):
 	errno, msg = error
-	# print(msg)
+	if errno != 20000:
+		current_app.logger.error(message if message else msg)
+	else:
+		current_app.logger.info(message if message else msg)
 	ret = {
 		'code': errno,
 		'message': message if message else msg,

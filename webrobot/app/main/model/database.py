@@ -2,6 +2,7 @@ import datetime
 import time
 import jwt
 
+from flask import current_app
 from .. import flask_bcrypt
 from ..config import key
 from mongoengine import *
@@ -93,7 +94,7 @@ class User(Document):
                 algorithm='HS256'
             )
         except Exception as e:
-            print(e)
+            current_app.logger.exception(e)
             return None
 
     @staticmethod

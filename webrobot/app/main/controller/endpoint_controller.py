@@ -1,4 +1,4 @@
-from flask import request
+from flask import request, current_app
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
@@ -226,4 +226,4 @@ class EndpointController(Resource):
                 t = Task.objects(pk=task['task_id']).first()
                 if t.status == 'waiting':
                     if not q.push(t):
-                        print('pushing the task to task queue timed out')
+                        current_app.logger.error('pushing the task to task queue timed out')

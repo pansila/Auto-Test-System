@@ -116,6 +116,7 @@ log.html
 .gitreview
 /webrobot/static/
 /webrobot/upload/
+/webrobot/logs/
 /robot-test-endpoint/testlibs/
 /robot-test-endpoint/resources/
 /robot-test-endpoint/tmp/

@@ -3,7 +3,7 @@ import re
 import shutil
 from pathlib import Path
 
-from flask import Flask, send_from_directory, request
+from flask import Flask, send_from_directory, request, current_app
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
@@ -163,7 +163,7 @@ class ScriptManagement(Resource):
             try:
                 os.remove(root / script)
             except OSError as err:
-                print(err)
+                current_app.logger.exception(err)
                 return error_message(EIO, 'Error happened while deleting a file'), 401
 
             if script_type == 'user_scripts':
@@ -175,7 +175,7 @@ class ScriptManagement(Resource):
                 Test.objects(path__contains=os.path.abspath(root / script)).delete()
                 shutil.rmtree(root / script)
             except OSError as err:
-                print(err)
+                current_app.logger.exception(err)
                 return error_message(EIO, 'Error happened while deleting a directory'), 401
 
         return error_message(SUCCESS)

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import requests
 from bson.objectid import ObjectId
-from flask import request, send_from_directory
+from flask import request, send_from_directory, current_app
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
@@ -38,7 +38,7 @@ class TaskResourceController(Resource):
         try:
             task = Task.objects(pk=task_id).get() 
         except ValidationError as e:
-            print(e)
+            current_app.logger.exception(e)
             return error_message(EINVAL, 'Task ID incorrect'), 400
         except Task.DoesNotExist:
             return error_message(ENOENT, 'Task not found'), 404

@@ -2,7 +2,7 @@ import os
 import time
 from pathlib import Path
 
-from flask import Flask, send_from_directory, request
+from flask import Flask, send_from_directory, request, current_app
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args
@@ -62,7 +62,7 @@ class ScriptDownload(Resource):
         for _ in range(3):
             tarball = pack_files(test_suite, scripts_root, results_tmp)
             if tarball is None:
-                print("retry packaging files")
+                current_app.logger.warning("retry packaging files")
                 time.sleep(1)
             else:
                 tarball = os.path.basename(tarball)

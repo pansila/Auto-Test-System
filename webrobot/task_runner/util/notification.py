@@ -8,6 +8,7 @@ from socket import timeout
 
 # sys.path.append('.')
 from app.main.config import get_config
+from flask import current_app
 
 notification_chain = []
 
@@ -38,16 +39,16 @@ def send_email(task):
     try:
         server = smtplib.SMTP(smtp_server, smtp_server_port, timeout=5)
     except TimeoutError:
-        print('SMTP server connecting timeout')
+        current_app.logger.error('SMTP server connecting timeout')
         return
     except timeout:
-        print('SMTP server connecting socket timeout')
+        current_app.logger.error('SMTP server connecting socket timeout')
         return
     except ConnectionRefusedError:
-        print('SMTP server connecting refused')
+        current_app.logger.error('SMTP server connecting refused')
         return
     except socket.gaierror:
-        print('Network is not available')
+        current_app.logger.error('Network is not available')
         return
 
     # server.starttls()
@@ -55,7 +56,7 @@ def send_email(task):
     try:
         server.login(smtp_user, password)
     except smtplib.SMTPAuthenticationError:
-        print('SMTP authentication failed')
+        current_app.logger.error('SMTP authentication failed')
         server.quit()
         return
     server.sendmail(from_addr, [task.tester.email], msg.as_string())
