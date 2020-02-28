@@ -119,6 +119,8 @@ def event_loop(organization=None, team=None):
 def event_loop_helper(organization=None, team=None):
     eventqueue = EventQueue.objects(organization=organization, team=team).first()
     if not eventqueue:
+        print('Error: event queue not found')
+        eventqueue.modify(test_alive=False)
         return
 
     org_name = team.organization.name + '-' + team.name if team else organization.name
@@ -128,8 +130,9 @@ def event_loop_helper(organization=None, team=None):
     thread.start()
 
     while thread.is_alive():
-        eventqueue.modify(test_alive=True)
         thread.join(1)
+    else:
+        eventqueue.modify(test_alive=False)
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -344,6 +347,8 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
 
     taskqueue = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address, priority=QUEUE_PRIORITY_DEFAULT).first()
     if not taskqueue:
+        print('Error: task queue not found')
+        taskqueue.modify(test_alive=False)
         return
 
     thread = threading.Thread(target=task_loop_per_endpoint,
@@ -353,8 +358,9 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
     thread.start()
 
     while thread.is_alive():
-        taskqueue.modify(test_alive=True)
         thread.join(1)
+    else:
+        taskqueue.modify(test_alive=False)
 
 def restart_interrupted_tasks(organization=None, team=None):
     """
@@ -413,10 +419,8 @@ def monitor_threads(task=None, organization=None, team=None):
     if not eventqueue:
         eventqueue = EventQueue(organization=organization, team=team)
         eventqueue.save()
-    eventqueue.modify(test_alive=False)
-    time.sleep(3) # test_alive will be set to True in a second if it's alive
-    eventqueue.reload('test_alive')
-    if not eventqueue.test_alive:
+    q = eventqueue.modify(test_alive=True)
+    if not q.test_alive:
         eventqueue.events = []
         eventqueue.save()
         reset_event_queue_status(organization, team)
@@ -426,12 +430,11 @@ def monitor_threads(task=None, organization=None, team=None):
 
     taskqueues = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list)
     if taskqueues.count() == 0:
+        print('Error: task queue not found')
         return
-    taskqueues.update(test_alive=False)
-    time.sleep(3) # test_alive will be set to True in a second if it's alive
     for taskqueue in taskqueues:
-        taskqueue.reload('test_alive')
-        if not taskqueue.test_alive:
+        q = taskqueue.modify(test_alive=True)
+        if not q.test_alive:
             reset_task_queue_status(organization, team)
             task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
                                            name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
