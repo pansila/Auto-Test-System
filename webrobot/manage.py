@@ -12,6 +12,7 @@ from mongoengine import connect
 from app.main.config import get_config
 
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
+get_config().init_app(app)
 app.register_blueprint(blueprint)
 
 app.app_context().push()

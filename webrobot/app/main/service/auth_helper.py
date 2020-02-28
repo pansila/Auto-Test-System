@@ -1,4 +1,5 @@
 from app.main.model.database import User
+from flask import current_app
 from ..service.blacklist_service import save_token
 from ..util.errors import *
 
@@ -19,7 +20,7 @@ class Auth:
                 return error_message(PASSWORD_INCORRECT), 401
             return error_message(USER_NOT_EXIST), 404
         except Exception as e:
-            print(e)
+            current_app.logger.exception(e)
             return error_message(EAGAIN), 500
 
     @staticmethod

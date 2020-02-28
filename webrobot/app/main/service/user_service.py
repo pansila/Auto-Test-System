@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.main import db
 from app.main.model.database import User, Organization
+from flask import current_app
 
 from ..config import get_config
 from ..util.errors import *
@@ -28,7 +29,7 @@ def save_new_user(data, admin=None):
         try:
             new_user.save()
         except Exception as e:
-            print(e)
+            current_app.logger.exception(e)
             return error_message(EINVAL, 'Field validating for User failed'), 401
 
         user_root = USERS_ROOT / data['email']
@@ -74,6 +75,6 @@ def generate_token(user):
         auth_token = User.encode_auth_token(str(user.id))
         return error_message(SUCCESS, token=auth_token.decode()), 201
     except Exception as e:
-        print(e)
+        current_app.logger.exception(e)
         return error_message(UNKNOWN_ERROR), 401
 

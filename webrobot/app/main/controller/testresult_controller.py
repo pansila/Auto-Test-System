@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bson.objectid import ObjectId
 from dateutil import tz
-from flask import Flask, render_template, request, send_from_directory, url_for
+from flask import Flask, render_template, request, send_from_directory, url_for, current_app
 from flask_restplus import Resource
 from mongoengine import DoesNotExist, ValidationError
 
@@ -92,7 +92,7 @@ class TestResultRoot(Resource):
             try:
                 ObjectId(d)
             except ValidationError as e:
-                print(e)
+                current_app.logger.exception(e)
             else:
                 ret.append(d)
 
@@ -140,7 +140,7 @@ class TestResultRoot(Resource):
         try:
             test_result.save()
         except ValidationError as e:
-            print(e)
+            current_app.logger.exception(e)
             return error_message(EINVAL, "Test result validation failed"), 400
 
         task.test_results.append(test_result)
@@ -182,5 +182,5 @@ class TestResultUpload(Resource):
         try:
             cur_test_result.save()
         except ValidationError as e:
-            print(e)
+            current_app.logger.exception(e)
             return error_message(EPERM, "Test result validation failed"), 400

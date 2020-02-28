@@ -3,6 +3,7 @@ import sys
 import shutil
 import tarfile
 from pathlib import Path
+from flask import current_app
 
 def make_tarfile(output_filename, source_dir):
     if output_filename[-2:] != 'gz':
@@ -26,13 +27,13 @@ def pack_files(filename, src, dst):
     output = str(dst / filename)
 
     if not os.path.exists(src):
-        print('Source files {} do not exist'.format(src))
+        current_app.logger.error('Source files {} do not exist'.format(src))
         return None
 
     try:
         output = make_tarfile(output, src)
     except Exception as e:
-        print(e)
+        current_app.logger.exception(e)
         return None
     else:
         return output
