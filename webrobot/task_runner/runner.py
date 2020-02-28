@@ -10,6 +10,7 @@ import sys
 import tarfile
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import mongoengine
@@ -111,6 +112,13 @@ def event_loop(organization=None, team=None):
             event.save()
         except KeyError:
             print('Unknown message: %s' % event.code)
+        except Exception:
+            print('Error happened during processing event: %s' % event.code)
+            e_type, e_value, e_traceback = sys.exc_info()
+            event.message['exception_type'] = e_type
+            event.message['exception_value'] = e_value
+            event.message['exception_traceback'] = traceback.print_tb(e_traceback)
+            event.save()
         if ret:
             break
 
@@ -333,11 +341,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
                 if taskqueue.idle_counter < min_idle:
                     min_idle = taskqueue.idle_counter
             if min_idle > QUIT_AFTER_IDLE_TIME:
-                event = Event(code=EVENT_CODE_EXIT_EVENT_TASK)
-                event.save()
-                if not eventqueue.push(event):
-                    print('Failed to push the event')
-                    break
+                taskqueue_first.modify(test_alive=False)
                 print('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
                 break
         time.sleep(1)
@@ -428,20 +432,19 @@ def monitor_threads(task=None, organization=None, team=None):
         task_thread.daemon = True
         task_thread.start()
 
-    taskqueues = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list)
-    if taskqueues.count() == 0:
+    taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list).first()
+    if not taskqueue:
         print('Error: task queue not found')
         return
-    for taskqueue in taskqueues:
-        q = taskqueue.modify(test_alive=True)
-        if not q.test_alive:
-            reset_task_queue_status(organization, team)
-            task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
-                                           name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
-                                           args=(taskqueue.endpoint_address, organization, team))
-            task_thread.daemon = True
-            task_thread.start()
-            taskqueue.update(idle_counter=0)
+    q = taskqueue.modify(test_alive=True)
+    if not q.test_alive:
+        reset_task_queue_status(organization, team)
+        task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
+                                       name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
+                                       args=(taskqueue.endpoint_address, organization, team))
+        task_thread.daemon = True
+        task_thread.start()
+        taskqueue.update(idle_counter=0)
 
 def _start_threads(task=None, organization=None, team=None):
     task_thread = threading.Thread(target=monitor_threads, name="monitor_threads", args=(task, organization, team))
