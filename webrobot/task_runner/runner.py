@@ -87,7 +87,6 @@ def event_loop(organization=None, team=None):
     get_config().logger().info('Start event loop: {}'.format(org_name))
 
     while True:
-        eventqueue.update(inc__alive_counter=1)
         # to_delete is roloaded implicitly in eventqueue.pop()
         if eventqueue.to_delete:
             eventqueue.delete()
@@ -131,6 +130,7 @@ def event_loop_helper(organization=None, team=None):
     if not eventqueue:
         get_config().logger().error('event queue not found')
         eventqueue.modify(test_alive=False)
+        eventqueue.modify(alive_counter=0)
         return
 
     org_name = team.organization.name + '-' + team.name if team else organization.name
@@ -140,9 +140,11 @@ def event_loop_helper(organization=None, team=None):
     thread.start()
 
     while thread.is_alive():
+        eventqueue.update(inc__alive_counter=1)
         thread.join(1)
     else:
         eventqueue.modify(test_alive=False)
+        eventqueue.modify(alive_counter=0)
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -224,7 +226,6 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
     get_config().logger().info('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
     while True:
-        taskqueues.update(inc__alive_counter=1)
         taskqueue_first.reload('to_delete')
         if taskqueue_first.to_delete:
             for taskqueue in taskqueues:
@@ -345,6 +346,7 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
                     min_idle = taskqueue.idle_counter
             if min_idle > QUIT_AFTER_IDLE_TIME:
                 taskqueues.modify(test_alive=False)
+                taskqueues.modify(alive_counter=0)
                 get_config().logger().info('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
                 break
         time.sleep(1)
@@ -356,6 +358,7 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
     if not taskqueue:
         get_config().logger().error('task queue not found')
         taskqueue.modify(test_alive=False)
+        taskqueue.modify(alive_counter=0)
         return
 
     thread = threading.Thread(target=task_loop_per_endpoint,
@@ -366,8 +369,10 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
 
     while thread.is_alive():
         thread.join(1)
+        taskqueue.update(inc__alive_counter=1)
     else:
         taskqueue.modify(test_alive=False)
+        taskqueue.modify(alive_counter=0)
 
 def restart_interrupted_tasks(organization=None, team=None):
     """
@@ -438,7 +443,7 @@ def start_task_thread(taskqueue, organization, team):
 def start_threads(task=None, organization=None, team=None):
     threads = []
     org_name = team.organization.name + '-' + team.name if team else organization.name
-    get_config().logger().info('Start monitoring threads for {}'.format(org_name))
+    get_config().logger().info('Try to start threads for {}'.format(org_name))
     # ret = prepare_to_run(organization, team)
     # if ret:
     #     return ret
@@ -453,7 +458,8 @@ def start_threads(task=None, organization=None, team=None):
         alive_counter = eventqueue.alive_counter
         time.sleep(3)
         eventqueue.reload('alive_counter')
-        if eventqueue.alive_counter == alive_counter:
+        if eventqueue.alive_counter == alive_counter or eventqueue.alive_counter == 0:
+            get_config().logger().info('Start event thread due to abnormal exit')
             start_event_thread(eventqueue, organization, team)
 
     taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list).modify(test_alive=True)
@@ -466,7 +472,8 @@ def start_threads(task=None, organization=None, team=None):
         alive_counter = taskqueue.alive_counter
         time.sleep(3)
         taskqueue.reload('alive_counter')
-        if taskqueue.alive_counter == alive_counter:
+        if taskqueue.alive_counter == alive_counter or taskqueue.alive_counter == 0:
+            get_config().logger().info('Start task thread due to abnormal exit')
             start_task_thread(taskqueue, organization, team)
 
 def _start_threads(task=None, organization=None, team=None):
