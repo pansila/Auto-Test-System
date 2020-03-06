@@ -141,8 +141,6 @@ class TeamList(Resource):
 
         team.organization.modify(pull__teams=team)
 
-        EventQueue.objects(team=team).update(to_delete=True, organization=None, team=None)
-
         try:
             shutil.rmtree(USERS_ROOT / team.organization.path / team.path)
         except FileNotFoundError:

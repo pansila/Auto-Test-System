@@ -1,150 +1,158 @@
 import argparse
+import asyncio
 import datetime
-import subprocess
+import functools
 import os
-import re
 import queue
+import re
 import shutil
 import signal
+import subprocess
 import sys
 import tarfile
 import threading
 import time
 import traceback
+from io import StringIO
 from pathlib import Path
 
 import mongoengine
 from bson import DBRef, ObjectId
 from mongoengine import connect
 
-from task_runner.util.notification import notification_chain_call, notification_chain_init
-from task_runner.util.dbhelper import db_update_test
-from app.main.util.tarball import make_tarfile
 from app.main.config import get_config
 from app.main.model.database import *
 from app.main.util.get_path import get_test_result_path, get_upload_files_root
+from app.main.util.tarball import make_tarfile
+from task_runner.util.dbhelper import db_update_test
+from task_runner.util.notification import (notification_chain_call,
+                                           notification_chain_init)
+
+ROBOT_PROCESSES = {}  # {task id: process instance}
+TASK_THREADS = {}     # {taskqueue id: idle counter (int)}}
+
+QUIT_AFTER_IDLE_TIME = 1800 * len(QUEUE_PRIORITY)  # seconds, count three times in a time of task searching
 
 
-ROBOT_TASKS = []
-QUIT_AFTER_IDLE_TIME = 1800  # seconds
-
-def event_handler_cancel_task(event):
-    global ROBOT_TASKS
+async def event_handler_cancel_task(event):
+    global ROBOT_PROCESSES, TASK_THREADS
     address = event.message['address']
     priority = event.message['priority']
     task_id = event.message['task_id']
 
-    task = Task.objects(pk=task_id).first()
-    if not task:
-        get_config().logger().error('task not found for ' + task_id)
+    taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint_address=address, priority=priority).first()
+    if not taskqueue:
+        get_config().logger().error('Task queue not found for %s %s' % (address, priority))
+        return
+    taskqueue_default = TaskQueue.objects(organization=event.organization, team=event.team, endpoint_address=address, priority=QUEUE_PRIORITY_DEFAULT).first()
+    if not taskqueue_default:
+        get_config().logger().error('Default task queue not found for %s %s' % (address, priority))
         return
 
-    taskqueue = TaskQueue.objects(endpoint_address=address, priority=priority).first()
-    if not taskqueue:
-        get_config().logger().error('task queue not found for %s %s' % (address, priority))
+    task = Task.objects(pk=task_id).first()
+    if not task:
+        get_config().logger().error('Task not found for ' + task_id)
         return
 
     if task.status == 'waiting':
-        taskqueue.modify(pull__tasks=task)
-        task.modify(status='cancelled')
-    elif task.status == 'running':
-        for idx, proc in enumerate(ROBOT_TASKS):
-            if str(proc['task_id']) == task_id:
+        taskqueue.acquire_lock()
+        if taskqueue.running_task and taskqueue.running_task.id == task.id and taskqueue.id in TASK_THREADS:
+            taskqueue.release_lock()
+            get_config().logger().critical('Waiting task to run')
+            for i in range(20):
+                task.reload('status')
+                if task.status == 'running':
+                    break
+                await asyncio.sleep(0.1)
+            else:
+                get_config().logger().error('Waiting task to run timeouted out')
+                taskqueue.modify(running_task=None)
+                task.modify(status='cancelled')
+        else:
+            taskqueue.modify(pull__tasks=task)
+            taskqueue.release_lock()
+            task.modify(status='cancelled')
+            get_config().logger().info('Waiting task cancelled without process running')
+            return
+    if task.status == 'running':
+        if taskqueue_default.id in TASK_THREADS:
+            if task.id in ROBOT_PROCESSES:
                 taskqueue.modify(running_task=None)
                 task.modify(status='cancelled')
 
-                # os.kill(proc['process'].pid, signal.SIGTERM)
-                proc['process'].terminate()
-                del ROBOT_TASKS[idx]
-                break
-        else:
-            get_config().logger().warning('task to cancel not found for id %s in the task threads' % task_id)
-            taskqueue.modify(running_task=None)
-            task.modify(status='cancelled')
+                #os.kill(ROBOT_PROCESSES[task.id].pid, signal.CTRL_C_EVENT)
+                ROBOT_PROCESSES[task.id].terminate()
+                # del ROBOT_PROCESSES[task.id]  # will be done in the task loop when robot process exits
+                get_config().logger().info('Running task cancelled with process running')
+                return
+            else:
+                get_config().logger().error('Task process not found when cancelling task (%s)' % task_id)
+        taskqueue.modify(running_task=None)
+        task.modify(status='cancelled')
+        get_config().logger().info('Running task cancelled without process running')
 
-def event_handler_update_user_script(event):
+async def event_handler_update_user_script(event):
     script = event.message['script']
     user = event.message['user']
     db_update_test(script=script, user=user)
 
-def event_handler_exit_event_task(event):
-    org_name = event.team.organization.name + '-' + event.team.name if event.team else event.organization.name
-    get_config().logger().info('Exit the event loop due to idle: {}'.format(org_name))
-    return True
+async def event_handler_start_taskqueue(event):
+    endpoint = Endpoint.objects(organization=event.organization, team=event.team, endpoint_address=event.message['address']).first()
+    if not endpoint:
+        get_config().logger().error('Endpoint not found')
+        return
+    start_threads_by_endpoint(endpoint)
 
 EVENT_HANDLERS = {
     EVENT_CODE_CANCEL_TASK: event_handler_cancel_task,
     EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script,
-    EVENT_CODE_EXIT_EVENT_TASK: event_handler_exit_event_task
+    EVENT_CODE_TASKQUEUE_START: event_handler_start_taskqueue,
 }
 
-def event_loop(organization=None, team=None):
-    eventqueue = EventQueue.objects(organization=organization, team=team).first()
+def log_event_exception(event, future):
+    try:
+        future.result()
+    except Exception as e:
+        get_config().logger().exception('Error happened during processing event: %s' % event.code)
+        e_type, e_value, e_traceback = sys.exc_info()
+        event.message['exception_type'] = str(e_type)
+        event.message['exception_value'] = str(e_value)
+        temp = StringIO()
+        traceback.print_tb(e_traceback, file=temp)
+        temp.seek(0)
+        event.message['exception_traceback'] = temp.read()
+        temp.close()
+        event.save()
+
+async def event_loop():
+    eventqueue = EventQueue.objects().first()
     if not eventqueue:
         get_config().logger().error('event queue not found')
 
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-    get_config().logger().info('Start event loop: {}'.format(org_name))
+    get_config().logger().info('Event loop started')
 
     while True:
-        # to_delete is roloaded implicitly in eventqueue.pop()
-        if eventqueue.to_delete:
-            eventqueue.delete()
-            get_config().logger().info('Exit the event loop: {}'.format(org_name))
-            break
-
         event = eventqueue.pop()
         if not event:
+            await asyncio.sleep(1)
             continue
 
         if isinstance(event, DBRef):
             get_config().logger().warning('event {} has been deleted, ignore it'.format(event.id))
             continue
 
-        event.organization = organization
-        event.team = team
-        event.save()
+        get_config().logger().info('\nStart to process event {} ...'.format(event.code))
 
-        get_config().logger().info('\n{}: Start to process event {} ...'.format(org_name, event.code))
         try:
-            ret = EVENT_HANDLERS[event.code](event)
-            event.status = 'Processed'
-            event.save()
+            async_task = asyncio.create_task(EVENT_HANDLERS[event.code](event))
+            event.modify(status='Processed')
+            async_task.add_done_callback(functools.partial(log_event_exception, event))
         except KeyError:
             get_config().logger().error('Unknown message: %s' % event.code)
-        except Exception as e:
-            get_config().logger().error('Error happened during processing event: %s' % event.code)
-            get_config().logger().exception(e)
-            e_type, e_value, e_traceback = sys.exc_info()
-            event.message['exception_type'] = e_type
-            event.message['exception_value'] = e_value
-            event.message['exception_traceback'] = traceback.print_tb(e_traceback)
-            event.save()
-        if ret:
-            break
 
-        time.sleep(1)
-
-def event_loop_helper(organization=None, team=None):
-    eventqueue = EventQueue.objects(organization=organization, team=team).first()
-    if not eventqueue:
-        get_config().logger().error('event queue not found')
-        eventqueue.modify(test_alive=False)
-        eventqueue.modify(alive_counter=0)
-        return
-
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-
-    thread = threading.Thread(target=event_loop, name='event_loop_' + org_name, args=(organization, team))
-    thread.daemon = True
-    thread.start()
-
-    while thread.is_alive():
-        eventqueue.update(inc__alive_counter=1)
-        thread.join(1)
-    else:
-        eventqueue.modify(test_alive=False)
-        eventqueue.modify(alive_counter=0)
+def event_loop_parent():
+    reset_event_queue_status()
+    asyncio.run(event_loop())
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -199,7 +207,7 @@ def convert_json_to_robot_variable(args, variables, variable_file):
     args.extend(['--variablefile', str(variable_file)])
 
 def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
-    global ROBOT_TASKS
+    global ROBOT_PROCESSES, TASK_THREADS
 
     if not organization and not team:
         get_config().logger().error('Argument organization and team must neither be None')
@@ -210,63 +218,68 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
         get_config().logger().error('Taskqueue not found')
         return
     # taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
-    taskqueue_first = taskqueues[0]
+    for q in taskqueues:
+        if q.priority == QUEUE_PRIORITY_DEFAULT:
+            taskqueue_default = q
+            break
 
     endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
     if endpoints.count() == 0:
         get_config().logger().error('Endpoint not found')
         return
 
-    eventqueue = EventQueue.objects(organization=organization, team=team).first()
-    if not eventqueue:
-        get_config().logger().error('Event queue not found')
-        return
-
     org_name = team.organization.name + '-' + team.name if team else organization.name
     get_config().logger().info('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
     while True:
-        taskqueue_first.reload('to_delete')
-        if taskqueue_first.to_delete:
-            for taskqueue in taskqueues:
-                taskqueue.delete()
+        taskqueue_default.reload('to_delete')
+        if taskqueue_default.to_delete:
+            taskqueues.delete()
             endpoints.delete()
             get_config().logger().info('Exit task loop: {} @ {}'.format(org_name, endpoint_address))
             break
         # TODO: lower priority tasks will take precedence if higher priority queue is empty first
         # but filled then when thread is searching for tasks in the lower priority task queues
-        for priority in (QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MIN):
+        for priority in QUEUE_PRIORITY:
+            exit_task = False
             for taskqueue in taskqueues:
+                taskqueue.reload('to_delete')
+                if taskqueue.to_delete:
+                    exit_task = True
+                    break
                 if taskqueue.priority == priority:
                     break
             else:
                 get_config().logger().error('Found task queue with unknown priority')
+                continue
 
-            # "continue" to search for tasks in the lower priority task queue
-            # "break" to start over to search for tasks from top priority task queue
+            if exit_task:
+                break
+
+            # "continue" to search for tasks in the lower priority task queues
+            # "break" to start over to search for tasks from the top priority task queue
             task = taskqueue.pop()
             if not task:
-                taskqueue.update(inc__idle_counter=1)
+                TASK_THREADS[taskqueue_default.id] += 1
                 continue
-            taskqueue.update(idle_counter=0)
+            TASK_THREADS[taskqueue_default.id] = 0
             if isinstance(task, DBRef):
                 get_config().logger().warning('task {} has been deleted, ignore it'.format(task.id))
+                taskqueue.modify(running_task=None)
                 break
 
             if task.kickedoff != 0 and not task.parallelization:
                 get_config().logger().info('task has been taken over by other threads, do nothing')
+                taskqueue.modify(running_task=None)
                 break
 
             task.modify(inc__kickedoff=1)
             if task.kickedoff != 1 and not task.parallelization:
                 get_config().logger().warning('a race condition happened')
+                taskqueue.modify(running_task=None)
                 break
 
             get_config().logger().info('Start to run task {} ...'.format(task.id))
-            task.status = 'running'
-            task.run_date = datetime.datetime.utcnow()
-            task.endpoint_run = endpoint_address
-            task.save()
 
             result_dir = get_test_result_path(task)
             args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md']
@@ -287,12 +300,17 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             args.append(task.test.path)
             get_config().logger().info('Arguments: ' + str(args))
 
-            taskqueue.modify(running_task=task)
-
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
-            ROBOT_TASKS.append({'task_id': task.id, 'process': p})
+            ROBOT_PROCESSES[task.id] = p
+
+            task.status = 'running'
+            task.run_date = datetime.datetime.utcnow()
+            task.endpoint_run = endpoint_address
+            task.save()
+
             stdout, stderr = p.communicate()
+            del ROBOT_PROCESSES[task.id]
             try:
                 get_config().logger().info('\n' + stdout.decode().replace('\r\n', '\n'))
             except UnicodeDecodeError:
@@ -316,7 +334,9 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             if p.returncode == 0:
                 task.status = 'successful'
             else:
-                task.status = 'failed'
+                task.reload('status')
+                if task.status != 'cancelled':
+                    task.status = 'failed'
             task.save()
 
             taskqueue.modify(running_task=None)
@@ -340,25 +360,20 @@ def task_loop_per_endpoint(endpoint_address, organization=None, team=None):
             notification_chain_call(task)
             break
         else:
-            min_idle = sys.maxsize
-            for taskqueue in taskqueues:
-                if taskqueue.idle_counter < min_idle:
-                    min_idle = taskqueue.idle_counter
-            if min_idle > QUIT_AFTER_IDLE_TIME:
-                taskqueues.modify(test_alive=False)
-                taskqueues.modify(alive_counter=0)
+            if TASK_THREADS[taskqueue_default.id] > QUIT_AFTER_IDLE_TIME:
+                del TASK_THREADS[taskqueue_default.id]
                 get_config().logger().info('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
                 break
         time.sleep(1)
 
 def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None):
+    global TASK_THREADS
     org_name = team.organization.name + '-' + team.name if team else organization.name
 
     taskqueue = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address, priority=QUEUE_PRIORITY_DEFAULT).first()
     if not taskqueue:
         get_config().logger().error('task queue not found')
-        taskqueue.modify(test_alive=False)
-        taskqueue.modify(alive_counter=0)
+        del TASK_THREADS[taskqueue.id]
         return
 
     thread = threading.Thread(target=task_loop_per_endpoint,
@@ -369,10 +384,8 @@ def task_loop_helper_per_endpoint(endpoint_address, organization=None, team=None
 
     while thread.is_alive():
         thread.join(1)
-        taskqueue.update(inc__alive_counter=1)
     else:
-        taskqueue.modify(test_alive=False)
-        taskqueue.modify(alive_counter=0)
+        del TASK_THREADS[taskqueue.id]
 
 def restart_interrupted_tasks(organization=None, team=None):
     """
@@ -380,17 +393,16 @@ def restart_interrupted_tasks(organization=None, team=None):
     """
     pass
 
-def reset_event_queue_status(organization=None, team=None):
-    queues = EventQueue.objects(organization=organization, team=team)
-    if queues.count() == 0:
+def reset_event_queue_status():
+    queue = EventQueue.objects().first()
+    if not queue:
+        queue = EventQueue()
+        queue.save()
         get_config().logger().error('Event queue has not been created')
-        return 1
 
-    for q in queues:
-        ret = q.modify({'rw_lock': True}, rw_lock=False)
-        if ret:
-            get_config().logger().info('Reset the read/write lock for event queue')
-    return 0
+    ret = queue.modify({'rw_lock': True}, rw_lock=False)
+    if ret:
+        get_config().logger().info('Reset the read/write lock for event queue')
 
 def reset_task_queue_status(organization=None, team=None):
     queues = TaskQueue.objects(organization=organization, team=team)
@@ -419,81 +431,62 @@ def prepare_to_run(organization=None, team=None):
 
     return 0
 
-def start_event_thread(eventqueue, organization, team):
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-    eventqueue.events = []
-    eventqueue.save()
-    reset_event_queue_status(organization, team)
-    task_thread = threading.Thread(target=event_loop_helper, name='event_loop_helper_' + org_name, args=(organization, team))
+def start_event_thread():
+    task_thread = threading.Thread(target=event_loop_parent, name='event_loop_parent')
     task_thread.daemon = True
     task_thread.start()
-    eventqueue.update(alive_counter=0)
 
-def start_task_thread(taskqueue, organization, team):
+def start_task_thread(taskqueue):
+    global TASK_THREADS
+    if taskqueue.id in TASK_THREADS:
+        return
+
+    organization, team = taskqueue.organization, taskqueue.team
     org_name = team.organization.name + '-' + team.name if team else organization.name
+
     reset_task_queue_status(organization, team)
-    org_name = team.organization.name + '-' + team.name if team else organization.name
     task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
                                    name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
                                    args=(taskqueue.endpoint_address, organization, team))
     task_thread.daemon = True
     task_thread.start()
-    taskqueue.update(idle_counter=0, alive_counter=0)
+    TASK_THREADS[taskqueue.id] = 0
 
-def start_threads(task=None, organization=None, team=None):
+def start_threads(task=None, organization=None, team=None, endpoint_address=None):
     threads = []
+    taskqueues = None
     org_name = team.organization.name + '-' + team.name if team else organization.name
     get_config().logger().info('Try to start threads for {}'.format(org_name))
     # ret = prepare_to_run(organization, team)
     # if ret:
     #     return ret
 
-    eventqueue = EventQueue.objects(organization=organization, team=team).modify(test_alive=True)
-    if not eventqueue:
-        eventqueue = EventQueue(organization=organization, team=team)
-        eventqueue.save()
-    if not eventqueue.test_alive:
-        start_event_thread(eventqueue, organization, team)
+    if task:
+        for endpoint_address in task.endpoint_list:
+            taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address=endpoint_address).first()
+            if not taskqueue:
+                get_config().logger().error('task queue not found')
+                return
+            start_task_thread(taskqueue)
+    elif endpoint_address:
+        taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address=endpoint_address).first()
+        if not taskqueue:
+            get_config().logger().error('task queue not found')
+            return
+        start_task_thread(taskqueue)
     else:
-        alive_counter = eventqueue.alive_counter
-        time.sleep(3)
-        eventqueue.reload('alive_counter')
-        if eventqueue.alive_counter == alive_counter or eventqueue.alive_counter == 0:
-            get_config().logger().info('Start event thread due to abnormal exit')
-            start_event_thread(eventqueue, organization, team)
+        get_config().logger().error('task or endpoint_address is required')
 
-    taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address__in=task.endpoint_list).modify(test_alive=True)
-    if not taskqueue:
-        get_config().logger().error('task queue not found')
-        return
-    if not taskqueue.test_alive:
-        start_task_thread(taskqueue, organization, team)
-    else:
-        alive_counter = taskqueue.alive_counter
-        time.sleep(3)
-        taskqueue.reload('alive_counter')
-        if taskqueue.alive_counter == alive_counter or taskqueue.alive_counter == 0:
-            get_config().logger().info('Start task thread due to abnormal exit')
-            start_task_thread(taskqueue, organization, team)
-
-def _start_threads(task=None, organization=None, team=None):
-    task_thread = threading.Thread(target=start_threads, name="start_threads", args=(task, organization, team))
+def _start_threads(task=None, organization=None, team=None, endpoint_address=None):
+    task_thread = threading.Thread(target=start_threads, name="start_threads", args=(task, organization, team, endpoint_address))
     task_thread.daemon = True
     task_thread.start()
 
-def start_threads_by_user(user):
-    teams = []
-    for organization in user.organizations:
-        _start_threads(organization=organization)
-        for team in organization.teams:
-            _start_threads(organization=team.organization, team=team)
-            teams.append(team)
-    for team in user.teams:
-        if team not in teams:
-            _start_threads(organization=team.organization, team=team)
-
 def start_threads_by_task(task):
     _start_threads(task=task, organization=task.organization, team=task.team)
+
+def start_threads_by_endpoint(endpoint):
+    _start_threads(endpoint_address=endpoint.endpoint_address, organization=endpoint.organization, team=endpoint.team)
 
 def initialize_runner(user):
     notification_chain_init()

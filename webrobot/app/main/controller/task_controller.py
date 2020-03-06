@@ -9,6 +9,7 @@ from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
 from app.main.util.get_path import get_test_result_path
+from ..util import push_event
 from ..util.tarball import path_to_dict
 from ..model.database import *
 from ..util.dto import TaskDto
@@ -304,16 +305,11 @@ class TaskController(Resource):
         if priority is None:
             return error_message(EINVAL, 'Field priority is required'), 400
 
-        event = Event()
-        event.code = EVENT_CODE_CANCEL_TASK
-        event.message['address'] = address
-        event.message['priority'] = priority
-        event.message['task_id'] = str(task.id)
-        event.save()
+        message = {}
+        message['address'] = address
+        message['priority'] = priority
+        message['task_id'] = str(task.id)
 
-        eventqueue = EventQueue.objects(organization=task.test.organization, team=task.test.team).first()
-        if not eventqueue:
-            return error_message(ENOENT, 'Event queue not found'), 404
-
-        if not eventqueue.push(event):
+        ret = push_event(organization=task.test.organization, team=task.test.team, code=EVENT_CODE_CANCEL_TASK, message=message)
+        if not ret:
             return error_message(EPERM, 'Pushing the event to event queue failed'), 403

@@ -22,7 +22,6 @@ eventlet = {version = "==0.21.0",index = "piwheels"}
 flask-cors = {index = "piwheels",version = "==3.0.7"}
 flask-restplus = {version = "==0.10.1",index = "piwheels"}
 gem = {version = "==0.1.12",index = "piwheels"}
-greenlet = {version = "==0.4.12",index = "piwheels"}
 gunicorn = {version = "==19.7.1",index = "piwheels"}
 itsdangerous = {version = "==0.24",index = "piwheels"}
 jsonschema = {version = "==2.6.0",index = "piwheels"}
@@ -46,7 +45,7 @@ Mako = {version = "==1.0.7",index = "piwheels"}
 MarkupSafe = {version = "==1.0",index = "piwheels"}
 PyJWT = {version = "==1.5.3",index = "piwheels"}
 SQLAlchemy = {version = "==1.2.0",index = "piwheels"}
-Werkzeug = {version = ">=0.14.1",index = "piwheels"}
+Werkzeug = {index = "piwheels",version = "==0.16.1"}
 mongoengine = {version = "==0.17.0",index = "piwheels"}
 mistune = {version = "==0.8.4",index = "piwheels"}
 robotframework = {version = "==3.1.1",index = "piwheels"}
@@ -58,7 +57,7 @@ pillow = {index = "piwheels",version = "==6.0.0"}
 pexpect = {index = "piwheels",version = "==4.7.0"}
 
 [requires]
-python_version = "3.6"
+python_version = "3.7"
 
 [scripts]
 server = "python manage.py run"

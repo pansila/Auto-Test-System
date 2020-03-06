@@ -122,8 +122,6 @@ class OrganizationList(Resource):
         if organization.owner != user:
             return error_message(EINVAL, 'You are not the organization owner'), 403
 
-        EventQueue.objects(organization=organization).update(to_delete=True, organization=None, team=None)
-
         try:
             shutil.rmtree(USERS_ROOT / organization.path)
         except FileNotFoundError:

@@ -10,14 +10,17 @@ from mongoengine import *
 QUEUE_PRIORITY_MIN = 1
 QUEUE_PRIORITY_DEFAULT = 2
 QUEUE_PRIORITY_MAX = 3
+QUEUE_PRIORITY = (QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MIN)
 
 EVENT_CODE_CANCEL_TASK = 200
 EVENT_CODE_UPDATE_USER_SCRIPT = 201
-EVENT_CODE_TASKQUEUE_UPDATE = 202
-EVENT_CODE_TASKQUEUE_DELETE = 203
-EVENT_CODE_EXIT_EVENT_TASK = 204
+EVENT_CODE_TASKQUEUE_START = 202
+EVENT_CODE_TASKQUEUE_UPDATE = 203
+EVENT_CODE_TASKQUEUE_DELETE = 204
+EVENT_CODE_EXIT_EVENT_TASK = 205
+EVENT_CODE_DELETE_ENDPOINT = 206
 
-LOCK_TIMEOUT = 5
+LOCK_TIMEOUT = 50
 
 class Organization(Document):
     schema_version = StringField(max_length=10, default='1')
@@ -216,25 +219,18 @@ class TaskQueue(Document):
     rw_lock = BooleanField(default=False)
     organization = ReferenceField(Organization)
     team = ReferenceField(Team)
-    test_alive = BooleanField(default=False)
     to_delete = BooleanField(default=False)
-    idle_counter = IntField(default=0)
-    alive_counter = IntField(default=0)
 
     meta = {'collection': 'task_queues'}
 
     def acquire_lock(self):
-        timeout = 0
-        while True:
+        for i in range(LOCK_TIMEOUT):
             ret = self.modify({'rw_lock': False}, rw_lock=True)
-            if not ret:
-                if timeout >= LOCK_TIMEOUT:
-                    return False
-                time.sleep(0.1)
-                timeout = timeout + 0.1
-            else:
-                break
-        return True
+            if ret:
+                return True
+            time.sleep(0.1)
+        else:
+            return False
 
     def release_lock(self):
         self.modify(rw_lock=False)
@@ -247,6 +243,7 @@ class TaskQueue(Document):
         else:
             task = self.tasks[0]
         self.modify(pop__tasks=-1)
+        self.modify(running_task=task)
         self.release_lock()
         return task
 
@@ -286,7 +283,7 @@ class Event(Document):
     schema_version = StringField(max_length=10, default='1')
     code = IntField(required=True)
     message = DictField()
-    organization = ReferenceField(Organization)
+    organization = ReferenceField(Organization, required=True)
     team = ReferenceField(Team)
     status = StringField(max_length=10, default='Triggered')
     date = DateTimeField(default=datetime.datetime.utcnow)
@@ -297,26 +294,17 @@ class EventQueue(Document):
     schema_version = StringField(max_length=10, default='1')
     events = ListField(ReferenceField(Event))
     rw_lock = BooleanField(default=False)
-    organization = ReferenceField(Organization)
-    team = ReferenceField(Team)
-    test_alive = BooleanField(default=False)
-    to_delete = BooleanField(default=False)
-    alive_counter = IntField(default=0)
 
     meta = {'collection': 'event_queues'}
 
     def acquire_lock(self):
-        timeout = 0
-        while True:
+        for i in range(LOCK_TIMEOUT):
             ret = self.modify({'rw_lock': False}, rw_lock=True)
-            if not ret:
-                if timeout >= LOCK_TIMEOUT:
-                    return False
-                time.sleep(0.1)
-                timeout = timeout + 0.1
-            else:
-                break
-        return True
+            if ret:
+                return True
+            time.sleep(0.1)
+        else:
+            return False
 
     def release_lock(self):
         self.modify(rw_lock=False)
