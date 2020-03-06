@@ -6,6 +6,7 @@ from app.main.util.decorator import token_required, organization_team_required_b
 from ..model.database import *
 from ..util.dto import EndpointDto
 from ..util.errors import *
+from ..util import push_event
 
 api = EndpointDto.api
 _endpoint_list = EndpointDto.endpoint_list
@@ -84,6 +85,31 @@ class EndpointController(Resource):
         if taskqueues.count() == 0:
             return error_message(ENOENT, 'Task queue not found'), 404
         taskqueues.update(to_delete=True)
+
+        message = {}
+        message['address'] = address
+        ret = push_event(organization=organization, team=team, code=EVENT_CODE_TASKQUEUE_START, message=message)
+        if not ret:
+            return error_message(EPERM, 'Pushing the event to event queue failed'), 403
+
+        for q in taskqueues:
+            message['priority'] = q.priority
+
+            q.acquire_lock()
+            running_task = q.running_task
+            if not running_task:
+                if len(q.tasks) != 0:
+                    for t in q.tasks:
+                        t.modify(status='cancelled')
+                    q.tasks = []
+                    q.save()
+            else:
+                message['task_id'] = str(running_task.id)
+                ret = push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
+                if not ret:
+                    q.release_lock()
+                    return error_message(EPERM, 'Pushing the event to event queue failed'), 403
+            q.release_lock()
 
         return error_message(SUCCESS)
 

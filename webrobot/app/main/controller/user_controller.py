@@ -212,8 +212,6 @@ class UserAccount(Resource):
         teams = Team.objects(owner=user)
 
         for org in organizations:
-            EventQueue.objects(organization=org).update(to_delete=True, organization=None, team=None)
-
             try:
                 shutil.rmtree(USERS_ROOT / org.path)
             except FileNotFoundError:
