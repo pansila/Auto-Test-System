@@ -96,6 +96,13 @@ class task_daemon(object):
         self._verify(backing_file)
         self.child_id += 1
 
+        for i in range(50):
+            if check_port(self.config["host_daemon"], self.config["port_test"]):
+                break
+            time.sleep(0.1)
+        else:
+            raise AssertionError('Port in use')
+
         self._create_test_result(test_case)
         server_queue, server_process = start_remote_server(backing_file,
                                     self.config,
@@ -105,7 +112,12 @@ class task_daemon(object):
                                     id=self.child_id)
         self.running_test = {"queue": server_queue, "process": server_process}
 
-        time.sleep(0.1)  # to avoid connection refuse issue
+        for i in range(50):
+            if not check_port(self.config["host_daemon"], self.config["port_test"]):
+                break
+            time.sleep(0.1)
+        else:
+            raise AssertionError('Failed to start the test')
 
     def stop_test(self, test_case, status):
         if self.running_test:
