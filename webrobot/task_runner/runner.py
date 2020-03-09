@@ -30,6 +30,7 @@ from task_runner.util.notification import (notification_chain_call,
 
 ROBOT_PROCESSES = {}  # {task id: process instance}
 TASK_THREADS = {}     # {taskqueue id: idle counter (int)}}
+TASK_LOCK = threading.Lock()
 
 QUIT_AFTER_IDLE_TIME = 1800 * len(QUEUE_PRIORITY)  # seconds, count three times in a time of task searching
 
@@ -438,7 +439,9 @@ def start_event_thread():
 
 def start_task_thread(taskqueue):
     global TASK_THREADS
+    TASK_LOCK.acquire()
     if taskqueue.id in TASK_THREADS:
+        TASK_LOCK.release()
         return
 
     organization, team = taskqueue.organization, taskqueue.team
@@ -451,6 +454,7 @@ def start_task_thread(taskqueue):
     task_thread.daemon = True
     task_thread.start()
     TASK_THREADS[taskqueue.id] = 0
+    TASK_LOCK.release()
 
 def start_threads(task=None, organization=None, team=None, endpoint_address=None):
     threads = []
