@@ -8,7 +8,7 @@ from app.main.model.database import User, Organization
 from flask import current_app
 
 from ..config import get_config
-from ..util.errors import *
+from ..util.response import *
 from ..util.identicon import *
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
@@ -30,17 +30,17 @@ def save_new_user(data, admin=None):
             new_user.save()
         except Exception as e:
             current_app.logger.exception(e)
-            return error_message(EINVAL, 'Field validating for User failed'), 401
+            return response_message(EINVAL, 'Field validating for User failed'), 401
 
         user_root = USERS_ROOT / data['email']
         try:
             os.mkdir(user_root)
         except FileExistsError as e:
-            return error_message(EEXIST), 401
+            return response_message(EEXIST), 401
         try:
             os.mkdir(user_root / 'test_results')
         except FileExistsError as e:
-            return error_message(EEXIST), 401
+            return response_message(EEXIST), 401
 
         if new_user.avatar == '':
             img = render_identicon(hash(data['email']), 27)
@@ -58,7 +58,7 @@ def save_new_user(data, admin=None):
 
         return generate_token(new_user)
     else:
-        return error_message(USER_ALREADY_EXIST), 409
+        return response_message(USER_ALREADY_EXIST), 409
 
 
 def get_all_users():
@@ -73,8 +73,8 @@ def generate_token(user):
     try:
         # generate the auth token
         auth_token = User.encode_auth_token(str(user.id))
-        return error_message(SUCCESS, token=auth_token.decode()), 201
+        return response_message(SUCCESS, token=auth_token.decode()), 201
     except Exception as e:
         current_app.logger.exception(e)
-        return error_message(UNKNOWN_ERROR), 401
+        return response_message(UNKNOWN_ERROR), 401
 

@@ -292,3 +292,18 @@ class TeamDto:
         'email': fields.String(description='The user email'),
         'value': fields.String(description='The user ID'),
     })
+
+class StoreDto:
+    api = Namespace('store', description='scripts management operations')
+    organization_team = api.model('organization_team', {
+        'organization': fields.String(description='The organization id'),
+        'team': fields.String(description='The team id'),
+    })
+
+    delete_package = api.inherit('delete_package', organization_team, {
+        'file': fields.String(description='Path to the queried file'),
+    })
+
+    upload_package = api.inherit('upload_package', organization_team, {
+        'example_file': fields.String(description='Content-Type: application/text')
+    })

@@ -10,7 +10,7 @@ from app.main.model.database import *
 
 from ..service.auth_helper import Auth
 from ..util.dto import TeamDto
-from ..util.errors import *
+from ..util.response import *
 from ..config import get_config
 from ..util.identicon import *
 
@@ -35,7 +35,7 @@ class TeamList(Resource):
         user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         teams = Team.objects(owner=ObjectId(user_id))
         for team in teams:
@@ -73,26 +73,26 @@ class TeamList(Resource):
         data = request.json
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         name = data.get('name', None)
         if not name:
-            return error_message(EINVAL, 'Field name is required'), 400
+            return response_message(EINVAL, 'Field name is required'), 400
 
         organization_id = data.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization_id is required'), 400
+            return response_message(EINVAL, 'Field organization_id is required'), 400
         
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
-            return error_message(ENOENT, 'Organization not found'), 404
+            return response_message(ENOENT, 'Organization not found'), 404
 
         if organization.owner != user:
-            return error_message(EINVAL, 'Your are not the organization\'s owner'), 403
+            return response_message(EINVAL, 'Your are not the organization\'s owner'), 403
 
         team = Team.objects(name=name, organization=organization).first()
         if team:
-            return error_message(EEXIST, 'Team has been registered'), 403
+            return response_message(EEXIST, 'Team has been registered'), 403
 
         team = Team(name=name, organization=organization, owner=user)
         team.members.append(user)
@@ -107,7 +107,7 @@ class TeamList(Resource):
         try:
             os.mkdir(team_root)
         except FileExistsError as e:
-            return error_message(EEXIST), 401
+            return response_message(EEXIST), 401
 
         img= render_identicon(hash(name), 27)
         img.save(team_root / ('%s.png' % team.id))
@@ -125,19 +125,19 @@ class TeamList(Resource):
         """
         team_id = request.json.get('team_id', None)
         if not team_id:
-            return error_message(EINVAL, "Field team_id is required"), 400
+            return response_message(EINVAL, "Field team_id is required"), 400
 
         team = Team.objects(pk=team_id).first()
         if not team:
-            return error_message(ENOENT, "Team not found"), 404
+            return response_message(ENOENT, "Team not found"), 404
 
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, "User not found"), 404
+            return response_message(ENOENT, "User not found"), 404
 
         if team.owner != user:
             if team.organization.owner != user:
-                return error_message(EINVAL, 'You are not the team owner'), 403
+                return response_message(EINVAL, 'You are not the team owner'), 403
 
         team.organization.modify(pull__teams=team)
 
@@ -172,10 +172,10 @@ class TeamAvatar(Resource):
                     team = Team.objects(pk=team_id).first()
                     if team:
                         return send_from_directory(Path(os.getcwd()) / USERS_ROOT / team.organization.path / team.path, team.avatar)
-                    return error_message(USER_NOT_EXIST, 'Team not found'), 404
-                return error_message(USER_NOT_EXIST), 404
-            return error_message(TOKEN_ILLEGAL, payload), 401
-        return error_message(TOKEN_REQUIRED), 400
+                    return response_message(USER_NOT_EXIST, 'Team not found'), 404
+                return response_message(USER_NOT_EXIST), 404
+            return response_message(TOKEN_ILLEGAL, payload), 401
+        return response_message(TOKEN_REQUIRED), 400
 
 @api.route('/member')
 class TeamMember(Resource):
@@ -191,26 +191,26 @@ class TeamMember(Resource):
         user_id = kwargs['user']['user_id']
         team_id = request.json.get('team_id', None)
         if not team_id:
-            return error_message(EINVAL, "Field team_id is required"), 400
+            return response_message(EINVAL, "Field team_id is required"), 400
 
         team_to_quit = Team.objects(pk=team_id).first()
         if not team_to_quit:
-            return error_message(ENOENT, "Team not found"), 404
+            return response_message(ENOENT, "Team not found"), 404
 
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, "User not found"), 404
+            return response_message(ENOENT, "User not found"), 404
 
         for team in user.teams:
             if team != team_to_quit:
                 continue
             if team.owner == user:
-                return error_message(EPERM, "Can't quit the team as you are the owner"), 403
+                return response_message(EPERM, "Can't quit the team as you are the owner"), 403
             team.modify(pull__members=user)
             user.modify(pull__teams=team)
-            return error_message(SUCCESS), 200
+            return response_message(SUCCESS), 200
         else:
-            return error_message(EINVAL, "User is not in the team"), 400
+            return response_message(EINVAL, "User is not in the team"), 400
 
 @api.route('/all')
 class TeamListAll(Resource):
@@ -224,7 +224,7 @@ class TeamListAll(Resource):
 
         organization_id = request.args.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization_id is required'), 400
+            return response_message(EINVAL, 'Field organization_id is required'), 400
 
         teams = Team.objects(organization=ObjectId(organization_id))
         return [{
@@ -244,15 +244,15 @@ class TeamJoin(Resource):
         """The logged in user joins a team"""
         team_id = request.json.get('team_id', None)
         if not team_id:
-            return error_message(EINVAL, "Field id is required"), 400
+            return response_message(EINVAL, "Field id is required"), 400
 
         user = User.objects(pk=user['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         team = Team.objects(pk=team_id).first()
         if not team:
-            return error_message(ENOENT, 'Team not found'), 404
+            return response_message(ENOENT, 'Team not found'), 404
 
         if user not in team.members:
             team.modify(push__members=user)
@@ -271,18 +271,18 @@ class OrganizationUsers(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         team_id = request.args.get('team_id', None)
         if not team_id:
-            return error_message(EINVAL, 'Field team_id is required'), 401
+            return response_message(EINVAL, 'Field team_id is required'), 401
 
         team = Team.objects(pk=team_id).first()
         if not team:
-            return error_message(ENOENT, 'Team not found'), 404
+            return response_message(ENOENT, 'Team not found'), 404
 
         if user not in team.members:
             if user not in team.organization.members:
-                return error_message(EPERM, 'You are not in the organization'), 403
+                return response_message(EPERM, 'You are not in the organization'), 403
 
         return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in team.members]

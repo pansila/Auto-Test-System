@@ -5,7 +5,7 @@ from app.main.util.decorator import token_required, organization_team_required_b
 
 from ..model.database import *
 from ..util.dto import EndpointDto
-from ..util.errors import *
+from ..util.response import *
 from ..util import push_event
 
 api = EndpointDto.api
@@ -79,18 +79,18 @@ class EndpointController(Resource):
 
         address = data.get('address', None)
         if address is None:
-            return error_message(EINVAL, 'Parameter address is required'), 400
+            return response_message(EINVAL, 'Parameter address is required'), 400
 
         taskqueues = TaskQueue.objects(endpoint_address=address, organization=organization, team=team)
         if taskqueues.count() == 0:
-            return error_message(ENOENT, 'Task queue not found'), 404
+            return response_message(ENOENT, 'Task queue not found'), 404
         taskqueues.update(to_delete=True)
 
         message = {}
         message['address'] = address
         ret = push_event(organization=organization, team=team, code=EVENT_CODE_TASKQUEUE_START, message=message)
         if not ret:
-            return error_message(EPERM, 'Pushing the event to event queue failed'), 403
+            return response_message(EPERM, 'Pushing the event to event queue failed'), 403
 
         for q in taskqueues:
             message['priority'] = q.priority
@@ -108,10 +108,10 @@ class EndpointController(Resource):
                 ret = push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
                 if not ret:
                     q.release_lock()
-                    return error_message(EPERM, 'Pushing the event to event queue failed'), 403
+                    return response_message(EPERM, 'Pushing the event to event queue failed'), 403
             q.release_lock()
 
-        return error_message(SUCCESS)
+        return response_message(SUCCESS)
 
     @token_required
     @organization_team_required_by_json
@@ -126,17 +126,17 @@ class EndpointController(Resource):
 
         endpoint_address = data.get('endpoint_address', None)
         if not endpoint_address:
-            return error_message(EINVAL, 'Field endpoint_address is required'), 400
+            return response_message(EINVAL, 'Field endpoint_address is required'), 400
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
-            return error_message(EINVAL, 'Tests is not a list'), 400
+            return response_message(EINVAL, 'Tests is not a list'), 400
 
         endpoint_tests = []
         for t in tests:
             tt = Test.objects(test_suite=t, organization=organization, team=team).first()
             if not tt:
-                return error_message(ENOENT, 'Test suite {} not found'.format(t)), 404
+                return response_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             endpoint_tests.append(tt)
 
         endpoint = Endpoint.objects(endpoint_address=endpoint_address, team=team, organization=organization).first()
@@ -151,14 +151,14 @@ class EndpointController(Resource):
                     taskqueue.endpoint = endpoint
                     taskqueue.save()
             else:
-                return error_message(EEXIST, 'Task queues exist already'), 401
+                return response_message(EEXIST, 'Task queues exist already'), 401
 
         endpoint.name = data.get('endpoint_name', endpoint_address)
         endpoint.enable = data.get('enable', False)
         endpoint.tests = endpoint_tests
         endpoint.save()
 
-        return error_message(SUCCESS), 200
+        return response_message(SUCCESS), 200
 
 @api.route('/queue/')
 class EndpointController(Resource):
@@ -219,29 +219,29 @@ class EndpointController(Resource):
         team = kwargs['team']
         taskqueues = request.json.get('taskqueues', None)
         if not taskqueues:
-            return error_message(EINVAL, 'Field taskqueues is required'), 400
+            return response_message(EINVAL, 'Field taskqueues is required'), 400
         if not isinstance(taskqueues, list):
-            return error_message(EINVAL, 'Field taskqueues should be a list'), 400
+            return response_message(EINVAL, 'Field taskqueues should be a list'), 400
 
         for taskqueue in taskqueues:
             if 'address' not in taskqueue or 'priority' not in taskqueue:
-                return error_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
+                return response_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
             queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'], team=team, organization=organization)
             if queue.count() != 1:
-                return error_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
+                return response_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
 
             for task in taskqueue['tasks']:
                 if 'task_id' not in task:
-                    return error_message(EINVAL, 'Task lacks the field task_id'), 400
+                    return response_message(EINVAL, 'Task lacks the field task_id'), 400
                 if task['priority'] != taskqueue['priority']:
-                    return error_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'), 400
+                    return response_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'), 400
                 t = Task.objects(pk=task['task_id']).first()
                 if not t:
-                    return error_message(ENOENT, 'task not found for ' + task['task_id']), 404
+                    return response_message(ENOENT, 'task not found for ' + task['task_id']), 404
 
             q = queue.first()
             if not q.flush():
-                return error_message(EPERM, 'task queue {} {} flushing failed'.format(q.endpoint_address, q.priority)), 401
+                return response_message(EPERM, 'task queue {} {} flushing failed'.format(q.endpoint_address, q.priority)), 401
 
             for task in taskqueue['tasks']:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet

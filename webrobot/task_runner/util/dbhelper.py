@@ -2,26 +2,54 @@ import argparse
 import copy
 import datetime
 import os
+import re
 import sys
 from os import path
 from pathlib import Path
+from wheel import wheelfile
+from wheel import pkginfo
 
 import mistune
 from mongoengine import *
+from flask import current_app
 
 sys.path.append('.')
 from app.main.model.database import Test, User
 from app.main.config import get_config
+
+METADATA = 'METADATA'
+WHEEL_INFO = 'WHEEL'
+WHEEL_INFO_RE = re.compile(
+    r"""^(?P<namever>(?P<name>.+?)(-(?P<ver>\d.+?))?)
+    ((-(?P<build>\d.*?))?-(?P<pyver>.+?)-(?P<abi>.+?)-(?P<plat>.+?)
+    \.whl|\.dist-info)$""",
+    re.VERBOSE).match
 
 def filter_kw(item):
     item = item.strip()
     if item.startswith('${') or item.startswith('@{') or item.startswith('&{'):
         item = item[2:]
         if not item.endswith('}'):
-            print('{ } mismatch for ' + item)
+            current_app.logger.error('{ } mismatch for ' + item)
         else:
             item = item[0:-1]
     return item
+
+def db_update_package(pkg_dir=None, script=None, user=None, organization=None, team=None):
+    if pkg_dir is None:
+        return 1
+    found = False
+
+    test_suites = []
+    for root, dirs, files in os.walk(pkg_dir):
+        for file in files:
+            if not file.endswith('.whl'):
+                continue
+
+            file_path = Path(root) / file
+            wf = wheelfile.WheelFile(file_path)
+            with wf.open(wf.dist_info_path + '/METADATA') as ef:
+                print(pkginfo.read_pkg_info_bytes(ef.read()).get_payload())
 
 def db_update_test(scripts_dir=None, script=None, user=None, organization=None, team=None):
     if scripts_dir is None:
@@ -43,10 +71,9 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                 for i in range(len(script_path)):
                     if script_path[i] != file_path[i]:
                         match = False
+                        break
                 if not match:
                     continue
-
-            if script:
                 found = True
 
             test_suite = md_file.split('.')[0]
@@ -105,16 +132,16 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                                         k, v = i.split('=')
                                         test.variables[dict_var][k] = v
                                 else:
-                                    print('Unknown tag: ' + c[0])
+                                    current_app.logger.error('Unknown tag: ' + c[0])
             old_test = Test.objects(path=test.path).first()
             if not old_test:
                 test.create_date = datetime.datetime.utcnow()
                 test.save()
-                print('Added new test suite {} to database'.format(test_suite))
+                current_app.logger.critical('Added new test suite {} to database'.format(test_suite))
                 continue
 
             if old_test != test:
-                print('Update test suite {}'.format(test_suite))
+                current_app.logger.critical('Update test suite {}'.format(test_suite))
                 for name in test:
                     if name == 'id' or name.startswith('_') or callable(test[name]):
                         continue
@@ -122,7 +149,7 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
                         continue
                     if old_test[name] == test[name]:
                         continue
-                    print('    Updating key: {}, {} -> {}'.format(name, old_test[name], test[name]))
+                    current_app.logger.info('    Updating key: {}, {} -> {}'.format(name, old_test[name], test[name]))
                     old_test[name] = test[name]
                 old_test.update_date = datetime.datetime.utcnow()
                 old_test.save()
@@ -142,7 +169,7 @@ def db_update_test(scripts_dir=None, script=None, user=None, organization=None, 
         else:
             if script is None:
                 Test.objects(pk=test_old.id).modify(remove=True)
-                print('Remove stale test suite {}'.format(test_old.test_suite))
+                current_app.logger.critical('Remove stale test suite {}'.format(test_old.test_suite))
 
     if script and not found:
         return 1

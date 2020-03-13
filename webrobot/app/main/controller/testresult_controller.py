@@ -15,7 +15,7 @@ from app.main.util.get_path import get_test_results_root
 from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestResultDto
-from ..util.errors import *
+from ..util.response import *
 
 api = TestResultDto.api
 _test_report = TestResultDto.test_report
@@ -61,7 +61,7 @@ class TestResultRoot(Resource):
                 end_date = parser.parse(end_date)
 
             if (start_date - end_date).days > 0:
-                return error_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
+                return response_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
 
             query = {'run_date__lte': end_date, 'run_date__gte': start_date, 'organization': organization}
         else:
@@ -120,19 +120,19 @@ class TestResultRoot(Resource):
         """Record the test case result in the database for a task"""
         data = request.json
         if data is None:
-            return error_message(EINVAL, "Payload of the request is empty"), 400
+            return response_message(EINVAL, "Payload of the request is empty"), 400
 
         task_id = data.get('task_id', None)
         if task_id == None:
-            return error_message(EINVAL, "Field task_id is required"), 400
+            return response_message(EINVAL, "Field task_id is required"), 400
 
         task = Task.objects(pk=task_id).first()
         if not task:
-            return error_message(ENOENT, "Task not found"), 404
+            return response_message(ENOENT, "Task not found"), 404
 
         test_case = data.get('test_case', None)
         if test_case == None:
-            return error_message(EINVAL, "Field test_case is required"), 400
+            return response_message(EINVAL, "Field test_case is required"), 400
 
         test_result = TestResult()
         test_result.test_case = test_case
@@ -141,7 +141,7 @@ class TestResultRoot(Resource):
             test_result.save()
         except ValidationError as e:
             current_app.logger.exception(e)
-            return error_message(EINVAL, "Test result validation failed"), 400
+            return response_message(EINVAL, "Test result validation failed"), 400
 
         task.test_results.append(test_result)
         task.save()
@@ -160,17 +160,17 @@ class TestResultUpload(Resource):
         """
         data = request.json
         if data is None:
-            return error_message(EINVAL, "Payload of the request is empty"), 400
+            return response_message(EINVAL, "Payload of the request is empty"), 400
 
         if isinstance(data, str):
             data = json.loads(data)
 
         task = Task.objects(pk=task_id).first()
         if not task:
-            return error_message(ENOENT, "Task not found"), 404
+            return response_message(ENOENT, "Task not found"), 404
 
         if not task.test_results:
-            return error_message(ENOENT, "Test result not found"), 404
+            return response_message(ENOENT, "Test result not found"), 404
 
         cur_test_result = task.test_results[-1]
 
@@ -183,4 +183,4 @@ class TestResultUpload(Resource):
             cur_test_result.save()
         except ValidationError as e:
             current_app.logger.exception(e)
-            return error_message(EPERM, "Test result validation failed"), 400
+            return response_message(EPERM, "Test result validation failed"), 400

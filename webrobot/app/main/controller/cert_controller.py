@@ -10,7 +10,7 @@ from flask_restplus import Resource
 
 from app.main.model.database import *
 from ..util.dto import CertDto
-from ..util.errors import *
+from ..util.response import *
 from ..config import get_config
 
 api = CertDto.api
