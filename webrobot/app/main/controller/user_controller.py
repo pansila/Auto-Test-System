@@ -11,7 +11,7 @@ from app.main.model.database import *
 from ..service.user_service import get_all_users, save_new_user
 from ..service.auth_helper import Auth
 from ..util.dto import UserDto
-from ..util.errors import *
+from ..util.response import *
 from ..config import get_config
 from ..util.identicon import *
 
@@ -50,7 +50,7 @@ class UserInfo(Resource):
     @api.marshal_with(_user_info_resp)
     def get(self):
         """Get user information"""
-        return Auth.get_logged_in_user(request)
+        return Auth.get_logged_in_user(request.headers.get('X-Token'))
 
 @api.route('/avatar')
 class UserInfo(Resource):
@@ -64,9 +64,9 @@ class UserInfo(Resource):
                 user = User.objects(pk=payload['sub']).first()
                 if user:
                     return send_from_directory(Path(os.getcwd()) / USERS_ROOT / user.email, user.avatar)
-                return error_message(USER_NOT_EXIST), 401
-            return error_message(TOKEN_ILLEGAL, payload), 401
-        return error_message(TOKEN_REQUIRED), 400
+                return response_message(USER_NOT_EXIST), 401
+            return response_message(TOKEN_ILLEGAL, payload), 401
+        return response_message(TOKEN_REQUIRED), 400
 
     @api.doc('upload_the_avatar')
     @token_required
@@ -76,7 +76,7 @@ class UserInfo(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         for name, file in request.files.items():
             ext = file.filename.split('.')[1]
@@ -95,16 +95,16 @@ class UserInfo(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         avatar_type = request.json.get('type', None)
         if not avatar_type:
-            return error_message(EINVAL, 'Field type is required'), 401
+            return response_message(EINVAL, 'Field type is required'), 401
 
         if avatar_type == 'custom':
             filename1 = USERS_ROOT / user.email / 'temp.png'
             if not os.path.exists(filename1):
-                return error_message(ENOENT, 'Avatar file not found'), 404
+                return response_message(ENOENT, 'Avatar file not found'), 404
 
             filename2 = USERS_ROOT / user.email / (str(user.id) + '.png')
             try:
@@ -123,7 +123,7 @@ class UserInfo(Resource):
             img = render_identicon(hash(user.email), 27)
             img.save(USERS_ROOT / user.email / ('%s.png' % user.id))
         else:
-            return error_message(EINVAL, 'Unknown avatar type'), 401
+            return response_message(EINVAL, 'Unknown avatar type'), 401
 
 @api.route('/check')
 class UserInfoCheck(Resource):
@@ -135,10 +135,10 @@ class UserInfoCheck(Resource):
         if email:
             user = User.objects(email=email).first()
             if user:
-                return error_message(USER_ALREADY_EXIST), 401
-            return error_message(SUCCESS), 200
+                return response_message(USER_ALREADY_EXIST), 401
+            return response_message(SUCCESS), 200
         else:
-            return error_message(UNKNOWN_ERROR, 'No query data found'), 401
+            return response_message(UNKNOWN_ERROR, 'No query data found'), 401
 
 @api.route('/account')
 class UserAccount(Resource):
@@ -153,7 +153,7 @@ class UserAccount(Resource):
 
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         username = data.get('name', None)
         if username:
@@ -174,7 +174,7 @@ class UserAccount(Resource):
         try:
             user.save()
         except ValidationError:
-            return error_message(EINVAL, 'Failed to update the user account'), 401
+            return response_message(EINVAL, 'Failed to update the user account'), 401
 
     @api.doc('delete_user_account')
     @api.expect(_password)
@@ -187,15 +187,15 @@ class UserAccount(Resource):
 
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         password = data.get('password', None)
         if not password:
-            return error_message(EINVAL, 'Field password is required'), 401
+            return response_message(EINVAL, 'Field password is required'), 401
 
         ret = user.check_password(password)
         if not ret:
-            return error_message(EINVAL, 'Password is incorrect'), 403
+            return response_message(EINVAL, 'Password is incorrect'), 403
 
         for org in user.organizations:
             org.modify(pull__members=user)
@@ -252,22 +252,22 @@ class UserAccount(Resource):
 
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         oldPassword = data.get('oldPassword', None)
         if not oldPassword:
-            return error_message(EINVAL, 'Field oldPassword is required'), 401
+            return response_message(EINVAL, 'Field oldPassword is required'), 401
 
         newPassword = data.get('newPassword', None)
         if not newPassword:
-            return error_message(EINVAL, 'Field newPassword is required'), 401
+            return response_message(EINVAL, 'Field newPassword is required'), 401
 
         ret = user.check_password(oldPassword)
         if not ret:
-            return error_message(EINVAL, 'Old password is incorrect'), 403
+            return response_message(EINVAL, 'Old password is incorrect'), 403
 
         user.password = newPassword
         try:
             user.save()
         except ValidationError:
-            return error_message(EINVAL, 'Failed to update the user account'), 401
+            return response_message(EINVAL, 'Failed to update the user account'), 401

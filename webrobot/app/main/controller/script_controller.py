@@ -13,7 +13,7 @@ from ..config import get_config
 from ..model.database import *
 from ..util.dto import ScriptDto
 from ..util.tarball import path_to_dict
-from ..util.errors import *
+from ..util.response import *
 
 api = ScriptDto.api
 _update_script = ScriptDto.update_script
@@ -47,15 +47,15 @@ class ScriptManagement(Resource):
 
         if script_path:
             if script_type is None:
-                return error_message(EINVAL, 'Field script_type is required'), 400
+                return response_message(EINVAL, 'Field script_type is required'), 400
             if script_type == 'user_scripts':
                 return send_from_directory(Path(os.getcwd()) / user_scripts_root, script_path)
             elif script_type == 'backing_scripts':
                 return send_from_directory(Path(os.getcwd()) / back_scripts_root, script_path)
             else:
-                return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
+                return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
         elif script_type:
-            return error_message(EINVAL, 'Field file is required'), 400
+            return response_message(EINVAL, 'Field file is required'), 400
 
         user_scripts = path_to_dict(user_scripts_root)
         back_scripts = path_to_dict(back_scripts_root)
@@ -69,22 +69,22 @@ class ScriptManagement(Resource):
         """Update the script file content"""
         script = request.json.get('file', None)
         if not script:
-            return error_message(EINVAL, 'Field file is required'), 400
+            return response_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
-            return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+            return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         new_name = request.json.get('new_name', None)
         if new_name:
             if '..' in new_name:
-                return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+                return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
         if script_type is None:
-            return error_message(EINVAL, 'Field script_type is required'), 400
+            return response_message(EINVAL, 'Field script_type is required'), 400
 
         content = request.json.get('content', None)
         if content is None and new_name is None:
-            return error_message(EINVAL, 'Field content is required'), 400
+            return response_message(EINVAL, 'Field content is required'), 400
 
         organization = kwargs['organization']
         team = kwargs['team']
@@ -95,7 +95,7 @@ class ScriptManagement(Resource):
         elif script_type == 'backing_scripts':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
-            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
+            return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         dirname = os.path.dirname(script)
         basename = os.path.basename(script)
@@ -126,9 +126,9 @@ class ScriptManagement(Resource):
             if _script.endswith('.md'):
                 ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
                 if ret:
-                    return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+                    return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
 
-        return error_message(SUCCESS)
+        return response_message(SUCCESS)
 
     @token_required
     @organization_team_required_by_json
@@ -141,44 +141,44 @@ class ScriptManagement(Resource):
         
         script = request.json.get('file', None)
         if not script:
-            return error_message(EINVAL, 'Field file is required'), 400
+            return response_message(EINVAL, 'Field file is required'), 400
         if '..' in script:
-            return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+            return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
         if script_type is None:
-            return error_message(EINVAL, 'Field script_type is required'), 400
+            return response_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
         elif script_type == 'backing_scripts':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
-            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
+            return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         if not os.path.exists(root / script):
-            return error_message(ENOENT, 'File/directory doesn\'t exist'), 404
+            return response_message(ENOENT, 'File/directory doesn\'t exist'), 404
 
         if os.path.isfile(root / script):
             try:
                 os.remove(root / script)
             except OSError as err:
                 current_app.logger.exception(err)
-                return error_message(EIO, 'Error happened while deleting a file'), 401
+                return response_message(EIO, 'Error happened while deleting a file'), 401
 
             if script_type == 'user_scripts':
                 cnt = Test.objects(path=os.path.abspath(root / script)).delete()
                 if cnt == 0:
-                    return error_message(ENOENT, 'Test suite not found in the database'), 404
+                    return response_message(ENOENT, 'Test suite not found in the database'), 404
         else:
             try:
                 Test.objects(path__contains=os.path.abspath(root / script)).delete()
                 shutil.rmtree(root / script)
             except OSError as err:
                 current_app.logger.exception(err)
-                return error_message(EIO, 'Error happened while deleting a directory'), 401
+                return response_message(EIO, 'Error happened while deleting a directory'), 401
 
-        return error_message(SUCCESS)
+        return response_message(SUCCESS)
 
 @api.route('/upload/')
 class ScriptUpload(Resource):
@@ -202,30 +202,30 @@ class ScriptUpload(Resource):
         
         script_type = request.form.get('script_type', None)
         if script_type is None:
-            return error_message(EINVAL, 'Field script_type is required'), 400
+            return response_message(EINVAL, 'Field script_type is required'), 400
 
         if script_type == 'user_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
         elif script_type == 'backing_scripts':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
-            return error_message(EINVAL, 'Unsupported script type ' + script_type), 400
+            return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
         if not os.path.exists(root):
             os.mkdir(root)
 
         for name, file in request.files.items():
             if '..' in file.filename:
-                return error_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+                return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
             found = True
             filename = root / file.filename
             file.save(str(filename))
 
         if not found:
-            return error_message(ENOENT, 'No files are found in the request'), 404
+            return response_message(ENOENT, 'No files are found in the request'), 404
 
         if script_type == 'user_scripts':
             for name, file in request.files.items():
                 ret = db_update_test(scripts_dir=root, script=file.filename, user=user.email, organization=organization, team=team)
                 if ret:
-                    return error_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+                    return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401

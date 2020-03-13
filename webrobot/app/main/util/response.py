@@ -152,7 +152,7 @@ response = {
 	'data': fields.Raw
 }
 
-def error_message(error, message=None, model=response, **payload):
+def response_message(error, message=None, model=response, **payload):
 	errno, msg = error
 	if errno != 20000:
 		current_app.logger.error(message if message else msg)

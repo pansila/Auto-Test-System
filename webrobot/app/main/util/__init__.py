@@ -17,3 +17,16 @@ def push_event(organization, team, code, message=None):
         current_app.logger.error('Failed to push the event')
         return False
     return True
+
+def get_room_id(*data):
+    if isinstance(data[0], dict):
+        organization = ''
+        if 'organization' in data[0]:
+            organization = data[0]['organization']
+        team = ''
+        if 'team' in data[0]:
+            team = data[0]['team']
+    else:
+        organization, team = data[0], data[1]
+    org_team = organization + ':' + team
+    return org_team

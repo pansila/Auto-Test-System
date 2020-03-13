@@ -14,7 +14,7 @@ from ..config import get_config
 from ..model.database import *
 from ..util.dto import TaskResourceDto
 from ..util.tarball import make_tarfile, pack_files
-from ..util.errors import *
+from ..util.response import *
 
 api = TaskResourceDto.api
 _task_resource = TaskResourceDto.task_resource
@@ -39,12 +39,12 @@ class TaskResourceController(Resource):
             task = Task.objects(pk=task_id).get() 
         except ValidationError as e:
             current_app.logger.exception(e)
-            return error_message(EINVAL, 'Task ID incorrect'), 400
+            return response_message(EINVAL, 'Task ID incorrect'), 400
         except Task.DoesNotExist:
-            return error_message(ENOENT, 'Task not found'), 404
+            return response_message(ENOENT, 'Task not found'), 404
         
         if not task.upload_dir:
-            return error_message(SUCCESS, 'Upload directory is empty'), 406
+            return response_message(SUCCESS, 'Upload directory is empty'), 406
 
         upload_root = get_upload_files_root(task)
         result_root = get_test_result_path(task)
@@ -55,7 +55,7 @@ class TaskResourceController(Resource):
 
         tarball = pack_files(task_id, upload_root, result_root / TARBALL_TEMP)
         if not tarball:
-            return error_message(EIO, 'Packing task resource files failed'), 401
+            return response_message(EIO, 'Packing task resource files failed'), 401
 
         tarball = os.path.basename(tarball)
         return send_from_directory(Path(os.getcwd()) / result_root / TARBALL_TEMP, tarball)
@@ -78,7 +78,7 @@ class TaskResourceList(Resource):
 
         upload_root = get_upload_files_root(task)
         if not os.path.exists(upload_root):
-            return error_message(ENOENT, 'Task upload directory does not exist'), 404
+            return response_message(ENOENT, 'Task upload directory does not exist'), 404
 
         return os.listdir(upload_root)
 
@@ -113,18 +113,18 @@ class TaskResourceUpload(Resource):
         if len(files) > 0:
             retrigger_task_id = request.form.get('retrigger_task', None)
             if not retrigger_task_id:
-                return error_message(EINVAL, 'Field retrigger_task is required'), 400
+                return response_message(EINVAL, 'Field retrigger_task is required'), 400
 
             retrigger_task = Task.objects(pk=retrigger_task_id).first()
             if not retrigger_task:
-                return error_message(ENOENT, 'Re-trigger task not found'), 404
+                return response_message(ENOENT, 'Re-trigger task not found'), 404
 
             if retrigger_task.test.organization != organization or retrigger_task.test.team != team:
-                return error_message(EINVAL, 'Re-triggering a task not belonging to your organization/team is not allowed'), 403
+                return response_message(EINVAL, 'Re-triggering a task not belonging to your organization/team is not allowed'), 403
 
             retrigger_task_upload_root = get_upload_files_root(retrigger_task)
             if not os.path.exists(retrigger_task_upload_root):
-                return error_message(ENOENT, 'Re-trigger task upload directory does not exist'), 404
+                return response_message(ENOENT, 'Re-trigger task upload directory does not exist'), 404
 
         for f in files:
             try:
@@ -132,9 +132,9 @@ class TaskResourceUpload(Resource):
                 found = True
             except FileNotFoundError:
                 shutil.rmtree(upload_root)
-                return error_message(ENOENT, 'File {} used in the re-triggered task not found'.format(f)), 404
+                return response_message(ENOENT, 'File {} used in the re-triggered task not found'.format(f)), 404
 
         if not found:
-            return error_message(ENOENT, 'No files are found in the request'), 404
+            return response_message(ENOENT, 'No files are found in the request'), 404
 
-        return error_message(SUCCESS, resource_id=temp_id), 200
+        return response_message(SUCCESS, resource_id=temp_id), 200

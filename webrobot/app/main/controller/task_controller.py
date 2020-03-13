@@ -3,7 +3,7 @@ from pathlib import Path
 import datetime
 from datetime import date, datetime, timedelta
 
-from flask import request, Response, send_from_directory
+from flask import request, Response, send_from_directory, current_app
 from flask_restplus import Resource
 from mongoengine import ValidationError
 
@@ -15,7 +15,7 @@ from ..model.database import *
 from ..util.dto import TaskDto
 # from ..util.dto import Organization_team as _organization_team
 from ..config import get_config
-from ..util.errors import *
+from ..util.response import *
 from task_runner.runner import start_threads_by_task
 
 api = TaskDto.api
@@ -40,7 +40,7 @@ class TaskStatistics(Resource):
 
         result_dir = get_test_result_path(task)
         if not os.path.exists(result_dir):
-            return error_message(ENOENT, 'Task result directory not found'), 404
+            return response_message(ENOENT, 'Task result directory not found'), 404
 
         with open(result_dir / 'output.xml', encoding='utf-8') as f:
             return Response(f.read(), mimetype='text/xml')
@@ -60,11 +60,11 @@ class ScriptDownloadList(Resource):
 
         result_dir = get_test_result_path(task)
         if not os.path.exists(result_dir):
-            return error_message(ENOENT, 'Task result directory not found'), 404
+            return response_message(ENOENT, 'Task result directory not found'), 404
 
         result_files = path_to_dict(result_dir)
 
-        return error_message(SUCCESS, files=result_files)
+        return response_message(SUCCESS, files=result_files)
 
 @api.route('/result_file')
 class ScriptDownload(Resource):
@@ -80,7 +80,7 @@ class ScriptDownload(Resource):
         """Get the test result file"""
         file_path = request.args.get('file', default=None)
         if not file_path:
-            return error_message(EINVAL, 'Field file is required'), 400
+            return response_message(EINVAL, 'Field file is required'), 400
 
         task = kwargs['task']
 
@@ -113,7 +113,7 @@ class TaskController(Resource):
         end_date = datetime.datetime.fromtimestamp(int(end_date)/1000)
 
         if (start_date - end_date).days > 0:
-            return error_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
+            return response_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401
 
         delta = end_date - start_date
         days = delta.days
@@ -169,12 +169,12 @@ class TaskController(Resource):
         """Run a test suite"""
         data = request.json
         if data is None:
-            return error_message(EINVAL, 'The request data is empty'), 400
+            return response_message(EINVAL, 'The request data is empty'), 400
 
         task = Task()
         test_suite = data.get('test_suite', None)
         if test_suite == None:
-            return error_message(EINVAL, 'Field test_suite is required'), 400
+            return response_message(EINVAL, 'Field test_suite is required'), 400
 
         task.test_suite = test_suite
 
@@ -187,23 +187,23 @@ class TaskController(Resource):
             query['team'] = team
         test = Test.objects(**query)
         if not test:
-            return error_message(ENOENT, 'The requested test suite is not found'), 404
+            return response_message(ENOENT, 'The requested test suite is not found'), 404
         if test.count() != 1:
-            return error_message(EINVAL, 'Found duplicate test suites'), 401
+            return response_message(EINVAL, 'Found duplicate test suites'), 401
         test = test.first()
 
         endpoint_list = data.get('endpoint_list', None)
         if endpoint_list == None:
-            return error_message(EINVAL, 'Endpoint list is not included in the request'), 400
+            return response_message(EINVAL, 'Endpoint list is not included in the request'), 400
         if not isinstance(endpoint_list, list):
-            return error_message(EINVAL, 'Endpoint list is not a list'), 400
+            return response_message(EINVAL, 'Endpoint list is not a list'), 400
         if len(endpoint_list) == 0:
-            return error_message(EINVAL, 'Endpoint list is empty'), 400
+            return response_message(EINVAL, 'Endpoint list is empty'), 400
         task.endpoint_list = endpoint_list
 
         priority = int(data.get('priority', QUEUE_PRIORITY_DEFAULT))
         if priority < QUEUE_PRIORITY_MIN or priority > QUEUE_PRIORITY_MAX:
-            return error_message(ERANGE, 'Task priority is out of range'), 400
+            return response_message(ERANGE, 'Task priority is out of range'), 400
         task.priority = priority
 
         parallelization = data.get('parallelization', False)
@@ -211,12 +211,12 @@ class TaskController(Resource):
 
         variables = data.get('variables', {})
         if not isinstance(variables, dict):
-            return error_message(EINVAL, 'Variables should be a dictionary'), 400
+            return response_message(EINVAL, 'Variables should be a dictionary'), 400
         task.variables = variables
 
         testcases = data.get('test_cases', [])
         if not isinstance(testcases, list):
-            return error_message(EINVAL, 'Testcases should be a list'), 400
+            return response_message(EINVAL, 'Testcases should be a list'), 400
         task.testcases = testcases
 
         task.tester = user
@@ -227,9 +227,10 @@ class TaskController(Resource):
         try:
             task.save()
         except ValidationError:
-            return error_message(EINVAL, 'Task validation failed'), 400
+            return response_message(EINVAL, 'Task validation failed'), 400
 
         failed = []
+        succeeded = []
         for endpoint in task.endpoint_list:
             if task.parallelization:
                 new_task = Task()
@@ -240,28 +241,31 @@ class TaskController(Resource):
                     new_task.save()
                     taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
                     if not taskqueue:
-                        failed.append(endpoint)
+                        failed.append(str(new_task.id))
                     else:
                         ret = taskqueue.push(new_task)
                         if ret == None:
-                            failed.append(endpoint)
+                            failed.append(str(new_task.id))
                         else:
-                            start_threads_by_task(new_task)
+                            start_threads_by_task(current_app._get_current_object(), new_task)
+                            succeeded.append(str(new_task.id))
             else:
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
                 if not taskqueue:
-                    failed.append(endpoint)
+                    failed.append(str(task.id))
                 else:
                     ret = taskqueue.push(task)
                     if ret == None:
-                        failed.append(endpoint)
+                        failed.append(str(task.id))
                     else:
-                        start_threads_by_task(task)
+                        start_threads_by_task(current_app._get_current_object(), task)
+                        succeeded.append(str(task.id))
         else:
             if task.parallelization:
                 task.delete()
         if len(failed) != 0:
-            return error_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
+            return response_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
+        return response_message(SUCCESS, failed=failed, succeeded=succeeded), 200
 
     @token_required
     @organization_team_required_by_json
@@ -273,11 +277,11 @@ class TaskController(Resource):
         task = kwargs['task']
         data = request.json
         if not data:
-            return error_message(EINVAL, 'The request data is empty'), 400
+            return response_message(EINVAL, 'The request data is empty'), 400
 
         comment = data.get('comment', None)
         if not comment:
-            return error_message(EINVAL, 'Field comment is required'), 400
+            return response_message(EINVAL, 'Field comment is required'), 400
 
         task.comment = comment
         task.save()
@@ -296,14 +300,14 @@ class TaskController(Resource):
         task = kwargs['task']
         data = request.json
         if data is None:
-            return error_message(EINVAL, 'The request data is empty'), 400
+            return response_message(EINVAL, 'The request data is empty'), 400
 
         address = data.get('address', None)
         if address is None:
-            return error_message(EINVAL, 'Field address is required'), 400
+            return response_message(EINVAL, 'Field address is required'), 400
         priority = data.get('priority', None)
         if priority is None:
-            return error_message(EINVAL, 'Field priority is required'), 400
+            return response_message(EINVAL, 'Field priority is required'), 400
 
         message = {}
         message['address'] = address
@@ -312,4 +316,4 @@ class TaskController(Resource):
 
         ret = push_event(organization=task.test.organization, team=task.test.team, code=EVENT_CODE_CANCEL_TASK, message=message)
         if not ret:
-            return error_message(EPERM, 'Pushing the event to event queue failed'), 403
+            return response_message(EPERM, 'Pushing the event to event queue failed'), 403

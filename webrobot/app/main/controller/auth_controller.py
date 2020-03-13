@@ -4,7 +4,7 @@ from flask_restplus import Resource
 from app.main.service.auth_helper import Auth
 from app.main.model.database import *
 from ..util.dto import AuthDto
-from ..util.errors import *
+from ..util.response import *
 from task_runner.runner import initialize_runner
 
 api = AuthDto.api

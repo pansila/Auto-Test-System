@@ -10,7 +10,7 @@ from app.main.model.database import *
 
 from ..service.auth_helper import Auth
 from ..util.dto import OrganizationDto
-from ..util.errors import *
+from ..util.response import *
 from ..config import get_config
 from ..util.identicon import *
 
@@ -37,7 +37,7 @@ class OrganizationList(Resource):
         user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organizations = Organization.objects(owner=ObjectId(user_id), name__not__exact='Personal')
         for organization in organizations:
@@ -73,11 +73,11 @@ class OrganizationList(Resource):
         data = request.json
         name = data.get('name', None)
         if not name:
-            return error_message(EINVAL, 'Field name is required'), 400
+            return response_message(EINVAL, 'Field name is required'), 400
         
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         org = Organization(name=name)
         org.owner = user
@@ -91,7 +91,7 @@ class OrganizationList(Resource):
         try:
             os.mkdir(org_root)
         except FileExistsError as e:
-            return error_message(EEXIST), 401
+            return response_message(EEXIST), 401
 
         img= render_identicon(hash(name), 27)
         img.save(org_root / ('%s.png' % org.id))
@@ -109,18 +109,18 @@ class OrganizationList(Resource):
         """
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, "Field organization_id is required"), 400
+            return response_message(EINVAL, "Field organization_id is required"), 400
 
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
-            return error_message(ENOENT, "Team not found"), 404
+            return response_message(ENOENT, "Team not found"), 404
 
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, "User not found"), 404
+            return response_message(ENOENT, "User not found"), 404
 
         if organization.owner != user:
-            return error_message(EINVAL, 'You are not the organization owner'), 403
+            return response_message(EINVAL, 'You are not the organization owner'), 403
 
         try:
             shutil.rmtree(USERS_ROOT / organization.path)
@@ -160,10 +160,10 @@ class OrganizationAvatar(Resource):
                     org = Organization.objects(pk=org_id).first()
                     if org:
                         return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.avatar)
-                    return error_message(USER_NOT_EXIST, 'Organization not found'), 404
-                return error_message(USER_NOT_EXIST), 404
-            return error_message(TOKEN_ILLEGAL, payload), 401
-        return error_message(TOKEN_REQUIRED), 400
+                    return response_message(USER_NOT_EXIST, 'Organization not found'), 404
+                return response_message(USER_NOT_EXIST), 404
+            return response_message(TOKEN_ILLEGAL, payload), 401
+        return response_message(TOKEN_REQUIRED), 400
 
 @api.route('/member')
 class OrganizationMember(Resource):
@@ -178,26 +178,26 @@ class OrganizationMember(Resource):
         """
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, "Field organization_id is required"), 400
+            return response_message(EINVAL, "Field organization_id is required"), 400
 
         org_to_quit = Organization.objects(pk=organization_id).first()
         if not org_to_quit:
-            return error_message(ENOENT, "Organization not found"), 404
+            return response_message(ENOENT, "Organization not found"), 404
 
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, "User not found"), 404
+            return response_message(ENOENT, "User not found"), 404
 
         for organization in user.organizations:
             if organization != org_to_quit:
                 continue
             if organization.owner == user:
-                return error_message(EPERM, "Can't quit the organization as you are the owner"), 403
+                return response_message(EPERM, "Can't quit the organization as you are the owner"), 403
             organization.modify(pull__members=user)
             user.modify(pull__organizations=organization)
-            return error_message(SUCCESS), 200
+            return response_message(SUCCESS), 200
         else:
-            return error_message(EINVAL, "User is not in the organization"), 400
+            return response_message(EINVAL, "User is not in the organization"), 400
 
 @api.route('/all')
 class OrganizationListAll(Resource):
@@ -228,7 +228,7 @@ class OrganizationListAll(Resource):
         user_id = kwargs['user']['user_id']
         user = User.objects(pk=user_id).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organizations = Organization.objects(owner=ObjectId(user_id))
         for organization in organizations:
@@ -285,15 +285,15 @@ class OrganizationJoin(Resource):
         """The logged in user joins an organization"""
         org_id = request.json.get('organization_id', None)
         if not org_id:
-            return error_message(EINVAL, "Field organization_id is required"), 400
+            return response_message(EINVAL, "Field organization_id is required"), 400
 
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organization = Organization.objects(pk=org_id).first()
         if not organization:
-            return error_message(ENOENT, 'Organization not found'), 404
+            return response_message(ENOENT, 'Organization not found'), 404
 
         if user not in organization.members:
             organization.modify(push__members=user)
@@ -314,18 +314,18 @@ class OrganizationUsers(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organization_id = request.args.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization_id is required'), 401
+            return response_message(EINVAL, 'Field organization_id is required'), 401
 
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
-            return error_message(ENOENT, 'Organization not found'), 404
+            return response_message(ENOENT, 'Organization not found'), 404
 
         if user not in organization.members:
-            return error_message(EPERM, 'You are not in the organization'), 403
+            return response_message(EPERM, 'You are not in the organization'), 403
 
         return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
 
@@ -343,18 +343,18 @@ class OrganizationUsers(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organization_id = request.args.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization_id is required'), 401
+            return response_message(EINVAL, 'Field organization_id is required'), 401
 
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
-            return error_message(ENOENT, 'Organization not found'), 404
+            return response_message(ENOENT, 'Organization not found'), 404
 
         if user not in organization.members:
-            return error_message(EPERM, 'You are not in the organization'), 403
+            return response_message(EPERM, 'You are not in the organization'), 403
 
         ret = [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
         check_list = [str(m.id) for m in organization.members]
@@ -381,33 +381,33 @@ class OrganizationTransfer(Resource):
         """
         user = User.objects(pk=kwargs['user']['user_id']).first()
         if not user:
-            return error_message(ENOENT, 'User not found'), 404
+            return response_message(ENOENT, 'User not found'), 404
 
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
-            return error_message(EINVAL, 'Field organization_id is required'), 401
+            return response_message(EINVAL, 'Field organization_id is required'), 401
 
         organization = Organization.objects(pk=organization_id).first()
         if not organization:
-            return error_message(ENOENT, 'Organization not found'), 404
+            return response_message(ENOENT, 'Organization not found'), 404
 
         if organization.owner != user:
-            return error_message(EPERM, 'You are not the organization owner'), 403
+            return response_message(EPERM, 'You are not the organization owner'), 403
 
         owner_id = request.json.get('new_owner', None)
         if not owner_id:
-            return error_message(EINVAL, 'Field new_owner is required'), 401
+            return response_message(EINVAL, 'Field new_owner is required'), 401
 
         owner = User.objects(pk=owner_id).first()
         if not owner:
-            return error_message(ENOENT, 'New owner not found'), 404
+            return response_message(ENOENT, 'New owner not found'), 404
 
         if owner not in organization.members:
             for team in organization.teams:
                 if owner in team.members:
                     break
             else:
-                return error_message(EPERM, 'New owner should be a member of the organization'), 403
+                return response_message(EPERM, 'New owner should be a member of the organization'), 403
 
         organization.owner = owner
         if owner not in organization.members:

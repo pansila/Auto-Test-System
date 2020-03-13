@@ -11,10 +11,14 @@ from app.main.model import user, blacklist
 from mongoengine import connect
 from app.main.config import get_config
 from task_runner.runner import start_event_thread
+from flask_socketio import SocketIO, send, emit
+from app.main.controller.socketio_controller import handle_message, handle_join_room, handle_leave_room
 
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
 get_config().init_app(app)
 app.register_blueprint(blueprint)
+socketio = SocketIO(app, async_mode='threading')
+app.config['socketio'] = socketio
 
 app.app_context().push()
 if os.getenv('BOILERPLATE_ENV') != 'prod':
@@ -32,8 +36,9 @@ def run():
     connect(get_config().MONGODB_DATABASE, host=get_config().MONGODB_URL, port=get_config().MONGODB_PORT)
     # workaround for dual runnings of the server
     if 'WERKZEUG_RUN_MAIN' in os.environ and os.environ['WERKZEUG_RUN_MAIN'] == 'true':
-        start_event_thread()
-    app.run(host='0.0.0.0')
+        start_event_thread(app)
+    #app.run(host='0.0.0.0')
+    socketio.run(app, host='0.0.0.0')
 
 
 @manager.command
@@ -44,6 +49,18 @@ def test():
     if result.wasSuccessful():
         return 0
     return 1
+
+socketio.on_event('message', handle_message)
+socketio.on_event('join', handle_join_room)
+socketio.on_event('leave', handle_leave_room)
+
+@socketio.on('connect')
+def test_connect():
+    print('Client connected')
+
+@socketio.on('disconnect')
+def test_disconnect():
+    print('Client disconnected')
 
 if __name__ == '__main__':
     manager.run()

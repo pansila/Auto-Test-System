@@ -11,7 +11,7 @@ from ..config import get_config
 from ..model.database import *
 from ..util.dto import TestDto
 from ..util.tarball import make_tarfile, pack_files
-from ..util.errors import *
+from ..util.response import *
 
 api = TestDto.api
 _test_cases = TestDto.test_cases
@@ -34,15 +34,15 @@ class ScriptDownload(Resource):
         """
         task_id = request.args.get('id', None)
         if not task_id:
-            return error_message(EINVAL, 'Field id is required'), 400
+            return response_message(EINVAL, 'Field id is required'), 400
 
         test_suite = request.args.get('test', None)
         if not test_suite:
-            return error_message(EINVAL, 'Field test is required'), 400
+            return response_message(EINVAL, 'Field test is required'), 400
 
         task = Task.objects(pk=task_id).first()
         if not task:
-            return error_message(ENOENT, 'Task not found'), 404
+            return response_message(ENOENT, 'Task not found'), 404
 
         if test_suite.endswith('.py'):
             test_suite = test_suite[0:-3]
@@ -57,7 +57,7 @@ class ScriptDownload(Resource):
             pass
         script_file = scripts_root / (test_suite + '.py')
         if not os.path.exists(script_file):
-            return error_message(ENOENT, "file {} does not exist".format(script_file)), 404
+            return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
         for _ in range(3):
             tarball = pack_files(test_suite, scripts_root, results_tmp)
@@ -68,7 +68,7 @@ class ScriptDownload(Resource):
                 tarball = os.path.basename(tarball)
                 return send_from_directory(Path(os.getcwd()) / results_tmp, tarball)
         else:
-            return error_message(EIO, "packaging files failed"), 404
+            return response_message(EIO, "packaging files failed"), 404
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'The test suite to query')
@@ -85,7 +85,7 @@ class TestSuiteGet(Resource):
 
         test = Test.objects(test_suite=test_suite, organization=organization, team=team).first()
         if not test:
-            return error_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
+            return response_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
 
         return {
             'test_cases': test.test_cases,
