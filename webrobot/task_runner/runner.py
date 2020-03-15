@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import datetime
+import eventlet
 import functools
 import os
 import queue
@@ -123,8 +124,7 @@ def log_event_exception(event, future):
         event.message['exception_value'] = str(e_value)
         temp = StringIO()
         traceback.print_tb(e_traceback, file=temp)
-        temp.seek(0)
-        event.message['exception_traceback'] = temp.read()
+        event.message['exception_traceback'] = temp.getvalue()
         temp.close()
         event.save()
 
@@ -306,7 +306,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             args.append(task.test.path)
             app.logger.info('Arguments: ' + str(args))
 
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, text=True,
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
             ROBOT_PROCESSES[task.id] = p
 
@@ -316,7 +316,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             task.save()
             socketio.emit('task started', {'task_id': str(task.id)}, room=room_id)
 
-            log_msg = b''
+            log_msg = StringIO()
             if room_id not in ROOM_MESSAGES:
                 ROOM_MESSAGES[room_id] = {str(task.id): log_msg}
             else:
@@ -324,16 +324,17 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
                     ROOM_MESSAGES[room_id][str(task.id)] = log_msg
             while True:
                 c = p.stdout.read(1)
-                log_msg += c
-                ROOM_MESSAGES[room_id][str(task.id)] = log_msg
-                socketio.emit('console log', {'task_id': str(task.id), 'message': c.decode()}, room=room_id)
                 if not c:
                     break
+                c = '\r\n' if c == '\n' else c
+                if os.name != 'nt':
+                    eventlet.sleep()
+                log_msg.write(c)
+                socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
             del ROBOT_PROCESSES[task.id]
-            try:
-                app.logger.info('\n' + log_msg.decode().replace('\r\n', '\n'))
-            except UnicodeDecodeError:
-                app.logger.info(stdout)
+
+            app.logger.info('\n' + log_msg.getvalue())
+            #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
 
             if p.returncode == 0:
                 task.status = 'successful'
@@ -343,6 +344,8 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
                     task.status = 'failed'
             task.save()
             socketio.emit('task finished', {'task_id': str(task.id), 'status': task.status}, room=room_id)
+            ROOM_MESSAGES[room_id][str(task.id)].close()
+            del ROOM_MESSAGES[room_id][str(task.id)]
 
             taskqueue.modify(running_task=None)
 

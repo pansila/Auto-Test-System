@@ -37,6 +37,12 @@ class Config:
         # email errors to the administrators
         import logging
         from logging.handlers import RotatingFileHandler
+
+        try:
+            os.mkdir(cls.LOG_PATH)
+        except FileExistsError:
+            pass
+
         # Formatter
         formatter = logging.Formatter(
             '%(asctime)s %(levelname)s %(process)d %(thread)d '

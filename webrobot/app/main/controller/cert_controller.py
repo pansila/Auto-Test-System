@@ -5,7 +5,7 @@ import time
 import subprocess
 from bson.objectid import ObjectId
 from pathlib import Path
-from flask import request, send_from_directory, current_app
+from flask import request, send_from_directory
 from flask_restplus import Resource
 
 from app.main.model.database import *
@@ -29,7 +29,7 @@ elif os.name == 'posix':
     LINE_BEGIN = './'
     LINE_END = os.linesep
 else:
-    current_app.logger.error('Unsupported platform')
+    print('Unsupported platform')
     sys.exit(1)
 
 def is_file_valid(file):
@@ -52,12 +52,13 @@ def get_pexpect_child():
     return child
 
 class build_keys(threading.Thread):
-    def __init__(self):
+    def __init__(self, app):
         threading.Thread.__init__(self)
+        self.app = app
 
     def run(self):
         if not is_file_valid(KEYS_PATH / 'ca.key') or not is_file_valid(KEYS_PATH / 'ca.crt'):
-            current_app.logger.info('Start to build CA key')
+            self.app.logger.info('Start to build CA key')
             start = time.time()
             child = get_pexpect_child()
             child.sendline('cd {}'.format(EASY_RSA_PATH))
@@ -99,12 +100,12 @@ class build_keys(threading.Thread):
             child.kill(9)
 
             if is_file_valid(KEYS_PATH / 'ca.key') and is_file_valid(KEYS_PATH / 'ca.crt'):
-                current_app.logger.info('Succeeded to build CA key, time consumed: {}'.format(time.time() - start))
+                self.app.logger.info('Succeeded to build CA key, time consumed: {}'.format(time.time() - start))
             else:
-                current_app.logger.error('Failed to build CA key')
+                self.app.logger.error('Failed to build CA key')
 
         if not is_file_valid(KEYS_PATH / 'ta.key') and os.name == 'nt':
-            current_app.logger.info('Start to build TA key')
+            self.app.logger.info('Start to build TA key')
             start = time.time()
             child = get_pexpect_child()
             child.sendline('cd {}'.format(EASY_RSA_PATH))
@@ -123,12 +124,12 @@ class build_keys(threading.Thread):
             child.kill(9)
 
             if is_file_valid(KEYS_PATH / 'ta.key'):
-                current_app.logger.info('Succeeded to build TA key, time consumed: {}'.format(time.time() - start))
+                self.app.logger.info('Succeeded to build TA key, time consumed: {}'.format(time.time() - start))
             else:
-                current_app.logger.error('Failed to build TA key')
+                self.app.logger.error('Failed to build TA key')
 
         if not is_file_valid(KEYS_PATH / 'server.key') or not is_file_valid(KEYS_PATH / 'server.crt'):
-            current_app.logger.info('Start to build server key')
+            self.app.logger.info('Start to build server key')
             start = time.time()
             child = get_pexpect_child()
             child.sendline('cd {}'.format(EASY_RSA_PATH))
@@ -177,7 +178,7 @@ class build_keys(threading.Thread):
             try:
                 child.expect('\[y/n\]', timeout=2)
             except pexpect.exceptions.TIMEOUT:
-                current_app.logger.warning('Signing certificate failed possibly due to repeated CSR requests')
+                self.app.logger.warning('Signing certificate failed possibly due to repeated CSR requests')
             child.sendline('y')
 
             child.expect(LINE_END, timeout=30)
@@ -186,12 +187,12 @@ class build_keys(threading.Thread):
             child.kill(9)
 
             if is_file_valid(KEYS_PATH / 'server.key') and is_file_valid(KEYS_PATH / 'server.crt'):
-                current_app.logger.info('Succeeded to build server key, time consumed: {}'.format(time.time() - start))
+                self.app.logger.info('Succeeded to build server key, time consumed: {}'.format(time.time() - start))
             else:
-                current_app.logger.error('Failed to build server key')
+                self.app.logger.error('Failed to build server key')
 
         if not is_file_valid(KEYS_PATH / 'dh2048.pem'):
-            current_app.logger.info('Start to build DH key')
+            self.app.logger.info('Start to build DH key')
             start = time.time()
             child = get_pexpect_child()
             child.sendline('cd {}'.format(EASY_RSA_PATH))
@@ -210,12 +211,12 @@ class build_keys(threading.Thread):
             child.kill(9)
 
             if is_file_valid(KEYS_PATH / 'dh2048.pem'):
-                current_app.logger.info('Succeeded to build DH key, time consumed: {}'.format(time.time() - start))
+                self.app.logger.info('Succeeded to build DH key, time consumed: {}'.format(time.time() - start))
             else:
-                current_app.logger.error('Failed to build DH key')
+                self.app.logger.error('Failed to build DH key')
 
-if not 'thread' in globals():
-    thread = build_keys()
+def build_easyrsa_keys(app):
+    thread = build_keys(app)
     thread.daemon = True
     thread.start()
 
