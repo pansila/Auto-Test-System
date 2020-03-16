@@ -8,7 +8,7 @@
 - [Configurations of the Auto Test System](#configurations-of-the-auto-test-system)
 - [Support The Robot Test Cases In Markdown](#support-the-robot-test-cases-in-markdown)
 - [Hacks To The Robot](#hacks-to-the-robot)
-- [RESTful API of Web Server](#restful-api-of-web-server)
+- [RESTful API Document of Web Server](#restful-api-document-of-web-server)
 
 ### Introduction
 This is a distributed test automation framework with a centralized management UI. We are not intent to invent a new test framework or language here, so we choose [Robot Framework](https://github.com/robotframework/robotframework) and [Robot Framework Remote Server](https://github.com/robotframework/PythonRemoteServer) as the test infrastructure, and then add the upper layer applications to make it easier to use.
@@ -91,7 +91,7 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    pipenv run daemon
    ```
 
-3. Run a test by using the restful API
+3. (Work in progress) Run a test by using the restful API
    ```
    http POST http://127.0.0.1:5000/task/ test_suite:=\"demo-test\" endpoint_list:=[\"127.0.0.1:8270\"] variables:={\"echo_message\":\"bye\"} tester:=\"abc@123.com\"
    ```
@@ -117,13 +117,6 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
    ```
    cd webrobot
    pipenv run start http://127.0.0.1:5000 demo-test -e 127.0.0.1:8270 --file firmware.bin --tester abc@123.com -v echo_message bye -t hello_world
-   ```
-
-4. (Optional) Run a test from the command line
-
-   ```bash
-   cd webrobot
-   pipenv run robot --loglevel=DEBUG ../example-test-scripts/robot_tester_scripts/demo-test.robot
    ```
 
 Notice:
@@ -154,172 +147,5 @@ robot demo-test.md
 ### Hacks To The Robot
 1. robot will cache test libraries if they have been imported before, we disabled it in `_import_library` in `importer.py` to support reloading test libraries in order to get the latest test library downloaded by daemon process on the test endpoint. Change details please see `patch/robot.diff`.
 
-### RESTful API of Web Server
-1. Test Script files
-   1. Method GET
-      Get a bundled script file that is necessary to run the test
-      ```
-      $ http GET http://127.0.0.1:5000/test/script/demo-test
-      ```
-2. Test Description
-   1. Method GET
-      Get the description information of a test suite
-      ```
-      $ http GET http://127.0.0.1:5000/test/demo-test
-      ```
-3. Task Resource
-   1. Method POST
-      Upload a file to the web server, will return a resource id associated with the uploading session.
-      ```
-      $ http --form POST http://127.0.0.1:5000/taskresource file@demo.bin
-      {
-          "data": "5c90ae3db38ff7139cb96f66",
-          "status": 0
-      }
-      ```
-   2. Method POST
-      Upload a file to the web server with a resource id, files uploaded will be put in the same place specified by the resource id.
-      ```
-      $ http --form POST http://127.0.0.1:5000/taskresource/ file@demo.bin resource_id=5c90ae3db38ff7139cb96f66
-      {
-          "data": "5c90ae3db38ff7139cb96f66",
-          "status": 0
-      }
-      ```
-   3. Method GET
-      Get a resource tarball associated to specified task id.
-      ```
-      $ http GET http://127.0.0.1:5000/taskresource/5c90aa12b38ff711584b3fab
-      ```
-   4. Method GET
-      Get a resource file of the task
-      ```
-      $ http GET http://127.0.0.1:5000/taskresource/5c90aa12b38ff711584b3fab?file=firmware.bin
-      ```
-4. Task
-   1. Method POST
-      Run a task with certain variables.
-      ```
-      $ http POST http://127.0.0.1:5000/task/ < task.json
-      $ cat task.json
-      {
-        "test_suite": "demo-test"
-        "endpoint_list": ["127.0.0.1:8270"],
-        "variables": {
-          "echo_message": "hello"
-        },
-        "testcases": ["hello world"],
-        "tester": "abc@123.com",
-        "upload_dir": "5c90ae3db38ff7139cb96f66"
-      }
-      ```
-      `test_suite` is the test suite to run.
-
-      `endpoint_list` is the list of endpoints that are allowed to run the task, only one endpoint will win the task, other endpoints will notice that and quit the contention.
-
-      `variables` will be passes to robot as `-v <arg>:<val>`. For more information  please see []().
-
-      `testcases` are the test cases in a test suite to run, they are passed to robot as `-t <testcase>`. For more information please see []().
-
-      `tester` will receive a notification email, so it should be a complete email address.
-
-      `upload_dir` should be filled with the resource id returned above if there is any resource needed for the test.
-   2. Method POST
-      Update the task description. At present, only comment could be updated.
-      ```
-      $ http POST http://127.0.0.1:5000/task/update < task.json
-      $ cat task.json
-      {
-        "_id": { "$oid": "5c90ae3db38ff7139cb96f68" },
-        "comment": "hello world"
-      }
-      ```
-   3. Method GET
-      Get task statistics within a specified period of time, result is a array whose element is the test statistics per day
-      ```
-      $ http GET http://127.0.0.1:5000/task/?start_date=1554277440941&end_date=1554882240941
-      [{
-        'succeeded': 12,
-        'failed': 10,
-        'running': 0,
-        'waiting': 0
-      }, ...]
-      ```
-   4. Method GET
-      Get the raw task result generated by robot framework, will return a XML file
-      ```
-      $ http GET http://127.0.0.1:5000/task/result/<task_id>
-      ```
-5. Test Endpoint
-   1. Method GET
-      Get a list of endpoint descriptions
-      ```
-      $ http GET http://127.0.0.1:5000/endpoint/
-      ```
-   2. Method POST
-      Create a test endpoint along with associated task queues with the specified address and supported test suites
-      ```
-      $ http POST http://127.0.0.1:5000/endpoint/ endpoint_address=127.0.0.1:8270 tests:=[\"demo-test\"]
-      ```
-   3. Method GET
-      Get the task queue of an endpoint
-      ```
-      $ http GET http://127.0.0.1:5000/endpoint/queue/
-      [
-          {
-              "address": "127.0.0.1:8270",
-              "endpoint": "test site 1@lab1",
-              "priority": 1,
-              "status": "Online",
-              "tasks": [],
-              "waiting": 0
-          },
-          {
-              "address": "127.0.0.1:8270",
-              "endpoint": "test site 1@lab1",
-              "priority": 2,
-              "status": "Online",
-              "tasks": [
-                  {
-                      "address": "127.0.0.1:8270",
-                      "endpoint": "test site 1@lab1",
-                      "priority": 2,
-                      "status": "Running",
-                      "task": "demo-test",
-                      "task_id": "5cc7d2a3c74f38639e31e062"
-                  },
-                  {
-                      "address": "127.0.0.1:8270",
-                      "endpoint": "test site 1@lab1",
-                      "priority": 2,
-                      "status": "Waiting",
-                      "task": "demo-test",
-                      "task_id": "5cc7d2a4c74f38639e31e063"
-                  }
-              ],
-              "waiting": 1
-          },
-          ...
-      ]
-      ```
-   4. Method POST
-      Update the task queue of an endpoint, data structure is the same as the result from task queue GET API
-      ```
-      $ http POST http://127.0.0.1:5000/endpoint/queue/
-      ```
-6. Task Result
-   1. Method GET
-      Get a list of tasks in the database, supported querying arguments are listed below.
-      ```
-      $ http GET http://127.0.0.1:5000/testresult?page=1&limit=10&title=wifi&priority=2&endpoint=127.0.0.1:8270&sort=-run_date&start_date=1554277440941&end_date=1554882240941
-      ```
-   2. Method POST
-      Create the test result document in the database.
-      ```
-      $ http POST http://127.0.0.1:5000/testresult/ task_id=<task id> test_case=<test case name>
-      ```
-   3. Method POST
-      Update the lastest test result document of a task in the database. A task usually hosts several test cases of a test suite, there is a test result document for each test case.
-      ```
-      $ http POST http://127.0.0.1:5000/testresult/<task id> status={PASS | FAIL} ...
-      ```
+### RESTful API Document of Web Server
+Please visit automatically generated [swagger doc](http://127.0.0.1:5000/)

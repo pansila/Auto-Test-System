@@ -231,6 +231,7 @@ class TaskController(Resource):
 
         failed = []
         succeeded = []
+        running = []
         for endpoint in task.endpoint_list:
             if task.parallelization:
                 new_task = Task()
@@ -242,10 +243,14 @@ class TaskController(Resource):
                     taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
                     if not taskqueue:
                         failed.append(str(new_task.id))
+                        current_app.logger.error('Task queue not found')
                     else:
+                        if not taskqueue.running_task and len(taskqueue.tasks) == 0:
+                            running.append(str(new_task.id))
                         ret = taskqueue.push(new_task)
                         if ret == None:
                             failed.append(str(new_task.id))
+                            current_app.logger.error('Failed to push task to the task queue')
                         else:
                             start_threads_by_task(current_app._get_current_object(), new_task)
                             succeeded.append(str(new_task.id))
@@ -253,10 +258,14 @@ class TaskController(Resource):
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
                 if not taskqueue:
                     failed.append(str(task.id))
+                    current_app.logger.error('Task queue not found')
                 else:
+                    if not taskqueue.running_task and len(taskqueue.tasks) == 0:
+                        running.append(str(task.id))
                     ret = taskqueue.push(task)
                     if ret == None:
                         failed.append(str(task.id))
+                        current_app.logger.error('Failed to push task to the task queue')
                     else:
                         start_threads_by_task(current_app._get_current_object(), task)
                         succeeded.append(str(task.id))
@@ -265,7 +274,7 @@ class TaskController(Resource):
                 task.delete()
         if len(failed) != 0:
             return response_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
-        return response_message(SUCCESS, failed=failed, succeeded=succeeded), 200
+        return response_message(SUCCESS, failed=failed, succeeded=succeeded, running=[t for t in running if t in succeeded]), 200
 
     @token_required
     @organization_team_required_by_json
