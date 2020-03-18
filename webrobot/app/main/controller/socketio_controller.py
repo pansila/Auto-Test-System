@@ -8,6 +8,8 @@ def handle_message(message):
     print(message, request.sid)
 
 def handle_join_room(json):
+    if 'X-Token' not in json:
+        return
     if not Auth.is_user_authenticated(json['X-Token']):
         return
 
@@ -21,6 +23,8 @@ def handle_join_room(json):
         emit('console log', {'task_id': task_id, 'message': ROOM_MESSAGES[org_team][task_id].getvalue()})
 
 def handle_enter_room(json):
+    if 'X-Token' not in json:
+        return
     if not Auth.is_user_authenticated(json['X-Token']):
         return
 
@@ -33,6 +37,8 @@ def handle_enter_room(json):
         emit('console log', {'task_id': task_id, 'message': ROOM_MESSAGES[org_team][task_id].getvalue()})
 
 def handle_leave_room(json):
+    if 'X-Token' not in json:
+        return
     if Auth.is_user_authenticated(json['X-Token']):
         org_team = get_room_id(json)
         leave_room(org_team)

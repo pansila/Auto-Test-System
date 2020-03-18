@@ -14,6 +14,7 @@ import tarfile
 import threading
 import time
 import traceback
+import xmlrpc.client
 from io import StringIO
 from pathlib import Path
 
@@ -155,7 +156,7 @@ async def event_loop(app):
             app.logger.error('Unknown message: %s' % event.code)
 
 def event_loop_parent(app):
-    reset_event_queue_status()
+    reset_event_queue_status(app)
     asyncio.run(event_loop(app))
 
 def convert_json_to_robot_variable(args, variables, variable_file):
@@ -327,14 +328,20 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
                 if not c:
                     break
                 c = '\r\n' if c == '\n' else c
-                if os.name != 'nt':
-                    eventlet.sleep()
                 log_msg.write(c)
                 socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
             del ROBOT_PROCESSES[task.id]
 
             app.logger.info('\n' + log_msg.getvalue())
             #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
+
+            for i in range(50):
+                if p.poll() is not None:
+                    break
+                time.sleep(0.1)
+            else:
+                p.terminate()
+                app.logger.error('Task process not stopped')
 
             if p.returncode == 0:
                 task.status = 'successful'
@@ -395,13 +402,45 @@ def task_loop_helper_per_endpoint(app, endpoint_address, organization=None, team
     if taskqueue.id in TASK_THREADS:
         del TASK_THREADS[taskqueue.id]
 
-def restart_interrupted_tasks(organization=None, team=None):
+def heartbeat_monitor(app):
+    app.logger.info('Start endpoint online check thread')
+    expires = 0
+    while True:
+        endpoints = Endpoint.objects()
+        for endpoint in endpoints:
+            url = 'http://{}'.format(endpoint.endpoint_address)
+            server = xmlrpc.client.ServerProxy(url)
+            organization = endpoint.organization
+            team = endpoint.team
+            org_name = team.organization.name + '-' + team.name if team else organization.name
+            try:
+                server.get_keyword_names()
+            except ConnectionRefusedError:
+                app.logger.error('Endpoint {} @ {} connecting failed'.format(org_name, endpoint.endpoint_address))
+            except xmlrpc.client.Fault as e:
+                app.logger.error('Endpoint {} @ {} RPC calling error'.format(org_name, endpoint.endpoint_address))
+            except TimeoutError:
+                app.logger.error('Endpoint {} @ {} connecting timeouted'.format(org_name, endpoint.endpoint_address))
+            except OSError:
+                app.logger.error('Endpoint {} @ {} unreachable'.format(org_name, endpoint.endpoint_address))
+            except Exception as e:
+                app.logger.error('Endpoint {} @ {} has error:'.format(org_name, endpoint.endpoint_address))
+                app.logger.exception(e)
+            else:
+                if endpoint.status == 'Offline':
+                    endpoint.modify(status='Online')
+                continue
+            if endpoint.status == 'Online':
+                endpoint.modify(status='Offline')
+        time.sleep(30)
+    
+def restart_interrupted_tasks(app, organization=None, team=None):
     """
     Restart interrupted tasks that have been left over when task runner aborts
     """
     pass
 
-def reset_event_queue_status():
+def reset_event_queue_status(app):
     queue = EventQueue.objects().first()
     if not queue:
         queue = EventQueue()
@@ -412,7 +451,7 @@ def reset_event_queue_status():
     if ret:
         app.logger.info('Reset the read/write lock for event queue')
 
-def reset_task_queue_status(organization=None, team=None):
+def reset_task_queue_status(app, organization=None, team=None):
     queues = TaskQueue.objects(organization=organization, team=team)
     if queues.count() == 0:
         app.logger.error('Task queue has not been created')
@@ -424,16 +463,16 @@ def reset_task_queue_status(organization=None, team=None):
             app.logger.info('Reset the read/write lock for queue {} with priority {}'.format(q.endpoint_address, q.priority))
     return 0
 
-def prepare_to_run(organization=None, team=None):
-    ret = reset_event_queue_status(organization, team)
+def prepare_to_run(app, organization=None, team=None):
+    ret = reset_event_queue_status(app)
     if ret:
         return ret
 
-    ret = reset_task_queue_status(organization, team)
+    ret = reset_task_queue_status(app, organization, team)
     if ret:
         return ret
 
-    ret = restart_interrupted_tasks(organization, team)
+    ret = restart_interrupted_tasks(app, organization, team)
     if ret:
         return ret
 
@@ -492,6 +531,11 @@ def start_threads_by_task(app, task):
 
 def start_threads_by_endpoint(app, endpoint):
     start_threads(app, endpoint_address=endpoint.endpoint_address, organization=endpoint.organization, team=endpoint.team)
+
+def start_heartbeat_thread(app):
+    thread = threading.Thread(target=heartbeat_monitor, name='heartbeat_monitor', args=(app,))
+    thread.daemon = True
+    thread.start()
 
 def initialize_runner(user):
     notification_chain_init()
