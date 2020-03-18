@@ -2,6 +2,7 @@ from flask import request, current_app
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
+from task_runner.runner import check_endpoint
 
 from ..model.database import *
 from ..util.dto import EndpointDto
@@ -249,3 +250,24 @@ class EndpointController(Resource):
                 if t.status == 'waiting':
                     if not q.push(t):
                         current_app.logger.error('pushing the task to task queue timed out')
+
+@api.route('/check/')
+class EndpointChecker(Resource):
+    @token_required
+    @organization_team_required_by_json
+    @api.doc('check whether endpoint is online')
+    @api.expect(_endpoint_del)
+    def post(self, **kwargs):
+        """Update the task queue of an endpoint"""
+        organization = kwargs['organization']
+        team = kwargs['team']
+
+        address = request.json.get('address', None)
+        if address is None:
+            return response_message(EINVAL, 'Parameter address is required'), 400
+
+        ret = check_endpoint(current_app._get_current_object(), address, organization, team)
+        if not ret:
+            return response_message(SUCCESS, 'Endpoint offline', status=False), 200
+        else:
+            return response_message(SUCCESS, 'Endpoint online', status=True), 200

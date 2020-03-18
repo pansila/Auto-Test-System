@@ -402,36 +402,41 @@ def task_loop_helper_per_endpoint(app, endpoint_address, organization=None, team
     if taskqueue.id in TASK_THREADS:
         del TASK_THREADS[taskqueue.id]
 
+def check_endpoint(app, endpoint_address, organization, team):
+    org_name = team.organization.name + '-' + team.name if team else organization.name
+    url = 'http://{}'.format(endpoint_address)
+    server = xmlrpc.client.ServerProxy(url)
+    endpoint = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team).first()
+    try:
+        server.get_keyword_names()
+    except ConnectionRefusedError:
+        app.logger.error('Endpoint {} @ {} connecting failed'.format(org_name, endpoint_address))
+    except xmlrpc.client.Fault as e:
+        app.logger.error('Endpoint {} @ {} RPC calling error'.format(org_name, endpoint_address))
+        app.logger.exception(e)
+    except TimeoutError:
+        app.logger.error('Endpoint {} @ {} connecting timeouted'.format(org_name, endpoint_address))
+    except OSError as e:
+        app.logger.error('Endpoint {} @ {} unreachable'.format(org_name, endpoint_address))
+        app.logger.exception(e)
+    except Exception as e:
+        app.logger.error('Endpoint {} @ {} has error:'.format(org_name, endpoint_address))
+        app.logger.exception(e)
+    else:
+        if endpoint and endpoint.status == 'Offline':
+            endpoint.modify(status='Online')
+        return True
+    if endpoint and endpoint.status == 'Online':
+        endpoint.modify(status='Offline')
+    return False
+    
 def heartbeat_monitor(app):
     app.logger.info('Start endpoint online check thread')
     expires = 0
     while True:
         endpoints = Endpoint.objects()
         for endpoint in endpoints:
-            url = 'http://{}'.format(endpoint.endpoint_address)
-            server = xmlrpc.client.ServerProxy(url)
-            organization = endpoint.organization
-            team = endpoint.team
-            org_name = team.organization.name + '-' + team.name if team else organization.name
-            try:
-                server.get_keyword_names()
-            except ConnectionRefusedError:
-                app.logger.error('Endpoint {} @ {} connecting failed'.format(org_name, endpoint.endpoint_address))
-            except xmlrpc.client.Fault as e:
-                app.logger.error('Endpoint {} @ {} RPC calling error'.format(org_name, endpoint.endpoint_address))
-            except TimeoutError:
-                app.logger.error('Endpoint {} @ {} connecting timeouted'.format(org_name, endpoint.endpoint_address))
-            except OSError:
-                app.logger.error('Endpoint {} @ {} unreachable'.format(org_name, endpoint.endpoint_address))
-            except Exception as e:
-                app.logger.error('Endpoint {} @ {} has error:'.format(org_name, endpoint.endpoint_address))
-                app.logger.exception(e)
-            else:
-                if endpoint.status == 'Offline':
-                    endpoint.modify(status='Online')
-                continue
-            if endpoint.status == 'Online':
-                endpoint.modify(status='Offline')
+            check_endpoint(app, endpoint.endpoint_address, endpoint.organization, endpoint.team)
         time.sleep(30)
     
 def restart_interrupted_tasks(app, organization=None, team=None):
