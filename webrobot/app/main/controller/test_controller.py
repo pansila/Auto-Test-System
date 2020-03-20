@@ -2,7 +2,7 @@ import os
 import time
 from pathlib import Path
 
-from flask import Flask, send_from_directory, request, current_app
+from flask import send_from_directory, request, current_app
 from flask_restplus import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args

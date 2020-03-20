@@ -16,7 +16,6 @@ from ..util.dto import TaskDto
 # from ..util.dto import Organization_team as _organization_team
 from ..config import get_config
 from ..util.response import *
-from task_runner.runner import start_threads_by_task
 
 api = TaskDto.api
 _task = TaskDto.task
@@ -252,7 +251,13 @@ class TaskController(Resource):
                             failed.append(str(new_task.id))
                             current_app.logger.error('Failed to push task to the task queue')
                         else:
-                            start_threads_by_task(current_app._get_current_object(), new_task)
+                            message = {
+                                'address': endpoint,
+                                'task_id': str(new_task.id),
+                            }
+                            ret = push_event(organization=new_task.test.organization, team=new_task.test.team, code=EVENT_CODE_START_TASK, message=message)
+                            if not ret:
+                                return response_message(EPERM, 'Pushing the event to event queue failed'), 403
                             succeeded.append(str(new_task.id))
             else:
                 taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
@@ -267,7 +272,13 @@ class TaskController(Resource):
                         failed.append(str(task.id))
                         current_app.logger.error('Failed to push task to the task queue')
                     else:
-                        start_threads_by_task(current_app._get_current_object(), task)
+                        message = {
+                            'address': endpoint,
+                            'task_id': str(task.id),
+                        }
+                        ret = push_event(organization=task.test.organization, team=task.test.team, code=EVENT_CODE_START_TASK, message=message)
+                        if not ret:
+                            return response_message(EPERM, 'Pushing the event to event queue failed'), 403
                         succeeded.append(str(task.id))
         else:
             if task.parallelization:
@@ -318,10 +329,11 @@ class TaskController(Resource):
         if priority is None:
             return response_message(EINVAL, 'Field priority is required'), 400
 
-        message = {}
-        message['address'] = address
-        message['priority'] = priority
-        message['task_id'] = str(task.id)
+        message = {
+            'address': address,
+            'priority': priority,
+            'task_id': str(task.id)
+        }
 
         ret = push_event(organization=task.test.organization, team=task.test.team, code=EVENT_CODE_CANCEL_TASK, message=message)
         if not ret:

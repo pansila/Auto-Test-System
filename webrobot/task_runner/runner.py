@@ -48,11 +48,12 @@ async def event_handler_cancel_task(app, event):
 
     taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint_address=address, priority=priority).first()
     if not taskqueue:
-        app.logger.error('Task queue not found for %s %s' % (address, priority))
+        app.logger.error('Task queue not found for {}:{}'.format(address, priority))
         return
-    taskqueue_default = TaskQueue.objects(organization=event.organization, team=event.team, endpoint_address=address, priority=QUEUE_PRIORITY_DEFAULT).first()
-    if not taskqueue_default:
-        app.logger.error('Default task queue not found for %s %s' % (address, priority))
+
+    endpoint = Endpoint.objects(endpoint_address=address, organization=organization, team=team).first()
+    if not endpoint:
+        app.logger.error('Endpoint not found for {}'.format(address))
         return
 
     task = Task.objects(pk=task_id).first()
@@ -61,9 +62,7 @@ async def event_handler_cancel_task(app, event):
         return
 
     if task.status == 'waiting':
-        taskqueue.acquire_lock()
-        if taskqueue.running_task and taskqueue.running_task.id == task.id and taskqueue.id in TASK_THREADS:
-            taskqueue.release_lock()
+        if taskqueue.running_task and taskqueue.running_task.id == task.id and str(endpoint.id) in TASK_THREADS:
             app.logger.critical('Waiting task to run')
             for i in range(20):
                 task.reload('status')
@@ -75,13 +74,13 @@ async def event_handler_cancel_task(app, event):
                 taskqueue.modify(running_task=None)
                 task.modify(status='cancelled')
         else:
+            taskqueue.modify(running_task=None)
             taskqueue.modify(pull__tasks=task)
-            taskqueue.release_lock()
             task.modify(status='cancelled')
             app.logger.info('Waiting task cancelled without process running')
             return
     if task.status == 'running':
-        if taskqueue_default.id in TASK_THREADS:
+        if str(endpoint.id) in TASK_THREADS:
             if task.id in ROBOT_PROCESSES:
                 taskqueue.modify(running_task=None)
                 task.modify(status='cancelled')
@@ -97,25 +96,54 @@ async def event_handler_cancel_task(app, event):
         task.modify(status='cancelled')
         app.logger.info('Running task cancelled without process running')
 
+async def event_handler_start_task(app, event):
+    address = event.message['address']
+    to_delete = event.message['to_delete'] if 'to_delete' in event.message else False
+    organization = event.organization
+    team = event.team
+
+    endpoint = Endpoint.objects(organization=organization, team=team, endpoint_address=address).first()
+    if not endpoint:
+        org_name = team.organization.name + '-' + team.name if team else organization.name
+        if not to_delete:
+            app.logger.error('Endpoint not found for {}@{}'.format(org_name, address))
+        return
+
+    endpoint_id = str(endpoint.id)
+    if endpoint_id not in TASK_THREADS:
+        TASK_THREADS[endpoint_id] = True
+        reset_task_queue_status(app, organization, team)
+        await process_task_per_endpoint(app, address, organization, team)
+        #del TASK_THREADS[endpoint_id]  ## will delete in the done callback
+
+def event_handler_start_task_done(app, event):
+    address = event.message['address']
+    to_delete = event.message['to_delete'] if 'to_delete' in event.message else False
+    organization = event.organization
+    team = event.team
+
+    endpoint = Endpoint.objects(organization=organization, team=team, endpoint_address=address).first()
+    if not endpoint:
+        org_name = team.organization.name + '-' + team.name if team else organization.name
+        if not to_delete:
+            app.logger.error('Endpoint not found for {}@{}'.format(org_name, address))
+        return
+
+    endpoint_id = str(endpoint.id)
+    del TASK_THREADS[endpoint_id]
+
 async def event_handler_update_user_script(app, event):
     script = event.message['script']
     user = event.message['user']
     db_update_test(script=script, user=user)
 
-async def event_handler_start_taskqueue(app, event):
-    endpoint = Endpoint.objects(organization=event.organization, team=event.team, endpoint_address=event.message['address']).first()
-    if not endpoint:
-        app.logger.error('Endpoint not found')
-        return
-    start_threads_by_endpoint(app, endpoint)
-
 EVENT_HANDLERS = {
-    EVENT_CODE_CANCEL_TASK: event_handler_cancel_task,
-    EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script,
-    EVENT_CODE_TASKQUEUE_START: event_handler_start_taskqueue,
+    EVENT_CODE_START_TASK: (event_handler_start_task, event_handler_start_task_done),
+    EVENT_CODE_CANCEL_TASK: (event_handler_cancel_task, None),
+    EVENT_CODE_UPDATE_USER_SCRIPT: (event_handler_update_user_script, None),
 }
 
-def log_event_exception(event, future):
+def log_event_exception(app, event, future):
     try:
         future.result()
     except Exception as e:
@@ -128,6 +156,9 @@ def log_event_exception(event, future):
         event.message['exception_traceback'] = temp.getvalue()
         temp.close()
         event.save()
+    finally:
+        if EVENT_HANDLERS[event.code][1]:
+            EVENT_HANDLERS[event.code][1](app, event)
 
 async def event_loop(app):
     eventqueue = EventQueue.objects().first()
@@ -137,7 +168,7 @@ async def event_loop(app):
     app.logger.info('Event loop started')
 
     while True:
-        event = eventqueue.pop()
+        event = await eventqueue.async_pop()
         if not event:
             await asyncio.sleep(1)
             continue
@@ -149,15 +180,22 @@ async def event_loop(app):
         app.logger.info('\nStart to process event {} ...'.format(event.code))
 
         try:
-            async_task = asyncio.create_task(EVENT_HANDLERS[event.code](app, event))
+            async_task = asyncio.create_task(EVENT_HANDLERS[event.code][0](app, event))
             event.modify(status='Processed')
-            async_task.add_done_callback(functools.partial(log_event_exception, event))
+            async_task.add_done_callback(functools.partial(log_event_exception, app, event))
         except KeyError:
             app.logger.error('Unknown message: %s' % event.code)
 
 def event_loop_parent(app):
     reset_event_queue_status(app)
-    asyncio.run(event_loop(app))
+    if os.name == 'nt':
+        # Subprocesses are not supported for default loop of SelectorEventLoop on Windows
+        loop = asyncio.ProactorEventLoop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(event_loop(app))
+        loop.close()
+    else:
+        asyncio.run(event_loop(app))
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -211,8 +249,8 @@ def convert_json_to_robot_variable(args, variables, variable_file):
 
     args.extend(['--variablefile', str(variable_file)])
 
-def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
-    global ROBOT_PROCESSES, TASK_THREADS
+async def process_task_per_endpoint(app, endpoint_address, organization=None, team=None):
+    global ROBOT_PROCESSES
 
     if not organization and not team:
         app.logger.error('Argument organization and team must neither be None')
@@ -225,10 +263,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
         app.logger.error('Taskqueue not found')
         return
     # taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
-    for q in taskqueues:
-        if q.priority == QUEUE_PRIORITY_DEFAULT:
-            taskqueue_default = q
-            break
+    taskqueue_first = taskqueues.first()
 
     endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
     if endpoints.count() == 0:
@@ -236,14 +271,13 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
         return
 
     org_name = team.organization.name + '-' + team.name if team else organization.name
-    app.logger.info('Start task loop: {} @ {}'.format(org_name, endpoint_address))
 
     while True:
-        taskqueue_default.reload('to_delete')
-        if taskqueue_default.to_delete:
+        taskqueue_first.reload('to_delete')
+        if taskqueue_first.to_delete:
             taskqueues.delete()
             endpoints.delete()
-            app.logger.info('Exit task loop: {} @ {}'.format(org_name, endpoint_address))
+            app.logger.info('Abort the task loop: {} @ {}'.format(org_name, endpoint_address))
             break
         # TODO: lower priority tasks will take precedence if higher priority queue is empty first
         # but filled then when thread is searching for tasks in the lower priority task queues
@@ -265,11 +299,9 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
 
             # "continue" to search for tasks in the lower priority task queues
             # "break" to start over to search for tasks from the top priority task queue
-            task = taskqueue.pop()
+            task = await taskqueue.async_pop()
             if not task:
-                TASK_THREADS[taskqueue_default.id] += 1
                 continue
-            TASK_THREADS[taskqueue_default.id] = 0
             if isinstance(task, DBRef):
                 app.logger.warning('task {} has been deleted, ignore it'.format(task.id))
                 taskqueue.modify(running_task=None)
@@ -289,7 +321,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             app.logger.info('Start to run task {} ...'.format(task.id))
 
             result_dir = get_test_result_path(task)
-            args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
+            args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
                     '--consolecolors', 'on', '--consolemarkers', 'on']
             os.makedirs(result_dir)
 
@@ -307,7 +339,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             args.append(task.test.path)
             app.logger.info('Arguments: ' + str(args))
 
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0, text=True,
+            p = await asyncio.create_subprocess_exec('robot', *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, limit=1,
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
             ROBOT_PROCESSES[task.id] = p
 
@@ -324,9 +356,10 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
                 if str(task.id) not in ROOM_MESSAGES[room_id]:
                     ROOM_MESSAGES[room_id][str(task.id)] = log_msg
             while True:
-                c = p.stdout.read(1)
+                c = await p.stdout.read(1)
                 if not c:
                     break
+                c = c.decode()
                 c = '\r\n' if c == '\n' else c
                 log_msg.write(c)
                 socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
@@ -335,14 +368,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             app.logger.info('\n' + log_msg.getvalue())
             #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
 
-            for i in range(50):
-                if p.poll() is not None:
-                    break
-                time.sleep(0.1)
-            else:
-                p.terminate()
-                app.logger.error('Task process not stopped')
-
+            await p.wait()
             if p.returncode == 0:
                 task.status = 'successful'
             else:
@@ -375,32 +401,7 @@ def task_loop_per_endpoint(app, endpoint_address, organization=None, team=None):
             notification_chain_call(task)
             break
         else:
-            if TASK_THREADS[taskqueue_default.id] > QUIT_AFTER_IDLE_TIME:
-                del TASK_THREADS[taskqueue_default.id]
-                app.logger.info('Exit task loop due to idle: {} @ {}'.format(org_name, endpoint_address))
-                break
-        time.sleep(1)
-
-def task_loop_helper_per_endpoint(app, endpoint_address, organization=None, team=None):
-    global TASK_THREADS
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-
-    taskqueue = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address, priority=QUEUE_PRIORITY_DEFAULT).first()
-    if not taskqueue:
-        app.logger.error('task queue not found')
-        if taskqueue.id in TASK_THREADS:
-            del TASK_THREADS[taskqueue.id]
-        return
-
-    thread = threading.Thread(target=task_loop_per_endpoint,
-                              name='task_loop_{}@{}'.format(org_name, endpoint_address),
-                              args=(app, endpoint_address, organization, team))
-    thread.daemon = True
-    thread.start()
-
-    thread.join()
-    if taskqueue.id in TASK_THREADS:
-        del TASK_THREADS[taskqueue.id]
+            break
 
 def check_endpoint(app, endpoint_address, organization, team):
     org_name = team.organization.name + '-' + team.name if team else organization.name
@@ -418,7 +419,6 @@ def check_endpoint(app, endpoint_address, organization, team):
         app.logger.error('Endpoint {} @ {} connecting timeouted'.format(org_name, endpoint_address))
     except OSError as e:
         app.logger.error('Endpoint {} @ {} unreachable'.format(org_name, endpoint_address))
-        app.logger.exception(e)
     except Exception as e:
         app.logger.error('Endpoint {} @ {} has error:'.format(org_name, endpoint_address))
         app.logger.exception(e)
@@ -487,55 +487,6 @@ def start_event_thread(app):
     task_thread = threading.Thread(target=event_loop_parent, name='event_loop_parent', args=(app,))
     task_thread.daemon = True
     task_thread.start()
-
-def start_task_thread(app, taskqueue):
-    global TASK_THREADS
-    TASK_LOCK.acquire()
-    if taskqueue.id in TASK_THREADS:
-        TASK_LOCK.release()
-        return
-
-    organization, team = taskqueue.organization, taskqueue.team
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-
-    reset_task_queue_status(organization, team)
-    task_thread = threading.Thread(target=task_loop_helper_per_endpoint,
-                                   name='task_loop_helper_{}@{}'.format(org_name, taskqueue.endpoint_address),
-                                   args=(app, taskqueue.endpoint_address, organization, team))
-    task_thread.daemon = True
-    task_thread.start()
-    TASK_THREADS[taskqueue.id] = 0
-    TASK_LOCK.release()
-
-def start_threads(app, task=None, organization=None, team=None, endpoint_address=None):
-    threads = []
-    taskqueues = None
-    org_name = team.organization.name + '-' + team.name if team else organization.name
-    # ret = prepare_to_run(organization, team)
-    # if ret:
-    #     return ret
-
-    if task:
-        for endpoint_address in task.endpoint_list:
-            taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address=endpoint_address).first()
-            if not taskqueue:
-                app.logger.error('task queue not found')
-                return
-            start_task_thread(app, taskqueue)
-    elif endpoint_address:
-        taskqueue = TaskQueue.objects(organization=organization, team=team, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address=endpoint_address).first()
-        if not taskqueue:
-            app.logger.error('task queue not found')
-            return
-        start_task_thread(app, taskqueue)
-    else:
-        app.logger.error('task or endpoint_address is required')
-
-def start_threads_by_task(app, task):
-    start_threads(app, task=task, organization=task.organization, team=task.team)
-
-def start_threads_by_endpoint(app, endpoint):
-    start_threads(app, endpoint_address=endpoint.endpoint_address, organization=endpoint.organization, team=endpoint.team)
 
 def start_heartbeat_thread(app):
     thread = threading.Thread(target=heartbeat_monitor, name='heartbeat_monitor', args=(app,))

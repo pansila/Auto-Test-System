@@ -2,7 +2,6 @@ import os
 import shutil
 from pathlib import Path
 
-import requests
 from bson.objectid import ObjectId
 from flask import request, send_from_directory, current_app
 from flask_restplus import Resource

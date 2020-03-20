@@ -3,7 +3,6 @@ import datetime
 import os
 from pathlib import Path
 
-from app.main import db
 from app.main.model.database import User, Organization
 from flask import current_app
 

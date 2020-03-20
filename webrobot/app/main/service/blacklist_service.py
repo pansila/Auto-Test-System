@@ -1,6 +1,4 @@
 
-from app.main import db
-
 from app.main.model.database import BlacklistToken
 from flask import current_app
 

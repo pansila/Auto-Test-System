@@ -1,3 +1,4 @@
+import urllib.parse
 from flask import request, current_app
 from flask_restplus import Resource
 
@@ -87,30 +88,18 @@ class EndpointController(Resource):
             return response_message(ENOENT, 'Task queue not found'), 404
         taskqueues.update(to_delete=True)
 
-        message = {}
-        message['address'] = address
-        ret = push_event(organization=organization, team=team, code=EVENT_CODE_TASKQUEUE_START, message=message)
-        if not ret:
-            return response_message(EPERM, 'Pushing the event to event queue failed'), 403
-
         for q in taskqueues:
-            message['priority'] = q.priority
-
-            q.acquire_lock()
-            running_task = q.running_task
-            if not running_task:
-                if len(q.tasks) != 0:
-                    for t in q.tasks:
-                        t.modify(status='cancelled')
-                    q.tasks = []
-                    q.save()
-            else:
-                message['task_id'] = str(running_task.id)
+            q.flush(cancelled=True)
+            if q.running_task:
+                message['priority'] = q.priority
+                message['task_id'] = str(q.running_task.id)
                 ret = push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
                 if not ret:
-                    q.release_lock()
                     return response_message(EPERM, 'Pushing the event to event queue failed'), 403
-            q.release_lock()
+
+        ret = push_event(organization=organization, team=team, code=EVENT_CODE_START_TASK, message={'address': address, 'to_delete': True})
+        if not ret:
+            return response_message(EPERM, 'Pushing the event to event queue failed'), 403
 
         return response_message(SUCCESS)
 
@@ -129,6 +118,10 @@ class EndpointController(Resource):
         if not endpoint_address:
             return response_message(EINVAL, 'Field endpoint_address is required'), 400
 
+        endpoint_address = endpoint_address.strip()
+        scheme, address = urllib.parse.splittype(endpoint_address)
+        address = urllib.parse.splittype(address)
+
         tests = data.get('tests', [])
         if not isinstance(tests, list):
             return response_message(EINVAL, 'Tests is not a list'), 400
@@ -140,21 +133,21 @@ class EndpointController(Resource):
                 return response_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             endpoint_tests.append(tt)
 
-        endpoint = Endpoint.objects(endpoint_address=endpoint_address, team=team, organization=organization).first()
+        endpoint = Endpoint.objects(endpoint_address=address, team=team, organization=organization).first()
         if not endpoint:
-            endpoint = Endpoint(team=team, organization=organization, endpoint_address=endpoint_address)
+            endpoint = Endpoint(team=team, organization=organization, endpoint_address=address)
             endpoint.save()
 
-            taskqueue = TaskQueue.objects(endpoint_address=endpoint_address, team=team, organization=organization).first()
+            taskqueue = TaskQueue.objects(endpoint_address=address, team=team, organization=organization).first()
             if not taskqueue:
                 for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
-                    taskqueue = TaskQueue(endpoint_address=endpoint_address, priority=priority, team=team, organization=organization)
+                    taskqueue = TaskQueue(endpoint_address=address, priority=priority, team=team, organization=organization)
                     taskqueue.endpoint = endpoint
                     taskqueue.save()
             else:
                 return response_message(EEXIST, 'Task queues exist already'), 401
 
-        endpoint.name = data.get('endpoint_name', endpoint_address)
+        endpoint.name = data.get('endpoint_name', address)
         endpoint.enable = data.get('enable', False)
         endpoint.tests = endpoint_tests
         endpoint.save()
@@ -227,8 +220,8 @@ class EndpointController(Resource):
         for taskqueue in taskqueues:
             if 'address' not in taskqueue or 'priority' not in taskqueue:
                 return response_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
-            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'], team=team, organization=organization)
-            if queue.count() != 1:
+            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'], team=team, organization=organization).first()
+            if not queue:
                 return response_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
 
             for task in taskqueue['tasks']:
@@ -240,15 +233,14 @@ class EndpointController(Resource):
                 if not t:
                     return response_message(ENOENT, 'task not found for ' + task['task_id']), 404
 
-            q = queue.first()
-            if not q.flush():
-                return response_message(EPERM, 'task queue {} {} flushing failed'.format(q.endpoint_address, q.priority)), 401
+            if not queue.flush():
+                return response_message(EPERM, 'task queue {} {} flushing failed'.format(queue.endpoint_address, queue.priority)), 401
 
             for task in taskqueue['tasks']:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
                 t = Task.objects(pk=task['task_id']).first()
                 if t.status == 'waiting':
-                    if not q.push(t):
+                    if not queue.push(t):
                         current_app.logger.error('pushing the task to task queue timed out')
 
 @api.route('/check/')
@@ -265,6 +257,10 @@ class EndpointChecker(Resource):
         address = request.json.get('address', None)
         if address is None:
             return response_message(EINVAL, 'Parameter address is required'), 400
+
+        address = address.strip()
+        scheme, address = urllib.parse.splittype(address)
+        address = urllib.parse.splittype(address)
 
         ret = check_endpoint(current_app._get_current_object(), address, organization, team)
         if not ret:

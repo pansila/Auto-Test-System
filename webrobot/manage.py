@@ -1,16 +1,12 @@
 import os
 import unittest
-if os.name != 'nt':
-    import eventlet
-    eventlet.monkey_patch()
 
 from flask_migrate import Migrate, MigrateCommand
 from flask_script import Manager
 from flask_cors import CORS
 
 from app import blueprint
-from app.main import create_app, db
-from app.main.model import user, blacklist
+from app.main import create_app
 from mongoengine import connect
 from app.main.config import get_config
 from task_runner.runner import start_event_thread, start_heartbeat_thread
@@ -22,7 +18,7 @@ from app.main.controller.cert_controller import build_easyrsa_keys
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
 get_config().init_app(app)
 app.register_blueprint(blueprint)
-socketio = SocketIO(app, async_mode='threading' if os.name == 'nt' else 'eventlet')
+socketio = SocketIO(app, async_mode='threading')
 app.config['socketio'] = socketio
 
 app.app_context().push()
@@ -30,10 +26,6 @@ if os.getenv('BOILERPLATE_ENV') != 'prod':
     CORS(app)
 
 manager = Manager(app)
-
-migrate = Migrate(app, db)
-
-manager.add_command('db', MigrateCommand)
 
 
 @manager.command

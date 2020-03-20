@@ -41,54 +41,42 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 
 ### Set Up The Test Environment
 
-1. Install python 3.6.x and pip.
+1. Install python 3.7.x and [pip](https://pip.pypa.io/en/stable/installing/).
 
-2. Install pipenv
+2. Install poetry
    ```bash
-   pip install -U pipenv
+   pip install --user poetry
    ```
 
 3. Set up test endpoint environment
    ```bash
    cd robot-test-endpoint
-   pipenv sync
+   poetry install
    ```
 
 4. Set up Web server and test runner environment
    ```bash
    cd webrobot
-   pipenv sync
-   pipenv run patch
+   poetry install
+   poetry run task patch
    ```
    The last step is to patch installed robot framework package, details please see sections [Support the robot test cases in markdown](#support-the-robot-test-cases-in-markdown) and [Hacks to the robot](#hacks-to-the-robot).
 
 5. Set up the MongoDB database
 
-   1. Install MongoDB from the [official website](https://www.mongodb.com/), please be noted to choose the community version instead of cloud based version.
-
-   2. Build up the test suite database
-      ```bash
-      cd webrobot
-      pipenv run update-db ../example-test-scripts/robot_tester_scripts
-      ```
-      1. It needs to be done every time when a test suite is added or modified.
-      2. It will search all robot scripts under the specified directory and find out all contained robot test suites, markdown is our first-class citizen, it will take precedence if other extension files are present with the same filename.
-
-6. The `example-test-scripts` above is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify configuration variables in the `config.py` to point to the right places after setting up your test asset repository.
-
-   By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
+   Install MongoDB from the [official website](https://www.mongodb.com/), please be noted to choose the community version instead of cloud based version.
 
 ### Run Tests
 1. Run the web server
    ```bash
    cd webrobot
-   pipenv run server
+   poetry run task server
    ```
 
 2. Run the daemon process of a test endpoint
    ```bash
    cd robot-test-endpoint
-   pipenv run daemon
+   poetry run task daemon
    ```
 
 3. (Work in progress) Run a test by using the restful API
@@ -122,6 +110,10 @@ It's recommended to deploy Robot Server and Test Endpoint on the separated machi
 Notice:
 1. For a test in action, please check out `wifi-basic-test.md`.
 2. The robot server and test endpoint run on the same PC by default, if you want to deploy the them on the different PCs respectively, change the IP addresses in the robot server's config script (`config.py`) and test endpoint's config file (`config.yml`). Don't forget to configure the firewall to let through the communication on the TCP port `8270/8271`.
+3. The `example-test-scripts` directory is just for demonstration so that you can play around with the demo tests out of box. For production environment, you will probably have your own test assets. Same for `robot-test-endpoint`, implement your own work of test endpoint along with the test scripts in a stand-alone repository as they're coupled to work together. Please remember to modify configuration variables in the `config.py` to point to the right places after setting up your test asset repository.
+
+   By this way you can keep tracking the latest code of auto test framework without the pain of messing with the code here by the frequent changes of test scripts.
+
 
 ### Configurations of the Auto Test System
 1. Test Endpoint
