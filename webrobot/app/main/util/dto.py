@@ -1,4 +1,4 @@
-from flask_restplus import Namespace, fields, Model
+from flask_restx import Namespace, fields, Model
 
 # Don't know why it doesn't work sometimes if put these outside DTO classes
 

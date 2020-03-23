@@ -3,7 +3,7 @@ import time
 from pathlib import Path
 
 from flask import send_from_directory, request, current_app
-from flask_restplus import Resource
+from flask_restx import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args
 from app.main.util.get_path import get_test_result_path, get_back_scripts_root

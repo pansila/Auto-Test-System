@@ -2,7 +2,7 @@ import os
 import shutil
 from pathlib import Path
 from flask import request, send_from_directory
-from flask_restplus import Resource
+from flask_restx import Resource
 from bson import ObjectId
 
 from app.main.util.decorator import token_required

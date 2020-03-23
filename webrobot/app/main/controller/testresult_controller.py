@@ -7,7 +7,7 @@ from pathlib import Path
 from bson.objectid import ObjectId
 from dateutil import tz
 from flask import render_template, request, send_from_directory, url_for, current_app
-from flask_restplus import Resource
+from flask_restx import Resource
 from mongoengine import DoesNotExist, ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json

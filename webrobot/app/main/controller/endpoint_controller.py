@@ -1,6 +1,6 @@
 import urllib.parse
 from flask import request, current_app
-from flask_restplus import Resource
+from flask_restx import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
 from task_runner.runner import check_endpoint

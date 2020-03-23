@@ -1,5 +1,5 @@
 import os
-from flask_restplus import Api, fields
+from flask_restx import Api, fields
 from flask import Blueprint
 
 from .main.controller.user_controller import api as user_ns

@@ -4,7 +4,7 @@ import datetime
 from datetime import date, datetime, timedelta
 
 from flask import request, Response, send_from_directory, current_app
-from flask_restplus import Resource
+from flask_restx import Resource
 from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required

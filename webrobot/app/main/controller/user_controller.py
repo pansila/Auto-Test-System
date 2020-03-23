@@ -2,7 +2,7 @@ import os
 import shutil
 from pathlib import Path
 from flask import request, send_from_directory
-from flask_restplus import Resource
+from flask_restx import Resource
 
 from app.main.service.auth_helper import Auth
 from app.main.util.decorator import admin_token_required, token_required

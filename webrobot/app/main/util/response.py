@@ -1,4 +1,4 @@
-from flask_restplus import marshal, fields
+from flask_restx import marshal, fields
 from flask import current_app
 
 SUCCESS = (20000, 'Success')

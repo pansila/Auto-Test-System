@@ -1,17 +1,5 @@
 [[package]]
 category = "main"
-description = "asyncio event loop scheduling callbacks in eventlet."
-name = "aioeventlet"
-optional = false
-python-versions = "*"
-version = "0.5.1"
-
-[package.dependencies]
-eventlet = "*"
-trollius = ">=0.3"
-
-[[package]]
-category = "main"
 description = "File support for asyncio."
 name = "aiofiles"
 optional = false
@@ -197,10 +185,10 @@ alembic = ">=0.6"
 [[package]]
 category = "main"
 description = "Fully featured framework for fast, easy and documented API development with Flask"
-name = "flask-restplus"
+name = "flask-restx"
 optional = false
 python-versions = "*"
-version = "0.10.1"
+version = "0.2.0"
 
 [package.dependencies]
 Flask = ">=0.8"
@@ -208,11 +196,12 @@ aniso8601 = ">=0.82"
 jsonschema = "*"
 pytz = "*"
 six = ">=1.3.0"
+werkzeug = "*"
 
 [package.extras]
-dev = ["alabaster", "blinker", "flake8", "invoke (>=0.13)", "minibench", "nose", "rednose", "sphinx", "sphinx-issues", "tox", "tzlocal"]
-doc = ["alabaster", "sphinx", "sphinx-issues"]
-test = ["blinker", "mock", "nose", "rednose", "tzlocal"]
+dev = ["blinker", "Faker (2.0.0)", "mock (3.0.5)", "pytest-benchmark (3.2.2)", "pytest-cov (2.7.1)", "pytest-flask (0.15.1)", "pytest-mock (1.10.4)", "pytest-profiling (1.7.0)", "tzlocal", "invoke (1.3.0)", "readme-renderer (24.0)", "twine (1.15.0)", "tox (3.13.2)", "pytest (4.6.5)", "pytest (5.4.1)", "ossaudit", "black (19.10b0)"]
+doc = ["alabaster (0.7.12)", "Sphinx (2.1.2)", "sphinx-issues (1.2.0)"]
+test = ["blinker", "Faker (2.0.0)", "mock (3.0.5)", "pytest-benchmark (3.2.2)", "pytest-cov (2.7.1)", "pytest-flask (0.15.1)", "pytest-mock (1.10.4)", "pytest-profiling (1.7.0)", "tzlocal", "invoke (1.3.0)", "readme-renderer (24.0)", "twine (1.15.0)", "pytest (4.6.5)", "pytest (5.4.1)", "ossaudit"]
 
 [[package]]
 category = "main"
@@ -259,14 +248,6 @@ version = "0.7.1"
 
 [package.dependencies]
 Flask = "*"
-
-[[package]]
-category = "main"
-description = "Backport of the concurrent.futures package from Python 3.2"
-name = "futures"
-optional = false
-python-versions = "*"
-version = "3.1.1"
 
 [[package]]
 category = "main"
@@ -667,18 +648,6 @@ version = "0.10.0"
 
 [[package]]
 category = "main"
-description = "Port of the Tulip project (asyncio module, PEP 3156) on Python 2"
-name = "trollius"
-optional = false
-python-versions = "*"
-version = "2.2"
-
-[package.dependencies]
-futures = "*"
-six = "*"
-
-[[package]]
-category = "main"
 description = "Backported and Experimental Type Hints for Python 3.5+"
 name = "typing-extensions"
 optional = false
@@ -733,13 +702,10 @@ docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["jaraco.itertools", "func-timeout"]
 
 [metadata]
-content-hash = "2b4e1b91712b362d324e67370a32e6d5ecfe321106bfae0c538574614cea36db"
+content-hash = "848aa123b26e1d5097c0291e3a83ce30ec67d9a15412f4a30cc32f134dae3fa9"
 python-versions = "^3.7"
 
 [metadata.files]
-aioeventlet = [
-    {file = "aioeventlet-0.5.2.tar.gz", hash = "sha256:cecb51ea220209e33b53cfb95124d90e4fcbee3ff8ba8a179a57120b8624b16a"},
-]
 aiofiles = [
     {file = "aiofiles-0.4.0-py3-none-any.whl", hash = "sha256:1e644c2573f953664368de28d2aa4c89dfd64550429d0c27c4680ccd3aa4985d"},
     {file = "aiofiles-0.4.0.tar.gz", hash = "sha256:021ea0ba314a86027c166ecc4b4c07f2d40fc0f4b3a950d1868a0f2571c2bbee"},
@@ -896,9 +862,9 @@ flask-migrate = [
     {file = "Flask-Migrate-2.1.1.tar.gz", hash = "sha256:b709ca8642559c3c5a81a33ab10839fa052177accd5ba821047a99db635255ed"},
     {file = "Flask_Migrate-2.1.1-py2.py3-none-any.whl", hash = "sha256:493f9b3795985b9b4915bf3b7d16946697f027b73545384e7d9e3a79f989d2fe"},
 ]
-flask-restplus = [
-    {file = "flask-restplus-0.10.1.tar.gz", hash = "sha256:129767ba6087a6f0a6d1bd901f4c11192b4d33fe80c38cf2a8a0b5f8dd6049e3"},
-    {file = "flask_restplus-0.10.1-py2.py3-none-any.whl", hash = "sha256:1a005a960ee2efa96dd8c6dc67efb0f047b9c27057a3e9d635181a41548ceba6"},
+flask-restx = [
+    {file = "flask-restx-0.2.0.tar.gz", hash = "sha256:ca87a1808333f4ec5a50a5740b44e6cd3879a4b940d559df3996877ec4a2f2a5"},
+    {file = "flask_restx-0.2.0-py2.py3-none-any.whl", hash = "sha256:a1653da19ca0b5e5c2ea59bd5f4639a7749e6a9b882f459de1814ed37872253b"},
 ]
 flask-script = [
     {file = "Flask-Script-2.0.6.tar.gz", hash = "sha256:6425963d91054cfcc185807141c7314a9c5ad46325911bd24dcb489bd0161c65"},
@@ -913,11 +879,6 @@ flask-sqlalchemy = [
 ]
 flask-testing = [
     {file = "Flask-Testing-0.7.1.tar.gz", hash = "sha256:dc076623d7d850653a018cb64f500948334c8aeb6b10a5a842bf1bcfb98122bc"},
-]
-futures = [
-    {file = "futures-3.1.1-py2-none-any.whl", hash = "sha256:c4884a65654a7c45435063e14ae85280eb1f111d94e542396717ba9828c4337f"},
-    {file = "futures-3.1.1-py3-none-any.whl", hash = "sha256:3a44f286998ae64f0cc083682fcfec16c406134a81a589a5de445d7bb7c2751b"},
-    {file = "futures-3.1.1.tar.gz", hash = "sha256:51ecb45f0add83c806c68e4b06106f90db260585b25ef2abfcda0bd95c0132fd"},
 ]
 gem = [
     {file = "gem-0.1.12.tar.gz", hash = "sha256:b236efb47897cbb37e3d07d36e2a613027e75eb96d726ad174b1ae1d270d7fd5"},
@@ -1203,12 +1164,6 @@ toml = [
     {file = "toml-0.10.0-py2.7.egg", hash = "sha256:f1db651f9657708513243e61e6cc67d101a39bad662eaa9b5546f789338e07a3"},
     {file = "toml-0.10.0-py2.py3-none-any.whl", hash = "sha256:235682dd292d5899d361a811df37e04a8828a5b1da3115886b73cf81ebc9100e"},
     {file = "toml-0.10.0.tar.gz", hash = "sha256:229f81c57791a41d65e399fc06bf0848bab550a9dfd5ed66df18ce5f05e73d5c"},
-]
-trollius = [
-    {file = "trollius-2.2-cp27-none-any.whl", hash = "sha256:f73b1b98c6263c289d3a0529e9c2cec54a22d117b4b92140909285578c42b5bb"},
-    {file = "trollius-2.2-pp260-none-any.whl", hash = "sha256:61423039690b23bbdeb1accb6e972c2687ef1443c7ad2f2190e43f2046fcba3c"},
-    {file = "trollius-2.2-pp271-none-any.whl", hash = "sha256:8e9134fe06336ef01ee6ca6260cf06e03bc379995bc34b043721e084c9612680"},
-    {file = "trollius-2.2-pp272-none-any.whl", hash = "sha256:ef7c403d94f8db8697ec7d6ff8eb637efeb3a9eb18ca4112b3d2a3189608c32c"},
 ]
 typing-extensions = [
     {file = "typing_extensions-3.7.4.1-py2-none-any.whl", hash = "sha256:910f4656f54de5993ad9304959ce9bb903f90aadc7c67a0bef07e678014e892d"},

@@ -6,7 +6,7 @@ import subprocess
 from bson.objectid import ObjectId
 from pathlib import Path
 from flask import request, send_from_directory
-from flask_restplus import Resource
+from flask_restx import Resource
 
 from app.main.model.database import *
 from ..util.dto import CertDto
