@@ -13,7 +13,6 @@ from task_runner.runner import start_event_thread, start_heartbeat_thread
 from flask_socketio import SocketIO, send, emit
 from app.main.controller.socketio_controller import handle_message, \
             handle_join_room, handle_enter_room, handle_leave_room
-from app.main.controller.cert_controller import build_easyrsa_keys
 
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
 get_config().init_app(app)
@@ -35,7 +34,6 @@ def run():
     if 'WERKZEUG_RUN_MAIN' in os.environ and os.environ['WERKZEUG_RUN_MAIN'] == 'true':
         start_event_thread(app)
         start_heartbeat_thread(app)
-        #build_easyrsa_keys(app)
     #app.run(host='0.0.0.0')
     socketio.run(app, host='0.0.0.0')
 

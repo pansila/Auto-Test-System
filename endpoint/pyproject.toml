@@ -6,7 +6,7 @@ authors = ["panzi <panzilla@163.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.7"
+python = "^3.8"
 netifaces = "0.10.7"
 pyserial = "3.4"
 requests = "2.20.1"

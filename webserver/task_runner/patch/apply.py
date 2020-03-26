@@ -1,6 +1,8 @@
 import os, sys
 import subprocess
+import re
 from pathlib import Path
+from io import StringIO
 
 # https://github.com/techtonik/python-patch/
 # with patch
@@ -8,7 +10,36 @@ from pathlib import Path
 import patch
 
 
-venv = subprocess.check_output('pipenv --venv', shell=True).decode().strip()
+# 7-bit C1 ANSI sequences
+ansi_escape = re.compile(r'''
+    \x1B  # ESC
+    (?:   # 7-bit C1 Fe (except CSI)
+        [@-Z\\-_]
+    |     # or [ for CSI, followed by a control sequence
+        \[
+        [0-?]*  # Parameter bytes
+        [ -/]*  # Intermediate bytes
+        [@-~]   # Final byte
+    )
+''', re.VERBOSE)
+
+venv = None
+try:
+    lines = subprocess.check_output('poetry env info', shell=True).decode()
+except subprocess.CalledProcessError:
+    print('poetry not found, please add it to the environment variable PATH')
+    sys.exit(1)
+
+for line in StringIO(lines):
+    parts = line.partition(':')
+    parts = [ansi_escape.sub('', p) for p in parts]
+    if parts[0] == 'Path':
+        venv = parts[2].strip()
+        break
+else:
+    print('No virtual environment found')
+    sys.exit(1)
+
 if os.name == 'nt':
     venv =  Path(venv) / 'Lib'
 elif os.name == 'posix':
