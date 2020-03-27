@@ -1,7 +1,6 @@
 import os
 import unittest
 
-from flask_migrate import Migrate, MigrateCommand
 from flask_script import Manager
 from flask_cors import CORS
 
