@@ -1,5 +1,8 @@
 import os
 import unittest
+if os.name != 'nt':
+    from eventlet import monkey_patch
+    monkey_patch(os=False)
 
 from flask_script import Manager
 from flask_cors import CORS
@@ -16,7 +19,11 @@ from app.main.controller.socketio_controller import handle_message, \
 app = create_app(os.getenv('BOILERPLATE_ENV') or 'dev')
 get_config().init_app(app)
 app.register_blueprint(blueprint)
-socketio = SocketIO(app, async_mode='threading')
+
+async_mode = 'threading' if os.name == 'nt' else 'eventlet'
+cors_allowed_origins = '*' if os.getenv('BOILERPLATE_ENV') != 'prod' else None
+socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins=cors_allowed_origins)
+
 app.config['socketio'] = socketio
 
 app.app_context().push()
@@ -35,7 +42,6 @@ def run():
         start_heartbeat_thread(app)
     #app.run(host='0.0.0.0')
     socketio.run(app, host='0.0.0.0')
-
 
 @manager.command
 def test():

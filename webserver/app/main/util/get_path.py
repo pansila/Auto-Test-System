@@ -14,15 +14,15 @@ USERS_ROOT = Path(get_config().USERS_ROOT)
 UPLOAD_ROOT = Path(get_config().UPLOAD_ROOT)
 STORE_ROOT = Path(get_config().STORE_ROOT)
 try:
-    os.mkdir(UPLOAD_ROOT)
+    os.makedirs(UPLOAD_ROOT)
 except FileExistsError:
     pass
 try:
-    os.mkdir(USERS_ROOT)
+    os.makedirs(USERS_ROOT)
 except FileExistsError:
     pass
 try:
-    os.mkdir(STORE_ROOT)
+    os.makedirs(STORE_ROOT)
 except FileExistsError:
     pass
 

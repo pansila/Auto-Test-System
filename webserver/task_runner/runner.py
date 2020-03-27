@@ -1,5 +1,4 @@
 import argparse
-import asyncio
 import datetime
 import eventlet
 import functools
@@ -40,7 +39,7 @@ QUIT_AFTER_IDLE_TIME = 1800 * len(QUEUE_PRIORITY)  # seconds, count three times 
 
 ROOM_MESSAGES = {}  # {"organziation:team": old_message, new_message}
 
-async def event_handler_cancel_task(app, event):
+def event_handler_cancel_task(app, event):
     global ROBOT_PROCESSES, TASK_THREADS
     address = event.message['address']
     priority = event.message['priority']
@@ -68,7 +67,7 @@ async def event_handler_cancel_task(app, event):
                 task.reload('status')
                 if task.status == 'running':
                     break
-                await asyncio.sleep(0.1)
+                time.sleep(0.1)
             else:
                 app.logger.error('Waiting task to run timeouted out')
                 taskqueue.modify(running_task=None)
@@ -96,7 +95,7 @@ async def event_handler_cancel_task(app, event):
         task.modify(status='cancelled')
         app.logger.info('Running task cancelled without process running')
 
-async def event_handler_start_task(app, event):
+def event_handler_start_task(app, event):
     address = event.message['address']
     to_delete = event.message['to_delete'] if 'to_delete' in event.message else False
     organization = event.organization
@@ -110,57 +109,32 @@ async def event_handler_start_task(app, event):
         return
 
     endpoint_id = str(endpoint.id)
+    TASK_LOCK.acquire()
     if endpoint_id not in TASK_THREADS:
-        TASK_THREADS[endpoint_id] = True
+        TASK_THREADS[endpoint_id] = 1
+        TASK_LOCK.release()
         reset_task_queue_status(app, organization, team)
-        await process_task_per_endpoint(app, address, organization, team)
-        #del TASK_THREADS[endpoint_id]  ## will delete in the done callback
+        thread = threading.Thread(target=process_task_per_endpoint, args=(app, address, organization, team))
+        thread.daemon = True
+        thread.start()
+        #del TASK_THREADS[endpoint_id]  ## will delete when task loop exits
+    else:
+        TASK_THREADS[endpoint_id] = 2
+        TASK_LOCK.release()
+        app.logger.info('Schedule the task to the pending queue')
 
-def event_handler_start_task_done(app, event):
-    address = event.message['address']
-    to_delete = event.message['to_delete'] if 'to_delete' in event.message else False
-    organization = event.organization
-    team = event.team
-
-    endpoint = Endpoint.objects(organization=organization, team=team, endpoint_address=address).first()
-    if not endpoint:
-        org_name = team.organization.name + '-' + team.name if team else organization.name
-        if not to_delete:
-            app.logger.error('Endpoint not found for {}@{}'.format(org_name, address))
-        return
-
-    endpoint_id = str(endpoint.id)
-    del TASK_THREADS[endpoint_id]
-
-async def event_handler_update_user_script(app, event):
+def event_handler_update_user_script(app, event):
     script = event.message['script']
     user = event.message['user']
     db_update_test(script=script, user=user)
 
 EVENT_HANDLERS = {
-    EVENT_CODE_START_TASK: (event_handler_start_task, event_handler_start_task_done),
-    EVENT_CODE_CANCEL_TASK: (event_handler_cancel_task, None),
-    EVENT_CODE_UPDATE_USER_SCRIPT: (event_handler_update_user_script, None),
+    EVENT_CODE_START_TASK: event_handler_start_task,
+    EVENT_CODE_CANCEL_TASK: event_handler_cancel_task,
+    EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script,
 }
 
-def log_event_exception(app, event, future):
-    try:
-        future.result()
-    except Exception as e:
-        app.logger.exception('Error happened during processing event: %s' % event.code)
-        e_type, e_value, e_traceback = sys.exc_info()
-        event.message['exception_type'] = str(e_type)
-        event.message['exception_value'] = str(e_value)
-        temp = StringIO()
-        traceback.print_tb(e_traceback, file=temp)
-        event.message['exception_traceback'] = temp.getvalue()
-        temp.close()
-        event.save()
-    finally:
-        if EVENT_HANDLERS[event.code][1]:
-            EVENT_HANDLERS[event.code][1](app, event)
-
-async def event_loop(app):
+def event_loop(app):
     eventqueue = EventQueue.objects().first()
     if not eventqueue:
         app.logger.error('event queue not found')
@@ -168,9 +142,9 @@ async def event_loop(app):
     app.logger.info('Event loop started')
 
     while True:
-        event = await eventqueue.async_pop()
+        event = eventqueue.pop()
         if not event:
-            await asyncio.sleep(1)
+            time.sleep(1)
             continue
 
         if isinstance(event, DBRef):
@@ -180,22 +154,17 @@ async def event_loop(app):
         app.logger.info('\nStart to process event {} ...'.format(event.code))
 
         try:
-            async_task = asyncio.create_task(EVENT_HANDLERS[event.code][0](app, event))
+            EVENT_HANDLERS[event.code](app, event)
             event.modify(status='Processed')
-            async_task.add_done_callback(functools.partial(log_event_exception, app, event))
         except KeyError:
             app.logger.error('Unknown message: %s' % event.code)
 
 def event_loop_parent(app):
     reset_event_queue_status(app)
-    if os.name == 'nt':
-        # Subprocesses are not supported for default loop of SelectorEventLoop on Windows
-        loop = asyncio.ProactorEventLoop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(event_loop(app))
-        loop.close()
-    else:
-        asyncio.run(event_loop(app))
+    thread = threading.Thread(target=event_loop, args=(app,))
+    thread.daemon = True
+    thread.start()
+    thread.join()
 
 def convert_json_to_robot_variable(args, variables, variable_file):
     local_args = None
@@ -249,7 +218,7 @@ def convert_json_to_robot_variable(args, variables, variable_file):
 
     args.extend(['--variablefile', str(variable_file)])
 
-async def process_task_per_endpoint(app, endpoint_address, organization=None, team=None):
+def process_task_per_endpoint(app, endpoint_address, organization=None, team=None):
     global ROBOT_PROCESSES
 
     if not organization and not team:
@@ -270,6 +239,7 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
         app.logger.error('Endpoint not found')
         return
 
+    endpoint_id = str(endpoints.first().id)
     org_name = team.organization.name + '-' + team.name if team else organization.name
 
     while True:
@@ -299,7 +269,7 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
 
             # "continue" to search for tasks in the lower priority task queues
             # "break" to start over to search for tasks from the top priority task queue
-            task = await taskqueue.async_pop()
+            task = taskqueue.pop()
             if not task:
                 continue
             if isinstance(task, DBRef):
@@ -318,10 +288,10 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
                 taskqueue.modify(running_task=None)
                 break
 
-            app.logger.info('Start to run task {} ...'.format(task.id))
+            app.logger.info('Start to run task {} in the thread {}'.format(task.id, threading.current_thread().name))
 
             result_dir = get_test_result_path(task)
-            args = ['--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
+            args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
                     '--consolecolors', 'on', '--consolemarkers', 'on']
             os.makedirs(result_dir)
 
@@ -339,7 +309,7 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
             args.append(task.test.path)
             app.logger.info('Arguments: ' + str(args))
 
-            p = await asyncio.create_subprocess_exec('robot', *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, limit=1,
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0)
             ROBOT_PROCESSES[task.id] = p
 
@@ -356,7 +326,7 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
                 if str(task.id) not in ROOM_MESSAGES[room_id]:
                     ROOM_MESSAGES[room_id][str(task.id)] = log_msg
             while True:
-                c = await p.stdout.read(1)
+                c = p.stdout.read(1)
                 if not c:
                     break
                 c = c.decode()
@@ -368,7 +338,7 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
             app.logger.info('\n' + log_msg.getvalue())
             #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
 
-            await p.wait()
+            p.wait()
             if p.returncode == 0:
                 task.status = 'successful'
             else:
@@ -399,8 +369,19 @@ async def process_task_per_endpoint(app, endpoint_address, organization=None, te
                 shutil.rmtree(result_dir_tmp)
 
             notification_chain_call(task)
+            TASK_LOCK.acquire()
+            TASK_THREADS[endpoint_id] = 1
+            TASK_LOCK.release()
             break
         else:
+            TASK_LOCK.acquire()
+            if TASK_THREADS[endpoint_id] != 1:
+                TASK_THREADS[endpoint_id] = 1
+                TASK_LOCK.release()
+                app.logger.info('Run the lately scheduled task')
+                continue
+            del TASK_THREADS[endpoint_id]
+            TASK_LOCK.release()
             break
 
 def check_endpoint(app, endpoint_address, organization, team):

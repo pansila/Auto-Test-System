@@ -8,9 +8,8 @@ flask_bcrypt = Bcrypt()
 
 def create_app(config_name):
     app = Flask(__name__,
-            static_url_path='',
-            static_folder='../../static',
-            template_folder='../../templates')
+            static_url_path='', 
+            static_folder='../../static')
     app.config.from_object(config_by_name[config_name])
     flask_bcrypt.init_app(app)
 

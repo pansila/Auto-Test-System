@@ -1,4 +1,3 @@
-import asyncio
 import datetime
 import time
 import jwt
@@ -225,15 +224,6 @@ class TaskQueue(Document):
 
     meta = {'collection': 'task_queues'}
 
-    async def async_acquire_lock(self):
-        for i in range(LOCK_TIMEOUT):
-            ret = self.modify({'rw_lock': False}, rw_lock=True)
-            if ret:
-                return True
-            await asyncio.time.sleep(0.1)
-        else:
-            return False
-
     def acquire_lock(self):
         for i in range(LOCK_TIMEOUT):
             ret = self.modify({'rw_lock': False}, rw_lock=True)
@@ -246,8 +236,8 @@ class TaskQueue(Document):
     def release_lock(self):
         self.modify(rw_lock=False)
 
-    async def async_pop(self):
-        if not await self.async_acquire_lock():
+    def pop(self):
+        if not self.acquire_lock():
             return None
         if 'tasks' not in self or len(self.tasks) == 0:
             task = None
@@ -263,17 +253,6 @@ class TaskQueue(Document):
     
     def flush(self, cancelled=False):
         if not self.acquire_lock():
-            return False
-        if cancelled:
-            for task in self.tasks:
-                task.update(status='cancelled')
-        self.tasks = []
-        self.save()
-        self.release_lock()
-        return True
-
-    async def async_flush(self, cancelled=False):
-        if not await self.async_acquire_lock():
             return False
         if cancelled:
             for task in self.tasks:
@@ -318,15 +297,6 @@ class EventQueue(Document):
 
     meta = {'collection': 'event_queues'}
 
-    async def async_acquire_lock(self):
-        for i in range(LOCK_TIMEOUT):
-            ret = self.modify({'rw_lock': False}, rw_lock=True)
-            if ret:
-                return True
-            await asyncio.time.sleep(0.1)
-        else:
-            return False
-
     def acquire_lock(self):
         for i in range(LOCK_TIMEOUT):
             ret = self.modify({'rw_lock': False}, rw_lock=True)
@@ -339,8 +309,8 @@ class EventQueue(Document):
     def release_lock(self):
         self.modify(rw_lock=False)
 
-    async def async_pop(self):
-        if not await self.async_acquire_lock():
+    def pop(self):
+        if not self.acquire_lock():
             return None
         if 'events' not in self or len(self.events) == 0:
             event = None
@@ -353,17 +323,6 @@ class EventQueue(Document):
     def push(self, event):
         return self.modify(push__events=event)
     
-    async def async_flush(self, cancelled=False):
-        if not await self.async_acquire_lock():
-            return False
-        if cancelled:
-            for event in self.events:
-                event.update(status='Cancelled')
-        self.events = []
-        self.save()
-        self.release_lock()
-        return True
-
     def flush(self, cancelled=False):
         if not self.acquire_lock():
             return False
