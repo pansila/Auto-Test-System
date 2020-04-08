@@ -15,14 +15,13 @@ class rest_api():
     def __init__(self, config, task_id):
         self.config = config
         self.task_id = task_id
-        self.result = {'test_site': '@'.join((self.config['name'], self.config['location']))}
+        self.result = {}
         self._update_result()
 
     def _update_result(self, new_result=None):
         if new_result:
             self.result = {**self.result, **new_result}
-        ret = requests.post('{}:{}/testresult/{}'.format(self.config['server_url'],
-                            self.config['server_port'],
+        ret = requests.post('{}/testresult/{}'.format(self.config['server_url'],
                             self.task_id),
                             json=json.dumps(self.result, default=json_serial))
         if ret.status_code != 200:

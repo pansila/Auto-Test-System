@@ -11,7 +11,7 @@ from app import blueprint
 from app.main import create_app
 from mongoengine import connect
 from app.main.config import get_config
-from task_runner.runner import start_event_thread, start_heartbeat_thread
+from task_runner.runner import start_event_thread, start_heartbeat_thread, start_rpc_proxy
 from flask_socketio import SocketIO, send, emit
 from app.main.controller.socketio_controller import handle_message, \
             handle_join_room, handle_enter_room, handle_leave_room
@@ -40,6 +40,7 @@ def run():
     if 'WERKZEUG_RUN_MAIN' in os.environ and os.environ['WERKZEUG_RUN_MAIN'] == 'true':
         start_event_thread(app)
         start_heartbeat_thread(app)
+        start_rpc_proxy(app)
     #app.run(host='0.0.0.0')
     socketio.run(app, host='0.0.0.0')
 

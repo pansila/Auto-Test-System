@@ -1,6 +1,10 @@
+import random
 import urllib.parse
+import uuid
 from flask import request, current_app
 from flask_restx import Resource
+from mongoengine import ValidationError
+from mongoengine.queryset.visitor import Q
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
 from task_runner.runner import check_endpoint
@@ -33,6 +37,11 @@ class EndpointController(Resource):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
+        forbidden = request.args.get('forbidden', default=False)
+        unauthorized = request.args.get('unauthorized', default=False)
+
+        forbidden = True if forbidden == 'true' else False
+        unauthorized = True if unauthorized == 'true' else False
 
         organization = kwargs['organization']
         team = kwargs['team']
@@ -40,64 +49,75 @@ class EndpointController(Resource):
         page = int(page)
         limit = int(limit)
 
-        query = []
         if title:
-            query.append({'name__contains': title, 'organization': organization, 'team': team})
-            query.append({'endpoint_address__contains': title, 'organization': organization, 'team': team})
+            query = {'name__contains': title, 'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
         else:
-            query.append({'organization': organization, 'team': team})
+            query = {'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
+        if forbidden:
+            query = {'status': 'Forbidden'}
+        if unauthorized:
+            query = {'status': 'Unauthorized'}
+        if forbidden and unauthorized:
+            query = Q(status='Forbidden') | Q(status='Unauthorized')
+            endpoints = Endpoint.objects(query)
+        else:
+            endpoints = Endpoint.objects(**query)
 
         ret = []
-        for q in query:
-            for ep in Endpoint.objects(**q):
-                tests = []
-                for t in ep.tests:
-                    if hasattr(t, 'test_suite'):
-                        tests.append(t.test_suite)
-                    else:
-                        tests.append(str(t.id))
-                ret.append({
-                    'address': ep.endpoint_address,
-                    'name': ep.name,
-                    'status': ep.status,
-                    'enable': ep.enable,
-                    'last_run': ep.last_run_date.timestamp() * 1000 if ep.last_run_date else 0,
-                    'tests': tests,
-                    'test_refs': [str(t.id) for t in ep.tests]
-                })
-            if len(ret) > 0:
-                break
-        return ret[(page-1)*limit:page*limit]
+        for ep in endpoints:
+            tests = []
+            for t in ep.tests:
+                if hasattr(t, 'test_suite'):
+                    tests.append(t.test_suite)
+                else:
+                    tests.append(str(t.id))
+            ret.append({
+                'name': ep.name,
+                'status': ep.status,
+                'enable': ep.enable,
+                'last_run': ep.last_run_date.timestamp() * 1000 if ep.last_run_date else 0,
+                'tests': tests,
+                'test_refs': [str(t.id) for t in ep.tests],
+                'endpoint_uid': ep.uid
+            })
+        return {'items': ret[(page-1)*limit:page*limit], 'total': len(ret)}
 
     @token_required
     @organization_team_required_by_json
     @api.doc('delete the test endpoint')
     @api.expect(_endpoint_del)
     def delete(self, **kwargs):
-        """Delete the test endpoint with the specified address"""
+        """Delete the test endpoint with the specified endpoint uid"""
         data = request.json
         organization = kwargs['organization']
         team = kwargs['team']
 
-        address = data.get('address', None)
-        if address is None:
-            return response_message(EINVAL, 'Parameter address is required'), 400
+        endpoint_uid = data.get('endpoint_uid', None)
+        if endpoint_uid is None:
+            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+        if endpoint is None:
+            return response_message(EINVAL, 'Endpoint not found'), 404
 
-        taskqueues = TaskQueue.objects(endpoint_address=address, organization=organization, team=team)
+        taskqueues = TaskQueue.objects(endpoint=endpoint, organization=organization, team=team)
         if taskqueues.count() == 0:
-            return response_message(ENOENT, 'Task queue not found'), 404
+            endpoint.delete()
+            return response_message(SUCCESS)
         taskqueues.update(to_delete=True)
 
         for q in taskqueues:
             q.flush(cancelled=True)
             if q.running_task:
-                message['priority'] = q.priority
-                message['task_id'] = str(q.running_task.id)
+                message = {
+                    'endpoint_uid': endpoint_uid,
+                    'priority': q.priority,
+                    'task_id': str(q.running_task.id)
+                }
                 ret = push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
                 if not ret:
                     return response_message(EPERM, 'Pushing the event to event queue failed'), 403
 
-        ret = push_event(organization=organization, team=team, code=EVENT_CODE_START_TASK, message={'address': address, 'to_delete': True})
+        ret = push_event(organization=organization, team=team, code=EVENT_CODE_START_TASK, message={'endpoint_uid': endpoint_uid, 'to_delete': True})
         if not ret:
             return response_message(EPERM, 'Pushing the event to event queue failed'), 403
 
@@ -105,26 +125,21 @@ class EndpointController(Resource):
 
     @token_required
     @organization_team_required_by_json
-    @api.doc('create a task queue for the endpoint address')
+    @api.doc('update the endpoint')
     @api.expect(_endpoint)
     def post(self, **kwargs):
-        """Create a task queue for the endpoint address"""
+        """Update the endpoint"""
         data = request.json
         organization = kwargs['organization']
         team = kwargs['team']
         user = kwargs['user']
 
-        endpoint_address = data.get('endpoint_address', None)
-        if not endpoint_address:
-            return response_message(EINVAL, 'Field endpoint_address is required'), 400
-
-        endpoint_address = endpoint_address.strip()
-        scheme, address = urllib.parse.splittype(endpoint_address)
-        address = urllib.parse.splittype(address)
-
         tests = data.get('tests', [])
         if not isinstance(tests, list):
             return response_message(EINVAL, 'Tests is not a list'), 400
+        uid = data.get('uid', None)
+        if not uid:
+            return response_message(EINVAL, 'Endpoint uid is invalid'), 400
 
         endpoint_tests = []
         for t in tests:
@@ -133,21 +148,18 @@ class EndpointController(Resource):
                 return response_message(ENOENT, 'Test suite {} not found'.format(t)), 404
             endpoint_tests.append(tt)
 
-        endpoint = Endpoint.objects(endpoint_address=address, team=team, organization=organization).first()
+        endpoint = Endpoint.objects(uid=uid).first()
         if not endpoint:
-            endpoint = Endpoint(team=team, organization=organization, endpoint_address=address)
-            endpoint.save()
+            return response_message(ENOENT, 'Endpoint not found'), 404
+        taskqueues = TaskQueue.objects(endpoint=endpoint, team=team, organization=organization)
+        if taskqueues.count() == 0:
+            for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
+                taskqueue = TaskQueue(endpoint=endpoint, priority=priority, team=team, organization=organization)
+                taskqueue.save()
+        else:
+            taskqueues.update(endpoint=endpoint)
 
-            taskqueue = TaskQueue.objects(endpoint_address=address, team=team, organization=organization).first()
-            if not taskqueue:
-                for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
-                    taskqueue = TaskQueue(endpoint_address=address, priority=priority, team=team, organization=organization)
-                    taskqueue.endpoint = endpoint
-                    taskqueue.save()
-            else:
-                return response_message(EEXIST, 'Task queues exist already'), 401
-
-        endpoint.name = data.get('endpoint_name', address)
+        endpoint.name = data.get('endpoint_name', 'test site#1')
         endpoint.enable = data.get('enable', False)
         endpoint.tests = endpoint_tests
         endpoint.save()
@@ -161,7 +173,7 @@ class EndpointController(Resource):
     @api.doc('get queuing tasks')
     @api.param('organization', description='The organization ID')
     @api.param('team', description='The team ID')
-    @api.param('address', description='The endpoint address')
+    @api.param('uid', description='The endpoint uid')
     @api.marshal_list_with(_queuing_tasks)
     def get(self, **kwargs):
         """Get the queuing tasks of an endpoint"""
@@ -169,24 +181,23 @@ class EndpointController(Resource):
         team = kwargs['team']
 
         query = {'organization': organization, 'team': team}
-        address = request.args.get('address', default=None)
-        if address:
-            query['endpoint_address'] = address
+        endpoint_uid = request.args.get('uid', default=None)
+        if endpoint_uid:
+            query['endpoint_uid'] = endpoint_uid
 
         ret = []
         for taskqueue in TaskQueue.objects(**query):
             taskqueue_stat = ({
                 'endpoint': taskqueue.endpoint.name,
-                'address': taskqueue.endpoint_address,
                 'priority': taskqueue.priority,
                 'waiting': len(taskqueue.tasks),
                 'status': taskqueue.endpoint.status,
+                'endpoint_uid': taskqueue.endpoint.uid,
                 'tasks': []
             })
             if taskqueue.running_task and taskqueue.running_task.status == 'running':
                 taskqueue_stat['tasks'].append({
                     'endpoint': taskqueue.endpoint.name,
-                    'address': taskqueue.endpoint_address,
                     'priority': taskqueue.priority,
                     'task': taskqueue.running_task.test_suite,
                     'task_id': str(taskqueue.running_task.id),
@@ -195,7 +206,6 @@ class EndpointController(Resource):
             for task in taskqueue.tasks:
                 taskqueue_stat['tasks'].append({
                     'endpoint': taskqueue.endpoint.name,
-                    'address': taskqueue.endpoint_address,
                     'priority': task.priority,
                     'task': task.test_suite,
                     'task_id': str(task.id),
@@ -218,12 +228,16 @@ class EndpointController(Resource):
             return response_message(EINVAL, 'Field taskqueues should be a list'), 400
 
         for taskqueue in taskqueues:
-            if 'address' not in taskqueue or 'priority' not in taskqueue:
-                return response_message(EINVAL, 'Task queue lacks the field address and field priority'), 400
-            queue = TaskQueue.objects(endpoint_address=taskqueue['address'], priority=taskqueue['priority'], team=team, organization=organization).first()
+            if 'endpoint_uid' not in taskqueue or 'priority' not in taskqueue:
+                return response_message(EINVAL, 'Task queue lacks the field endpoint_uid and field priority'), 400
+            endpoint = Endpoint.objects(uid=taskqueue['endpoint_uid']).first()
+            if not endpoint:
+                return response_message(EINVAL, f"endpoint not found for uid {taskqueue['endpoint_uid']}"), 400
+            queue = TaskQueue.objects(endpoint=endpoint, priority=taskqueue['priority'], team=team, organization=organization).first()
             if not queue:
-                return response_message(EINVAL, 'Task queue querying failed for {} of priority{}'.format(taskqueue['address'], taskqueue['priority'])), 400
+                return response_message(EINVAL, 'Task queue querying failed for {} of priority {}'.format(taskqueue['endpoint_uid'], taskqueue['priority'])), 400
 
+            tasks = []
             for task in taskqueue['tasks']:
                 if 'task_id' not in task:
                     return response_message(EINVAL, 'Task lacks the field task_id'), 400
@@ -232,16 +246,24 @@ class EndpointController(Resource):
                 t = Task.objects(pk=task['task_id']).first()
                 if not t:
                     return response_message(ENOENT, 'task not found for ' + task['task_id']), 404
+                tasks.append(t)
 
             if not queue.flush():
-                return response_message(EPERM, 'task queue {} {} flushing failed'.format(queue.endpoint_address, queue.priority)), 401
+                return response_message(EPERM, 'task queue {} {} flushing failed'.format(queue.endpoint.uid, queue.priority)), 401
 
-            for task in taskqueue['tasks']:
+            queue.acquire_lock()
+            set1 = set(tasks)
+            set2 = set(queue.tasks)
+            task_cancel_set = set2 - set1
+            for task in task_cancel_set:
+                task.update(status='cancelled')
+            queue.release_lock()
+
+            for task in tasks:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
-                t = Task.objects(pk=task['task_id']).first()
-                if t.status == 'waiting':
-                    if not queue.push(t):
-                        current_app.logger.error('pushing the task to task queue timed out')
+                if task.status == 'waiting':
+                    if not queue.push(task):
+                        current_app.logger.error('pushing the task {} to task queue timed out'.format(str(task.id)))
 
 @api.route('/check/')
 class EndpointChecker(Resource):
@@ -254,16 +276,72 @@ class EndpointChecker(Resource):
         organization = kwargs['organization']
         team = kwargs['team']
 
-        address = request.json.get('address', None)
-        if address is None:
-            return response_message(EINVAL, 'Parameter address is required'), 400
+        endpoint_uid = request.json.get('endpoint_uid', None)
+        if endpoint_uid is None:
+            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
 
-        address = address.strip()
-        scheme, address = urllib.parse.splittype(address)
-        address = urllib.parse.splittype(address)
-
-        ret = check_endpoint(current_app._get_current_object(), address, organization, team)
+        ret = check_endpoint(current_app._get_current_object(), endpoint_uid, organization, team)
         if not ret:
             return response_message(SUCCESS, 'Endpoint offline', status=False), 200
         else:
             return response_message(SUCCESS, 'Endpoint online', status=True), 200
+
+@api.route('/authorize')
+class EndpointController(Resource):
+    @token_required
+    @organization_team_required_by_json
+    @api.doc('authorize the test endpoint')
+    @api.expect(_endpoint_del)
+    def post(self, **kwargs):
+        """Authorize the test endpoint with the specified endpoint uid"""
+        data = request.json
+        organization = kwargs['organization']
+        team = kwargs['team']
+
+        endpoint_uid = data.get('endpoint_uid', None)
+        if endpoint_uid is None:
+            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+
+        if not endpoint:
+            endpoint = Endpoint(name=f'Test Site {random.randint(1, 9999)}', uid=endpoint_uid, organization=organization, team=team, status='Offline')
+            endpoint.save()
+        else:
+            endpoint.modify(name=f'Test Site {random.randint(1, 9999)}', status='Offline')
+
+        taskqueues = TaskQueue.objects(endpoint=endpoint, team=team, organization=organization)
+        if taskqueues.count() == 0:
+            for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
+                taskqueue = TaskQueue(endpoint=endpoint, priority=priority, team=team, organization=organization)
+                taskqueue.save()
+        else:
+            taskqueues.update(endpoint=endpoint)
+
+        check_endpoint(current_app._get_current_object(), endpoint_uid, organization, team)
+
+        return response_message(SUCCESS)
+
+@api.route('/forbid')
+class EndpointController(Resource):
+    @token_required
+    @organization_team_required_by_json
+    @api.doc('forbid the test endpoint')
+    @api.expect(_endpoint_del)
+    def post(self, **kwargs):
+        """Forbid the test endpoint with the specified endpoint uid"""
+        data = request.json
+        organization = kwargs['organization']
+        team = kwargs['team']
+
+        endpoint_uid = data.get('endpoint_uid', None)
+        if endpoint_uid is None:
+            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+
+        if not endpoint:
+            endpoint = Endpoint(uid=endpoint_uid, organization=organization, team=team, status='Forbidden')
+            endpoint.save()
+        else:
+            endpoint.update(status='Forbidden')
+
+        return response_message(SUCCESS)

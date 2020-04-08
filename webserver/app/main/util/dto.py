@@ -63,6 +63,9 @@ class CertDto:
         'test': fields.String(description='test'),
     })
 
+class SettingDto:
+    api = Namespace('setting', description='settings of the server')
+
 class TestDto:
     api = Namespace('test', description='test management operations')
     test_cases = api.model('test_cases', {
@@ -91,7 +94,7 @@ class TaskDto:
         'comment': fields.String(required=True, description='The task comment'),
     })
     task_cancel = api.inherit('task_cancel', task_id, {
-        'address': fields.String(description='The endpoint address that is running the test'),
+        'endpoint_uid': fields.String(description='The endpoint uid that is running the test'),
         'priority': fields.Integer(description='The priority of the task'),
     })
     task_stat = api.model('task_stat', {
@@ -163,34 +166,39 @@ class EndpointDto:
         'team': fields.String(description='The team id'),
     })
 
-    endpoint_list = api.model('endpoint_list', {
-        'address': fields.String(),
+    endpoint_item = api.model('endpoint_item', {
+        'endpoint_uid': fields.String(),
         'name': fields.String(),
         'status': fields.String(),
         'enable': fields.Boolean(),
         'last_run': fields.Integer(description="Timestamp in milliseconds, 0 if not run yet"),
         'tests': fields.List(fields.String()),
-        'test_refs': fields.List(fields.String())
+        'test_refs': fields.List(fields.String()),
+        'endpoint_uid': fields.String()
+    })
+    endpoint_list = api.model('endpoint_list', {
+        'items': fields.List(fields.Nested(endpoint_item)),
+        'total': fields.Integer(),
     })
     endpoint_del = api.inherit('endpoint_del', organization_team, {
-        'address': fields.String(),
+        'endpoint_uid': fields.String(),
     })
     endpoint = api.inherit('endpoint', organization_team, {
-        'endpoint_address': fields.String(),
+        'endpoint_uid': fields.String(),
         'tests': fields.List(fields.String(), description='The tests that the endpoint supports'),
         'endpoint_name': fields.String(),
         'enable': fields.Boolean(default=False),
     })
     queuing_task = api.model('queuing_task', {
         'endpoint': fields.String(description="The endpoint name"),
-        'address': fields.String(description="The endpoint address"),
+        'endpoint_uid': fields.String(description="The endpoint uid"),
         'priority': fields.Integer(),
         'task': fields.String(description="The test name"),
         'task_id': fields.String(description="The task id"),
         'status': fields.String(),
     })
     queuing_tasks = api.model('queuing_tasks', {
-        'address': fields.String(description="The endpoint address"),
+        'endpoint_uid': fields.String(description="The endpoint uid"),
         'endpoint': fields.String(description="The endpoint name"),
         'priority': fields.Integer(),
         'waiting': fields.Integer(),
@@ -231,6 +239,7 @@ class OrganizationDto:
         'label': fields.String(description='The organization name'),
         'owner': fields.String(description='The organization owner\'s name'),
         'owner_email': fields.String(description='The organization owner\'s email'),
+        'personal': fields.Boolean(description='The organization is of person', default=False),
         'value': fields.String(description='The organization ID'),
     })
 

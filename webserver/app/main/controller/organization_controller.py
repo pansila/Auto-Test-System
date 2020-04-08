@@ -39,26 +39,29 @@ class OrganizationList(Resource):
         if not user:
             return response_message(ENOENT, 'User not found'), 404
 
-        organizations = Organization.objects(owner=ObjectId(user_id), name__not__exact='Personal')
+        organizations = Organization.objects(owner=user)
         for organization in organizations:
             ret.append({
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
+                'personal': organization.personal,
                 'value': str(organization.id)
             })
             check.append(organization)
 
         for organization in user.organizations:
-            if organization in check or organization.name == 'Personal':
+            if organization in check:
                 continue
             ret.append({
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
+                'personal': organization.personal,
                 'value': str(organization.id)
             })
 
+        ret.sort(key=lambda x: not x['personal'])
         return ret
 
     @token_required
@@ -159,7 +162,10 @@ class OrganizationAvatar(Resource):
                 if user:
                     org = Organization.objects(pk=org_id).first()
                     if org:
-                        return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.avatar)
+                        if org.avatar:
+                            return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.avatar)
+                        else:
+                            return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.owner.avatar)
                     return response_message(USER_NOT_EXIST, 'Organization not found'), 404
                 return response_message(USER_NOT_EXIST), 404
             return response_message(TOKEN_ILLEGAL, payload), 401
@@ -213,6 +219,7 @@ class OrganizationListAll(Resource):
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
+                'personal': organization.personal,
                 'value': str(organization.id)
             } for organization in organizations]
 
@@ -230,12 +237,13 @@ class OrganizationListAll(Resource):
         if not user:
             return response_message(ENOENT, 'User not found'), 404
 
-        organizations = Organization.objects(owner=ObjectId(user_id))
+        organizations = Organization.objects(owner=user)
         for organization in organizations:
             r = {
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
+                'personal': organization.personal,
                 'value': str(organization.id)
             }
             ret.append(r)
@@ -259,6 +267,7 @@ class OrganizationListAll(Resource):
                 'label': organization.name,
                 'owner': organization.owner.name,
                 'owner_email': organization.owner.email,
+                'personal': organization.personal,
                 'value': str(organization.id)
             }
             ret.append(r)

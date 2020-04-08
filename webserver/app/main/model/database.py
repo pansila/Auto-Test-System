@@ -6,6 +6,7 @@ from flask import current_app
 from .. import flask_bcrypt
 from ..config import key
 from mongoengine import *
+from urllib.parse import urlparse
 
 QUEUE_PRIORITY_MIN = 1
 QUEUE_PRIORITY_DEFAULT = 2
@@ -23,6 +24,19 @@ EVENT_CODE_DELETE_ENDPOINT = 207
 
 LOCK_TIMEOUT = 50
 
+class IPAddressField(StringField):
+    """A field that validates input as an IP address, may including port.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def validate(self, value):
+        try:
+            urlparse(value)
+        except ValueError:
+            self.error(u"Invalid IP address: {}".format(value))
+
 class Organization(Document):
     schema_version = StringField(max_length=10, default='1')
     name = StringField(max_length=50, required=True)
@@ -37,6 +51,7 @@ class Organization(Document):
     region = StringField()
     avatar = StringField(max_length=100)
     path = StringField()
+    personal = BooleanField(default=False)
 
     meta = {'collection': 'organizations'}
 
@@ -181,9 +196,9 @@ class Task(Document):
     status = StringField(max_length=50, default='waiting')
     comment = StringField(max_length=1000)
     kickedoff = IntField(min_value=0, default=0)
-    endpoint_list = ListField(StringField(max_length=50))
+    endpoint_list = ListField(UUIDField(binary=False))
     parallelization = BooleanField(default=False)
-    endpoint_run = StringField(max_length=50)
+    endpoint_run = ReferenceField('Endpoint')
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     variables = DictField()
     tester = ReferenceField(User)
@@ -197,13 +212,13 @@ class Task(Document):
 class Endpoint(Document):
     schema_version = StringField(max_length=10, default='1')
     name = StringField(max_length=100)
-    endpoint_address = StringField(required=True)
     tests = ListField(ReferenceField(Test))
-    status = StringField(default='Offline', max_length=10)
+    status = StringField(default='Offline', max_length=20)
     enable = BooleanField(default=True)
     last_run_date = DateTimeField()
     organization = ReferenceField(Organization)
     team = ReferenceField(Team)
+    uid = UUIDField(binary=False)
 
     meta = {'collection': 'endpoints'}
 
@@ -212,7 +227,6 @@ class TaskQueue(Document):
     Per endpoint per priority queue
     '''
     schema_version = StringField(max_length=10, default='1')
-    endpoint_address = StringField(max_length=50, required=True)  # embedded document from Endpoint
     priority = IntField(min_value=QUEUE_PRIORITY_MIN, max_value=QUEUE_PRIORITY_MAX, default=QUEUE_PRIORITY_DEFAULT)
     tasks = ListField(ReferenceField(Task))
     endpoint = ReferenceField(Endpoint)
@@ -261,10 +275,6 @@ class TaskQueue(Document):
         self.save()
         self.release_lock()
         return True
-
-    # @classmethod
-    # def __getitem__(cls, index, priority=QUEUE_PRIORITY_DEFAULT, endpoint_address):
-    #     pass
 
 class TestResult(Document):
     schema_version = StringField(max_length=10, default='1')

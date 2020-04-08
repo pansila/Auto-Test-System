@@ -6,7 +6,7 @@ from pathlib import Path
 
 from bson.objectid import ObjectId
 from dateutil import tz
-from flask import render_template, request, send_from_directory, url_for, current_app
+from flask import request, send_from_directory, url_for, current_app
 from flask_restx import Resource
 from mongoengine import DoesNotExist, ValidationError
 
@@ -45,7 +45,7 @@ class TestResultRoot(Resource):
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
         priority = request.args.get('priority', default=None)
-        endpoint = request.args.get('endpoint', default=None)
+        endpoint_uid = request.args.get('endpoint', default=None)
         sort = request.args.get('sort', default='-run_date')
         start_date = request.args.get('start_date', None)
         end_date = request.args.get('end_date', None)
@@ -80,7 +80,10 @@ class TestResultRoot(Resource):
         if title and priority != '':
             query['test_suite__contains'] = title
 
-        if endpoint and endpoint != '':
+        if endpoint_uid and endpoint_uid != '':
+            endpoint = Endpoint.objects(uid=endpoint_uid).first()
+            if not endpoint:
+                return response_message(EINVAL, 'Endpoint not found'), 400
             query['endpoint_run'] = endpoint
 
         try:
@@ -108,7 +111,10 @@ class TestResultRoot(Resource):
                 'priority': t.priority,
                 'run_date': t.run_date,
                 'tester': t.tester.name,
-                'status': t.status
+                'status': t.status,
+                'variables': t.variables,
+                'endpoint_list': t.endpoint_list,
+                'parallelization': t.parallelization
             })
 
         return {'items': ret, 'total': all_tasks.count()}
@@ -117,7 +123,7 @@ class TestResultRoot(Resource):
     @api.doc('record_the_test_case')
     @api.expect(_record_test_result)
     def post(self):
-        """Record the test case result in the database for a task"""
+        """create the test result in the database for a task"""
         data = request.json
         if data is None:
             return response_message(EINVAL, "Payload of the request is empty"), 400
@@ -137,6 +143,7 @@ class TestResultRoot(Resource):
         test_result = TestResult()
         test_result.test_case = test_case
         test_result.task = task
+        test_result.test_site = task.endpoint_run.name
         try:
             test_result.save()
         except ValidationError as e:

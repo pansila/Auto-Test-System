@@ -198,6 +198,9 @@ class TaskController(Resource):
             return response_message(EINVAL, 'Endpoint list is not a list'), 400
         if len(endpoint_list) == 0:
             return response_message(EINVAL, 'Endpoint list is empty'), 400
+        for uid in endpoint_list:
+            if Endpoint.objects(uid=uid).count() == 0:
+                return response_message(EINVAL, 'An uid in the endpoint list is invalid'), 400
         task.endpoint_list = endpoint_list
 
         priority = int(data.get('priority', QUEUE_PRIORITY_DEFAULT))
@@ -231,7 +234,7 @@ class TaskController(Resource):
         failed = []
         succeeded = []
         running = []
-        for endpoint in task.endpoint_list:
+        for endpoint_uid in task.endpoint_list:
             if task.parallelization:
                 new_task = Task()
                 for name in task:
@@ -239,7 +242,12 @@ class TaskController(Resource):
                         new_task[name] = task[name]
                 else:
                     new_task.save()
-                    taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
+                    endpoint = Endpoint.objects(uid=endpoint_uid).first()
+                    if not endpoint:
+                        failed.append(str(new_task.id))
+                        current_app.logger.error('Endpoint not found')
+                        continue
+                    taskqueue = TaskQueue.objects(endpoint=endpoint, priority=task.priority, organization=organization, team=team).first()
                     if not taskqueue:
                         failed.append(str(new_task.id))
                         current_app.logger.error('Task queue not found')
@@ -252,7 +260,7 @@ class TaskController(Resource):
                             current_app.logger.error('Failed to push task to the task queue')
                         else:
                             message = {
-                                'address': endpoint,
+                                'endpoint_uid': endpoint_uid,
                                 'task_id': str(new_task.id),
                             }
                             ret = push_event(organization=new_task.test.organization, team=new_task.test.team, code=EVENT_CODE_START_TASK, message=message)
@@ -260,7 +268,12 @@ class TaskController(Resource):
                                 return response_message(EPERM, 'Pushing the event to event queue failed'), 403
                             succeeded.append(str(new_task.id))
             else:
-                taskqueue = TaskQueue.objects(endpoint_address=endpoint, priority=task.priority, organization=organization, team=team).first()
+                endpoint = Endpoint.objects(uid=endpoint_uid).first()
+                if not endpoint:
+                    failed.append(str(task.id))
+                    current_app.logger.error('Endpoint not found')
+                    continue
+                taskqueue = TaskQueue.objects(endpoint=endpoint, priority=task.priority, organization=organization, team=team).first()
                 if not taskqueue:
                     failed.append(str(task.id))
                     current_app.logger.error('Task queue not found')
@@ -273,7 +286,7 @@ class TaskController(Resource):
                         current_app.logger.error('Failed to push task to the task queue')
                     else:
                         message = {
-                            'address': endpoint,
+                            'endpoint_uid': endpoint_uid,
                             'task_id': str(task.id),
                         }
                         ret = push_event(organization=task.test.organization, team=task.test.team, code=EVENT_CODE_START_TASK, message=message)
@@ -322,15 +335,12 @@ class TaskController(Resource):
         if data is None:
             return response_message(EINVAL, 'The request data is empty'), 400
 
-        address = data.get('address', None)
-        if address is None:
-            return response_message(EINVAL, 'Field address is required'), 400
         priority = data.get('priority', None)
         if priority is None:
             return response_message(EINVAL, 'Field priority is required'), 400
 
         message = {
-            'address': address,
+            'endpoint_uid': task.endpoint_run.uid,
             'priority': priority,
             'task_id': str(task.id)
         }

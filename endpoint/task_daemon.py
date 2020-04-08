@@ -1,53 +1,61 @@
 import argparse
+import asyncio
+import functools
 import importlib
-import multiprocessing
+import inspect
+import json
 import os
 import os.path
 import queue
 import shutil
 import signal
-import subprocess
-import sys
 import socket
+import sys
 import tarfile
 import threading
 import time
+import traceback
+import uuid
 from contextlib import closing
 from io import BytesIO
-from multiprocessing import Queue, Process, current_process
 from pathlib import Path
-from watchdog.observers import Observer
-from watchdog.events import FileSystemEventHandler
 
 import requests
+import websockets
 from bson.objectid import ObjectId
-
+from robotremoteserver import RobotRemoteServer, RemoteLibraryFactory
+from ruamel import yaml
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+from wsrpc import WebsocketRPC
 # import daemon as Daemon
 # from daemoniker import Daemonizer, SignalHandler1
-from robotremoteserver import RobotRemoteServer
-from ruamel import yaml
 
 DOWNLOAD_LIB = "testlibs"
-TERMINATE = 1
-TEST_END = 2
-HEARTBEAT = 3
+RESOURCE_DIR = "resources"
 
-g_config = {}
 
-def stop_process(proc_queue, process):
-    if not proc_queue or not process or not process.is_alive():
-        return
-    proc_queue.put(TERMINATE)
-    time.sleep(0.1)
-    try:
-        ret = proc_queue.get(timeout=5)
-    except queue.Empty:
-        print('Failed to stop test, killing it')
-        process.terminate()
-    else:
-        if ret != TEST_END:
-            print('Failed to stop process, wrong return {}, killing it'.format(ret))
-            process.terminate()
+
+class SecureWebsocketRPC(WebsocketRPC):
+    def __init__(
+        self,
+        ws,
+        handler_cls=None,
+        *,
+        client_mode: bool = False,
+        timeout=10,
+        http_request=None,
+        method_prefix: str = "rpc_"
+    ):
+        if handler_cls and not inspect.isclass(handler_cls):
+            handler = handler_cls
+        super().__init__(ws, None, client_mode=client_mode, timeout=timeout, http_request=http_request, method_prefix=method_prefix)
+        if handler_cls and not inspect.isclass(handler_cls):
+            self.handler = handler
+
+class WebsocketRemoteServer(RobotRemoteServer):
+    def __init__(self, library):
+        self._library = RemoteLibraryFactory(library)
 
 def empty_folder(folder):
     for root, dirs, files in os.walk(folder):
@@ -56,14 +64,25 @@ def empty_folder(folder):
         for d in dirs:
             shutil.rmtree(os.path.join(root, d))
 
-def check_port(host, port):
-    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        try:
-            result = sock.bind((host, port))
-        except OSError:
-            return False
-        else:
-            return True
+class SignalHandler(object):
+
+    def __init__(self, handler):
+        self._handler = lambda signum, frame: handler()
+        self._original = {}
+
+    def __enter__(self):
+        for name in 'SIGINT', 'SIGTERM', 'SIGHUP':
+            if hasattr(signal, name):
+                try:
+                    orig = signal.signal(getattr(signal, name), self._handler)
+                except ValueError:  # Not in main thread
+                    return
+                self._original[name] = orig
+
+    def __exit__(self, *exc_info):
+        while self._original:
+            name, handler = self._original.popitem()
+            signal.signal(getattr(signal, name), handler)
 
 class task_daemon(object):
 
@@ -71,16 +90,6 @@ class task_daemon(object):
         self.running_test = None
         self.config = config
         self.task_id = None
-        self.child_id = 0
-
-        try:
-            os.makedirs(self.config["test_dir"])
-        except FileExistsError:
-            pass
-        try:
-            os.makedirs(self.config["resource_dir"])
-        except FileExistsError:
-            pass
 
         sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
@@ -88,48 +97,41 @@ class task_daemon(object):
         # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
         self.stop_test('', 'ABORT')
 
-        if backing_file.endswith(".py"):
-            backing_file = backing_file[0:-3]
+        if not backing_file.endswith(".py"):
+            backing_file += '.py'
 
         self.task_id = task_id
         self._download(backing_file, self.task_id)
         self._verify(backing_file)
-        self.child_id += 1
-
-        for i in range(50):
-            if check_port(self.config["host_daemon"], self.config["port_test"]):
-                break
-            time.sleep(0.1)
-        else:
-            raise AssertionError('Port in use')
 
         self._create_test_result(test_case)
-        server_queue, server_process = start_remote_server(backing_file,
+        server = start_remote_server(backing_file,
                                     self.config,
-                                    host=self.config["host_daemon"],
-                                    port=self.config["port_test"],
-                                    task_id=self.task_id,
-                                    id=self.child_id)
-        self.running_test = {"queue": server_queue, "process": server_process}
+                                    host=self.config["server_host"],
+                                    port=self.config["server_rpc_port"],
+                                    task_id=self.task_id
+                                    )
+        self.running_test = server
 
-        for i in range(50):
-            if not check_port(self.config["host_daemon"], self.config["port_test"]):
+        for i in range(5):
+            if not server.is_ready():
+                time.sleep(1)
+            else:
                 break
-            time.sleep(0.1)
         else:
-            raise AssertionError('Failed to start the test')
+            raise AssertionError("RPC server can't be ready")
 
     def stop_test(self, test_case, status):
         if self.running_test:
             self._update_test_result(status)
-            stop_process(self.running_test["queue"], self.running_test["process"])
+            self.running_test.stop()
             self.running_test = None
             self.task_id = None
 
     def _download_file(self, endpoint, dest_dir):
         empty_folder(dest_dir)
 
-        url = "{}:{}/{}".format(self.config["server_url"], self.config["server_port"], endpoint)
+        url = "{}/{}".format(self.config["server_url"], endpoint)
         print('Start to download file from {}'.format(url))
 
         r = requests.get(url)
@@ -183,9 +185,7 @@ class task_daemon(object):
         if not self.task_id:
             return
         data = {'status': status}
-        ret = requests.post('{}:{}/testresult/{}'.format(self.config['server_url'],
-                                                         self.config['server_port'],
-                                                         self.task_id),
+        ret = requests.post('{}/testresult/{}'.format(self.config['server_url'], self.task_id),
                             json=data)
         if ret.status_code != 200:
             print('Updating the task result on the server failed')
@@ -194,75 +194,154 @@ class task_daemon(object):
         if not self.task_id:
             return
         data = {'task_id': self.task_id, 'test_case': test_case}
-        ret = requests.post('{}:{}/testresult/'.format(self.config['server_url'],
-                                                       self.config['server_port']),
+        ret = requests.post('{}/testresult/'.format(self.config['server_url']),
                             json=data)
         if ret.status_code != 200:
             print('Creating the task result on the server failed')
 
-# Don't run RobotRemoteServer directly as there is a thread.lock pickling issue
-def start_test_library(proc_queue, backing_file, task_id, config, host, port):
-    # importlib.invalidate_caches()
-    testlib = importlib.import_module(backing_file)
-    # importlib.reload(testlib)
-    test = getattr(testlib, backing_file)
+class test_library(threading.Thread):
+    def __init__(self, backing_file, task_id, config, host, port, rpc_daemon=False):
+        super().__init__()
+        self.backing_file = backing_file
+        self.task_id = task_id
+        self.config = config
+        self.host = host
+        self.port = port
+        self.name = backing_file
+        self.websocket = None
+        self.loop = None
+        self.rpc_daemon = rpc_daemon
 
-    server = RobotRemoteServer(test(config, task_id), host=host, serve=False, port=port)
-    server_thread = threading.Thread(target=server.serve)
-    server_thread.daemon = True
-    server_thread.start()
+    def run(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_until_complete(self.go())
 
-    while server_thread.is_alive():
-        try:
-            item = proc_queue.get()
-        except KeyboardInterrupt:
-            server.stop()
-            break
-        else:
-            if item == TERMINATE:
-                server.stop()
+    def is_ready(self):
+        return self.websocket is not None
+
+    async def go(self):
+        module_name = self.backing_file.rpartition('.')[0]
+        importlib.invalidate_caches()
+        test_module = importlib.import_module(module_name)
+        test_module = importlib.reload(test_module)
+        test_lib = getattr(test_module, module_name)
+
+        while True:
+            try:
+                async with websockets.connect(f'ws://{self.host}:{self.port}/') as ws:
+                    await ws.send(json.dumps({'organization_id': self.config['organization_id'],
+                                   'uid': self.config['uuid'],
+                                   'backing_file': self.backing_file if not self.rpc_daemon else ''
+                                   }))
+                    try:
+                        await ws.recv()
+                    except websockets.exceptions.ConnectionClosedOK:
+                        await asyncio.sleep(10)
+                        continue
+                    self.websocket = ws
+                    print(f'Start RPC server - {threading.current_thread().name}')
+                    try:
+                        await SecureWebsocketRPC(ws, WebsocketRemoteServer(test_lib(self.config, self.task_id)), method_prefix='').run()
+                    except websockets.exceptions.ConnectionClosedError:
+                        print('Websocket closed')
+            except ConnectionRefusedError:
+                print('Network connection is not ready')
+            if not self.rpc_daemon:
+                print(f'Exit RPC server - {threading.current_thread().name}')
                 break
+            print(f'Restart due to network connection closed - {threading.current_thread().name}')
 
-    proc_queue.put(TEST_END)
+    async def stop_websocket(self):
+        if self.websocket:
+            await self.websocket.close()
+            self.websocket = None
 
-def start_remote_server(backing_file, config, host, port=8270, task_id=None, id=0):
-    queue = Queue()
-    server_process = Process(target=start_test_library, name='test_library {}'.format(id),
-                                             args=(queue, backing_file, task_id, config, host, port))
-    server_process.start()
-    return queue, server_process
+    def stop(self):
+        fut = asyncio.run_coroutine_threadsafe(self.stop_websocket(), self.loop)
+        try:
+            fut.result()
+        except:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(exc_type, exc_value)
+            traceback.print_tb(exc_tb)
+        finally:
+            self.loop.stop()
 
-def start_daemon(config_file = "config.yml", host=None, port=None):
-    global g_config
+def start_remote_server(backing_file, config, host='127.0.0.1', port=5555, task_id=None, rpc_daemon=False):
+    thread = test_library(backing_file, task_id, config, host, port, rpc_daemon)
+    thread.start()
+    return thread
+
+def get_rpc_port(url):
+    ret = requests.get(f'{url}/setting/rpc')
+    if ret.status_code != 200:
+        print('Failed to get the server RPC port')
+        return None
+    if 'port' not in ret.json():
+        return None
+    return ret.json()['port']
+
+def read_config(config_file = "config.yml", host=None, port=None):
+    build_uuid = False
     with open(config_file, 'r', encoding='utf-8') as f:
-        g_config = yaml.load(f, Loader=yaml.RoundTripLoader)
+        config = yaml.load(f, Loader=yaml.RoundTripLoader)
+
+    if 'organization_id' not in config or not config['organization_id']:
+        print('organization ID must be specified before connecting, you can find it on the user profile page on the server')
+        sys.exit(1)
+
+    if 'uuid' not in config or not config['uuid']:
+        build_uuid = True
+    else:
+        try:
+            uuid.UUID(config['uuid'])
+        except Exception:
+            build_uuid = True
+    if build_uuid:
+        config['uuid'] = str(uuid.uuid1())
+        with open(config_file, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, Dumper=yaml.RoundTripDumper)
 
     if host:
-        g_config["host_daemon"] = host
-    elif "host_daemon" not in g_config:
-        g_config["host_daemon"] = '127.0.0.1'
+        config["server_host"] = host
+    elif "host" not in config:
+        config["server_host"] = '127.0.0.1'
 
     if port:
-        g_config["port_daemon"] = port
-        g_config["port_test"] = port + 1
-    else:
-        if "port_daemon" not in g_config:
-            g_config["port_daemon"] = 8270
-        if "port_test" not in g_config:
-            g_config["port_test"] = 8271
+        config["server_port"] = port
+    elif "port" not in config:
+        config["server_port"] = 5000
 
-    if "test_dir" not in g_config:
-        g_config["test_dir"] = DOWNLOAD_LIB
-    if "server_url" not in g_config:
-        raise AssertionError('server is not set in the config file')
-    else:
-        if not g_config['server_url'].startswith('http://'):
-            g_config['server_url'] += 'http://'
-        if g_config['server_url'][-1] == '/':
-            g_config['server_url'] = g_config['server_url'][0:-1]
+    if "test_dir" not in config:
+        config["test_dir"] = DOWNLOAD_LIB
+    try:
+        os.makedirs(config["test_dir"])
+    except FileExistsError:
+        pass
+    if "resource_dir" not in config:
+        config["resource_dir"] = RESOURCE_DIR
+    try:
+        os.makedirs(config["resource_dir"])
+    except FileExistsError:
+        pass
 
-    server_queue, server_process = start_remote_server('task_daemon', g_config, host=g_config["host_daemon"], port=g_config["port_daemon"])
-    return server_queue, server_process
+    config['server_url'] = 'http://{}:{}'.format(config['server_ip'], config['server_port'])
+    try:
+        rpc_port = get_rpc_port(config['server_url'])
+    except requests.exceptions.ConnectionError:
+        config['server_rpc_port'] = 5555
+    else:
+        if rpc_port:
+            config['server_rpc_port'] = rpc_port
+        else:
+            config['server_rpc_port'] = 5555
+
+    return config
+
+def start_daemon(config, host, port):
+    server = start_remote_server(__file__, config, host=config['server_host'], port=config['server_rpc_port'], rpc_daemon=True)
+    return server
 
 class Config_Handler(FileSystemEventHandler):
     def __init__(self):
@@ -272,46 +351,50 @@ class Config_Handler(FileSystemEventHandler):
         if not event.is_directory and event.src_path.endswith("config.yml"):
             self.restart = True
 
+def run(config_watchdog, handler, host, port):
+    task_daemon = None
+    while config_watchdog.is_alive():
+        if handler.restart:
+            if task_daemon:
+                task_daemon.stop()
+            config = read_config(host=host, port=port)
+            task_daemon = start_daemon(config, host, port)
+            handler.restart = False
+
+        try:
+            task_daemon.join(1)
+        except KeyboardInterrupt:
+            config_watchdog.stop()
+            task_daemon.stop()
+            break
+
+        if not task_daemon.is_alive():
+            config_watchdog.stop()
+            break
+    else:
+        task_daemon.stop()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str,
-                        help='the network interface for daemon to listen',
-                        default='0.0.0.0')
+                        help='the server IP for daemon to connect',
+                        default='127.0.0.1')
     parser.add_argument('--port', type=int,
-                        help='the port for daemon to listen, the test port will be next it',
-                        default=8270)
+                        help='the server port for daemon to connect',
+                        default=5000)
     args = parser.parse_args()
+    host, port = args.host, args.port
 
-    proc_queue, process = None, None
     handler = Config_Handler()
     ob = Observer()
     watch = ob.schedule(handler, path='.')
     ob.start()
 
-    dead = 0
-    while ob.is_alive():
-        if handler.restart:
-            stop_process(proc_queue, process)
-            proc_queue, process = start_daemon(host=args.host, port=args.port)
-            handler.restart = False
-
-        try:
-            process.join(1)
-        except KeyboardInterrupt:
-            ob.stop()
-            stop_process(proc_queue, process)
-            break
-
-        if not process.is_alive():
-            print('Error: Daemon is dead, stopping')
-            ob.stop()
-            break
-    else:
-        ob.stop()
-        stop_process(proc_queue, process)
+    run(ob, handler, host, port)
 
     sys.exit(0)
 
+    """
     if os.name == 'nt':
         with Daemonizer() as (is_setup, daemonizer):
             if is_setup:
@@ -324,13 +407,14 @@ if __name__ == '__main__':
             start_daemon(host=host, port=port)
         except OSError as err:
             print(err)
-            print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+            print("Please check IP {} is configured correctly")
     elif os.name == 'posix':
         with Daemon.DaemonContext():
             try:
                 start_daemon(host=host, port=port)
             except OSError as err:
                 print(err)
-                print("Please check IP {} is configured correctly".format(g_config["host_daemon"]))
+                print("Please check IP {} is configured correctly")
     else:
         raise AssertionError(os.name + ' is not supported')
+    """

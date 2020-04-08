@@ -51,6 +51,8 @@ def save_new_user(data, admin=None):
             organization = Organization(name='Personal')
             organization.owner = new_user
             organization.path = new_user.email
+            organization.members = [new_user]
+            organization.personal = True
             organization.save()
             new_user.organizations = [organization]
         new_user.save()

@@ -1,7 +1,9 @@
 import argparse
+import asyncio
+import chardet
 import datetime
-import eventlet
 import functools
+import json
 import os
 import queue
 import re
@@ -17,42 +19,47 @@ import xmlrpc.client
 from io import StringIO
 from pathlib import Path
 
+import eventlet
 import mongoengine
-from bson import DBRef, ObjectId
-from mongoengine import connect
-
+import websockets
+from mongoengine import ValidationError
 from app.main.config import get_config
 from app.main.model.database import *
+from app.main.util import get_room_id
 from app.main.util.get_path import get_test_result_path, get_upload_files_root
 from app.main.util.tarball import make_tarfile
-from app.main.util import get_room_id
+from bson import DBRef, ObjectId
+from mongoengine import connect
+from sanic import Sanic
+from sanic.websocket import WebSocketProtocol
 from task_runner.util.dbhelper import db_update_test
 from task_runner.util.notification import (notification_chain_call,
                                            notification_chain_init)
+from task_runner.util.xmlrpcserver import XMLRPCServer
+from wsrpc import WebsocketRPC
 
 ROBOT_PROCESSES = {}  # {task id: process instance}
 TASK_THREADS = {}     # {taskqueue id: idle counter (int)}}
 TASK_LOCK = threading.Lock()
-
-QUIT_AFTER_IDLE_TIME = 1800 * len(QUEUE_PRIORITY)  # seconds, count three times in a time of task searching
-
-
 ROOM_MESSAGES = {}  # {"organziation:team": old_message, new_message}
+RPC_PROXIES = {}    # {"endpoint_id": (websocket, rpc)}
+
+WS_APP = Sanic(__name__)
 
 def event_handler_cancel_task(app, event):
     global ROBOT_PROCESSES, TASK_THREADS
-    address = event.message['address']
+    endpoint_uid = event.message['endpoint_uid']
     priority = event.message['priority']
     task_id = event.message['task_id']
 
-    taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint_address=address, priority=priority).first()
-    if not taskqueue:
-        app.logger.error('Task queue not found for {}:{}'.format(address, priority))
+    endpoint = Endpoint.objects(uid=endpoint_uid, organization=event.organization, team=event.team).first()
+    if not endpoint:
+        app.logger.error('Endpoint not found for {}'.format(endpoint_uid))
         return
 
-    endpoint = Endpoint.objects(endpoint_address=address, organization=organization, team=team).first()
-    if not endpoint:
-        app.logger.error('Endpoint not found for {}'.format(address))
+    taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint=endpoint, priority=priority).first()
+    if not taskqueue:
+        app.logger.error('Task queue not found for {}:{}'.format(endpoint_uid, priority))
         return
 
     task = Task.objects(pk=task_id).first()
@@ -96,16 +103,16 @@ def event_handler_cancel_task(app, event):
         app.logger.info('Running task cancelled without process running')
 
 def event_handler_start_task(app, event):
-    address = event.message['address']
+    endpoint_uid = event.message['endpoint_uid']
     to_delete = event.message['to_delete'] if 'to_delete' in event.message else False
     organization = event.organization
     team = event.team
 
-    endpoint = Endpoint.objects(organization=organization, team=team, endpoint_address=address).first()
+    endpoint = Endpoint.objects(organization=organization, team=team, uid=endpoint_uid).first()
     if not endpoint:
         org_name = team.organization.name + '-' + team.name if team else organization.name
         if not to_delete:
-            app.logger.error('Endpoint not found for {}@{}'.format(org_name, address))
+            app.logger.error('Endpoint not found for {}@{}'.format(org_name, endpoint_uid))
         return
 
     endpoint_id = str(endpoint.id)
@@ -114,7 +121,7 @@ def event_handler_start_task(app, event):
         TASK_THREADS[endpoint_id] = 1
         TASK_LOCK.release()
         reset_task_queue_status(app, organization, team)
-        thread = threading.Thread(target=process_task_per_endpoint, args=(app, address, organization, team))
+        thread = threading.Thread(target=process_task_per_endpoint, args=(app, endpoint, organization, team), name='task_thread_per_endpoint')
         thread.daemon = True
         thread.start()
         #del TASK_THREADS[endpoint_id]  ## will delete when task loop exits
@@ -151,7 +158,7 @@ def event_loop(app):
             app.logger.warning('event {} has been deleted, ignore it'.format(event.id))
             continue
 
-        app.logger.info('\nStart to process event {} ...'.format(event.code))
+        app.logger.info('Start to process event {} ...'.format(event.code))
 
         try:
             EVENT_HANDLERS[event.code](app, event)
@@ -161,7 +168,7 @@ def event_loop(app):
 
 def event_loop_parent(app):
     reset_event_queue_status(app)
-    thread = threading.Thread(target=event_loop, args=(app,))
+    thread = threading.Thread(target=event_loop, args=(app,), name='event_loop')
     thread.daemon = True
     thread.start()
     thread.join()
@@ -218,7 +225,7 @@ def convert_json_to_robot_variable(args, variables, variable_file):
 
     args.extend(['--variablefile', str(variable_file)])
 
-def process_task_per_endpoint(app, endpoint_address, organization=None, team=None):
+def process_task_per_endpoint(app, endpoint, organization=None, team=None):
     global ROBOT_PROCESSES
 
     if not organization and not team:
@@ -227,27 +234,23 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
     room_id = get_room_id(str(organization.id), str(team.id) if team else '')
     socketio = app.config['socketio']
 
-    taskqueues = TaskQueue.objects(organization=organization, team=team, endpoint_address=endpoint_address)
+    taskqueues = TaskQueue.objects(organization=organization, team=team, endpoint=endpoint)
     if taskqueues.count() == 0:
         app.logger.error('Taskqueue not found')
         return
     # taskqueues = [q for q in taskqueues]  # query becomes stale if the document it points to gets changed elsewhere, use document instead of query to perform deletion
     taskqueue_first = taskqueues.first()
 
-    endpoints = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team)
-    if endpoints.count() == 0:
-        app.logger.error('Endpoint not found')
-        return
-
-    endpoint_id = str(endpoints.first().id)
+    endpoint_id = str(endpoint.id)
+    endpoint_uid = endpoint.uid
     org_name = team.organization.name + '-' + team.name if team else organization.name
 
     while True:
         taskqueue_first.reload('to_delete')
         if taskqueue_first.to_delete:
             taskqueues.delete()
-            endpoints.delete()
-            app.logger.info('Abort the task loop: {} @ {}'.format(org_name, endpoint_address))
+            endpoint.delete()
+            app.logger.info('Abort the task loop: {} @ {}'.format(org_name, endpoint_uid))
             break
         # TODO: lower priority tasks will take precedence if higher priority queue is empty first
         # but filled then when thread is searching for tasks in the lower priority task queues
@@ -303,9 +306,9 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
                 variable_file = Path(result_dir) / 'variablefile.py'
                 convert_json_to_robot_variable(args, task.variables, variable_file)
 
-            addr, port = endpoint_address.split(':')
-            args.extend(['-v', 'address_daemon:{}'.format(addr), '-v', 'port_daemon:{}'.format(port),
-                        '-v', 'port_test:{}'.format(int(port)+1), '-v', 'task_id:{}'.format(task.id)])
+            addr, port = '127.0.0.1', 8270
+            args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
+                        '-v', f'task_id:{task.id}', '-v', f'endpoint_uid:{endpoint_uid}'])
             args.append(task.test.path)
             app.logger.info('Arguments: ' + str(args))
 
@@ -315,7 +318,7 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
 
             task.status = 'running'
             task.run_date = datetime.datetime.utcnow()
-            task.endpoint_run = endpoint_address
+            task.endpoint_run = endpoint
             task.save()
             socketio.emit('task started', {'task_id': str(task.id)}, room=room_id)
 
@@ -325,17 +328,30 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
             else:
                 if str(task.id) not in ROOM_MESSAGES[room_id]:
                     ROOM_MESSAGES[room_id][str(task.id)] = log_msg
+            ss = b''
             while True:
                 c = p.stdout.read(1)
                 if not c:
                     break
-                c = c.decode()
-                c = '\r\n' if c == '\n' else c
-                log_msg.write(c)
-                socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
+                try:
+                    c = c.decode(encoding=sys.getdefaultencoding())
+                except UnicodeDecodeError:
+                    ss += c
+                else:
+                    c = '\r\n' if c == '\n' else c
+                    log_msg.write(c)
+                    socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
             del ROBOT_PROCESSES[task.id]
 
-            app.logger.info('\n' + log_msg.getvalue())
+            if ss != b'':
+                ss = ss.decode(chardet.detect(ss)['encoding'])
+                log_msg_all = StringIO()
+                log_msg_all.write(ss)
+                log_msg_all.write(log_msg.getvalue())
+                app.logger.info('\n' + log_msg_all.getvalue())
+                socketio.emit('console log', {'task_id': str(task.id), 'message': ss}, room=room_id)
+            else:
+                app.logger.info('\n' + log_msg.getvalue())
             #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
 
             p.wait()
@@ -351,13 +367,7 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
             del ROOM_MESSAGES[room_id][str(task.id)]
 
             taskqueue.modify(running_task=None)
-
-            endpoint = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team).first()
-            if not endpoint:
-                app.logger.error('No endpoint found with the address {}'.format(endpoint_address))
-            else:
-                endpoint.last_run_date = datetime.datetime.utcnow()
-                endpoint.save()
+            endpoint.modify(last_run_date=datetime.datetime.utcnow())
 
             if task.upload_dir:
                 resource_dir_tmp = get_upload_files_root(task)
@@ -384,30 +394,34 @@ def process_task_per_endpoint(app, endpoint_address, organization=None, team=Non
             TASK_LOCK.release()
             break
 
-def check_endpoint(app, endpoint_address, organization, team):
+def check_endpoint(app, endpoint_uid, organization, team):
     org_name = team.organization.name + '-' + team.name if team else organization.name
-    url = 'http://{}'.format(endpoint_address)
+    url = 'http://127.0.0.1:8270/{}'.format(endpoint_uid)
     server = xmlrpc.client.ServerProxy(url)
-    endpoint = Endpoint.objects(endpoint_address=endpoint_address, organization=organization, team=team).first()
+    endpoint = Endpoint.objects(uid=endpoint_uid, organization=organization, team=team).first()
     try:
-        server.get_keyword_names()
+        ret = server.get_keyword_names()
     except ConnectionRefusedError:
-        app.logger.error('Endpoint {} @ {} connecting failed'.format(org_name, endpoint_address))
+        err_msg = 'Endpoint {} @ {} connecting failed'.format(endpoint.name, org_name)
     except xmlrpc.client.Fault as e:
-        app.logger.error('Endpoint {} @ {} RPC calling error'.format(org_name, endpoint_address))
+        err_msg = 'Endpoint {} @ {} RPC calling error'.format(endpoint.name, org_name)
         app.logger.exception(e)
     except TimeoutError:
-        app.logger.error('Endpoint {} @ {} connecting timeouted'.format(org_name, endpoint_address))
+        err_msg = 'Endpoint {} @ {} connecting timeouted'.format(endpoint.name, org_name)
     except OSError as e:
-        app.logger.error('Endpoint {} @ {} unreachable'.format(org_name, endpoint_address))
+        err_msg = 'Endpoint {} @ {} unreachable'.format(endpoint.name, org_name)
     except Exception as e:
-        app.logger.error('Endpoint {} @ {} has error:'.format(org_name, endpoint_address))
+        err_msg = 'Endpoint {} @ {} has error:'.format(endpoint.name, org_name)
         app.logger.exception(e)
     else:
-        if endpoint and endpoint.status == 'Offline':
-            endpoint.modify(status='Online')
-        return True
+        if ret:
+            if endpoint and endpoint.status == 'Offline':
+                endpoint.modify(status='Online')
+            return True
+        else:
+            err_msg = 'Endpoint {} @ {} RPC proxy not found'.format(endpoint.name, org_name)
     if endpoint and endpoint.status == 'Online':
+        app.logger.error(err_msg)
         endpoint.modify(status='Offline')
     return False
     
@@ -417,9 +431,68 @@ def heartbeat_monitor(app):
     while True:
         endpoints = Endpoint.objects()
         for endpoint in endpoints:
-            check_endpoint(app, endpoint.endpoint_address, endpoint.organization, endpoint.team)
+            check_endpoint(app, endpoint.uid, endpoint.organization, endpoint.team)
         time.sleep(30)
-    
+
+def normalize_url(url):
+    if not url.startswith('/'):
+        url = '/' + url
+    if url.endswith('/'):
+        url = url[:-1]
+    return url
+
+@WS_APP.websocket('/')
+async def rpc_proxy(request, ws):
+    # need to protect from DDos attacking
+    global RPC_PROXIES
+    RPC_PROXIES['loop'] = asyncio.get_event_loop()
+
+    ret = await ws.recv()
+    try:
+        data = json.loads(ret)
+    except Exception as e:
+        # print(f'Received an unknown format json data: {e}')
+        return
+    organization_id = data['organization_id']
+    uid = data['uid']
+    backing_file = data['backing_file']
+    organization, team = None, None
+
+    endpoint = Endpoint.objects(uid=uid).first()
+    if endpoint:
+        if endpoint.status == 'Forbidden' or endpoint.status == 'Unauthorized':
+            #await ws.send('Rejected')
+            return
+    organization = Organization.objects(pk=organization_id).first()
+    if not organization:
+        team = Team.objects(pk=organization_id).first()
+        if not team:
+            #await ws.send('Organization not found')
+            return
+    if not endpoint:
+        try:
+            endpoint = Endpoint(uid=uid, organization=team.organization if team else organization, team=team)
+            endpoint.status = 'Unauthorized'
+            endpoint.save()
+        except OSError:
+            print('Endpoint uid %s validation error' % uid)
+            return
+        print('Received a new endpoint with uid %s' % uid)
+        return
+    await ws.send('OK')
+
+    rpc = WebsocketRPC(ws, client_mode=True)
+    url = normalize_url(uid + '/' + backing_file)
+    if url in RPC_PROXIES:
+        await RPC_PROXIES[url].close()
+        del RPC_PROXIES[url]
+    RPC_PROXIES[url] = rpc
+
+    await ws.wait_closed()
+
+    await RPC_PROXIES[url].close()
+    del RPC_PROXIES[url]
+
 def restart_interrupted_tasks(app, organization=None, team=None):
     """
     Restart interrupted tasks that have been left over when task runner aborts
@@ -446,7 +519,7 @@ def reset_task_queue_status(app, organization=None, team=None):
     for q in queues:
         ret = q.modify({'rw_lock': True}, rw_lock=False)
         if ret:
-            app.logger.info('Reset the read/write lock for queue {} with priority {}'.format(q.endpoint_address, q.priority))
+            app.logger.info('Reset the read/write lock for queue {} with priority {}'.format(q.endpoint.uid, q.priority))
     return 0
 
 def prepare_to_run(app, organization=None, team=None):
@@ -471,6 +544,23 @@ def start_event_thread(app):
 
 def start_heartbeat_thread(app):
     thread = threading.Thread(target=heartbeat_monitor, name='heartbeat_monitor', args=(app,))
+    thread.daemon = True
+    thread.start()
+
+def bootstrap_rpc_proxy(app):
+    WS_APP.run(host='0.0.0.0', port=5555, debug=True, protocol=WebSocketProtocol)
+
+def start_rpc_proxy(app):
+    app.logger.info('Start RPC proxy thread')
+    thread = threading.Thread(target=bootstrap_rpc_proxy, name='rpc_proxy', args=(app,))
+    thread.daemon = True
+    thread.start()
+
+    start_xmlrpc_server(app)
+
+def start_xmlrpc_server(app):
+    app.logger.info('Start local XML RPC server thread')
+    thread = XMLRPCServer(RPC_PROXIES, host='0.0.0.0', port=8270)
     thread.daemon = True
     thread.start()
 

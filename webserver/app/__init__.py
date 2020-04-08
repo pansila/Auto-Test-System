@@ -14,6 +14,7 @@ from .main.controller.script_controller import api as script_ns
 from .main.controller.organization_controller import api as organization_ns
 from .main.controller.team_controller import api as team_ns
 from .main.controller.teststore_controller import api as store_ns
+from .main.controller.setting_controller import api as setting_ns
 
 blueprint = Blueprint('api', __name__)
 
@@ -46,3 +47,4 @@ api.add_namespace(script_ns)
 api.add_namespace(organization_ns)
 api.add_namespace(team_ns)
 api.add_namespace(store_ns)
+api.add_namespace(setting_ns)

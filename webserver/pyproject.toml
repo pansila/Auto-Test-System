@@ -32,6 +32,9 @@ flask-restx = "^0.2.0"
 python-engineio = "^3.12.1"
 python-socketio = "^4.5.1"
 Flask-SocketIO = "^4.2.1"
+websocket-rpc = "^0.0.5"
+sanic = "^19.12.2"
+chardet = "^3.0.4"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.2.0"

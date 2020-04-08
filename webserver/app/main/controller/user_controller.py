@@ -79,7 +79,7 @@ class UserInfo(Resource):
             return response_message(ENOENT, 'User not found'), 404
 
         for name, file in request.files.items():
-            ext = file.filename.split('.')[1]
+            # ext = file.filename.rpartition('.')[2]
             filename = USERS_ROOT / user.email / 'temp.png'
             file.save(str(filename))
 
