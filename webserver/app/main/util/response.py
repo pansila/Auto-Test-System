@@ -161,8 +161,6 @@ def response_message(error, message=None, model=response, **payload):
 	ret = {
 		'code': errno,
 		'message': message if message else msg,
-		'data': {}
+        'data': payload
 	}
-	for k in payload:
-		ret['data'][k] = payload[k]
 	return marshal(ret, model)

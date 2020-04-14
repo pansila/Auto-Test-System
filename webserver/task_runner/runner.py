@@ -474,7 +474,7 @@ async def rpc_proxy(request, ws):
             endpoint = Endpoint(uid=uid, organization=team.organization if team else organization, team=team)
             endpoint.status = 'Unauthorized'
             endpoint.save()
-        except OSError:
+        except ValidationError:
             print('Endpoint uid %s validation error' % uid)
             return
         print('Received a new endpoint with uid %s' % uid)

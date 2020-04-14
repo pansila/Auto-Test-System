@@ -316,3 +316,6 @@ class StoreDto:
     upload_package = api.inherit('upload_package', organization_team, {
         'example_file': fields.String(description='Content-Type: application/text')
     })
+
+class PypiDto:
+    api = Namespace('pypi', description='local python package index repository')

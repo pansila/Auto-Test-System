@@ -1,0 +1,16 @@
+<!doctype html>
+<head>
+	<title>Python Package Index Of Ember Test Automation</title>
+</head>
+<body>
+	<h1>Index of Packages</h1>
+	<ul>
+	{% for item in items %}
+		{% if path == '' %}
+			<li><a href="{{ item }}">{{ item }}</a></li>
+		{% else %}
+			<li><a href="{{ path }}/{{ item }}">{{ item }}</a></li>
+		{% endif %}
+	{% endfor %}
+	</ul>
+</body>

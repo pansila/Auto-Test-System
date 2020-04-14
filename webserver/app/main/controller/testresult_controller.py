@@ -72,6 +72,8 @@ class TestResultRoot(Resource):
 
         page = int(page)
         limit = int(limit)
+        if page <= 0 or limit <= 0:
+            return response_message(EINVAL, 'Field page and limit should be larger than 1'), 400
 
         if priority and priority != '' and priority.isdigit() and \
                 int(priority) >= QUEUE_PRIORITY_MIN and int(priority) <= QUEUE_PRIORITY_MAX:
@@ -100,9 +102,8 @@ class TestResultRoot(Resource):
                 ret.append(d)
 
         all_tasks = Task.objects(id__in=ret, **query).order_by(sort)
-        tasks = all_tasks[(page - 1) * limit : page * limit]
         ret = []
-        for t in tasks:
+        for t in all_tasks[(page - 1) * limit : page * limit]:
             ret.append({
                 'id': str(t.id),
                 'test_suite': t.test_suite,

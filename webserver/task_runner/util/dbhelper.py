@@ -51,6 +51,20 @@ def db_update_package(pkg_dir=None, script=None, user=None, organization=None, t
             with wf.open(wf.dist_info_path + '/METADATA') as ef:
                 print(pkginfo.read_pkg_info_bytes(ef.read()).get_payload())
 
+def get_package_info(package):
+    name, package_name, description, long_description = '', '', '', ''
+    if package.endswith('.whl'):
+        wf = wheelfile.WheelFile(package)
+        ef = wf.open(wf.dist_info_path + '/METADATA')
+        pkg_info = pkginfo.read_pkg_info_bytes(ef.read())
+        name = pkg_info['Name']
+        description = pkg_info['Summary']
+        long_description = pkg_info.get_payload()
+        package_name = name.replace('-', '_').replace(' ', '_')
+        ef.close()
+        wf.close()
+    return name, package_name, description, long_description
+
 def db_update_test(scripts_dir=None, script=None, user=None, organization=None, team=None):
     if scripts_dir is None:
         return 1

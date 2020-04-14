@@ -30,3 +30,10 @@ def get_room_id(*data):
         organization, team = data[0], data[1]
     org_team = organization + ':' + team
     return org_team
+
+def js2python_bool(value):
+    if value == 'True' or value == 'true':
+        return True
+    if bool(value) == value and value:
+        return True
+    return False

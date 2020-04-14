@@ -9,7 +9,7 @@ from mongoengine import ValidationError
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
 from app.main.util.get_path import get_test_result_path
-from ..util import push_event
+from ..util import push_event, js2python_bool
 from ..util.tarball import path_to_dict
 from ..model.database import *
 from ..util.dto import TaskDto
@@ -208,7 +208,7 @@ class TaskController(Resource):
             return response_message(ERANGE, 'Task priority is out of range'), 400
         task.priority = priority
 
-        parallelization = data.get('parallelization', False)
+        parallelization = js2python_bool(data.get('parallelization', False))
         task.parallelization = parallelization == True
 
         variables = data.get('variables', {})

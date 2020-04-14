@@ -7,7 +7,7 @@ from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
-from app.main.util.get_path import get_user_scripts_root, get_back_scripts_root
+from app.main.util.get_path import get_user_scripts_root, get_back_scripts_root, is_path_secure
 from task_runner.util.dbhelper import db_update_test
 from ..config import get_config
 from ..model.database import *
@@ -70,12 +70,12 @@ class ScriptManagement(Resource):
         script = request.json.get('file', None)
         if not script:
             return response_message(EINVAL, 'Field file is required'), 400
-        if '..' in script:
+        if not is_path_secure(script):
             return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         new_name = request.json.get('new_name', None)
         if new_name:
-            if '..' in new_name:
+            if not is_path_secure(new_name):
                 return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
@@ -142,7 +142,7 @@ class ScriptManagement(Resource):
         script = request.json.get('file', None)
         if not script:
             return response_message(EINVAL, 'Field file is required'), 400
-        if '..' in script:
+        if not is_path_secure(script):
             return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
         script_type = request.json.get('script_type', None)
@@ -215,7 +215,7 @@ class ScriptUpload(Resource):
             os.mkdir(root)
 
         for name, file in request.files.items():
-            if '..' in file.filename:
+            if not is_path_secure(file.filename):
                 return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
             found = True
             filename = root / file.filename

@@ -71,7 +71,7 @@ class DevelopmentConfig(Config):
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
-    STORE_ROOT = 'static/test_packages'
+    STORE_ROOT = 'static/pypi'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
     MONGODB_DATABASE = 'auto_test'
@@ -97,7 +97,7 @@ class ProductionConfig(Config):
     # SQLALCHEMY_DATABASE_URI = postgres_local_base
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
-    STORE_ROOT = 'static/test_packages'
+    STORE_ROOT = 'static/pypi'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
     MONGODB_DATABASE = 'auto_test'

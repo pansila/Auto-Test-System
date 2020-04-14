@@ -1,11 +1,12 @@
 import datetime
 import time
 import jwt
+import re
 
 from flask import current_app
 from .. import flask_bcrypt
 from ..config import key
-from mongoengine import *
+from mongoengine import Document, StringField, EmailField, ListField, ReferenceField, DateTimeField, DictField, URLField, BooleanField, IntField, UUIDField
 from urllib.parse import urlparse
 
 QUEUE_PRIORITY_MIN = 1
@@ -343,3 +344,27 @@ class EventQueue(Document):
         self.save()
         self.release_lock()
         return True
+
+
+class Package(Document):
+    schema_version = StringField(max_length=10, default='1')
+    package_type = StringField(required=True)
+    name = StringField(required=True)
+    index_url = URLField(default='http://127.0.0.1:5000/pypi')
+    files = ListField(StringField())
+    proprietary = BooleanField(default=True)
+    description = StringField()
+    long_description = StringField()
+    rating = IntField(default=4)
+    download_times = IntField(default=0)
+    organization = ReferenceField(Organization)
+    team = ReferenceField(Team)
+
+    version_re = re.compile(r'\d+\.\d+\.\d+')
+
+    meta = {'collection': 'packages'}
+
+    def get_package_by_version(self, version):
+        for f in self.files:
+            if self.version_re.search(f):
+                return f

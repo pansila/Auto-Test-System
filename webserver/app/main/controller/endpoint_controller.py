@@ -12,7 +12,7 @@ from task_runner.runner import check_endpoint
 from ..model.database import *
 from ..util.dto import EndpointDto
 from ..util.response import *
-from ..util import push_event
+from ..util import push_event, js2python_bool
 
 api = EndpointDto.api
 _endpoint_list = EndpointDto.endpoint_list
@@ -48,6 +48,8 @@ class EndpointController(Resource):
 
         page = int(page)
         limit = int(limit)
+        if page <= 0 or limit <= 0:
+            return response_message(EINVAL, 'Field page and limit should be larger than 1'), 400
 
         if title:
             query = {'name__contains': title, 'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
@@ -64,7 +66,7 @@ class EndpointController(Resource):
             endpoints = Endpoint.objects(**query)
 
         ret = []
-        for ep in endpoints:
+        for ep in endpoints[(page-1)*limit:page*limit]:
             tests = []
             for t in ep.tests:
                 if hasattr(t, 'test_suite'):
@@ -80,7 +82,7 @@ class EndpointController(Resource):
                 'test_refs': [str(t.id) for t in ep.tests],
                 'endpoint_uid': ep.uid
             })
-        return {'items': ret[(page-1)*limit:page*limit], 'total': len(ret)}
+        return {'items': ret, 'total': endpoints.count()}
 
     @token_required
     @organization_team_required_by_json
@@ -160,7 +162,7 @@ class EndpointController(Resource):
             taskqueues.update(endpoint=endpoint)
 
         endpoint.name = data.get('endpoint_name', 'test site#1')
-        endpoint.enable = data.get('enable', False)
+        endpoint.enable = js2python_bool(data.get('enable', False))
         endpoint.tests = endpoint_tests
         endpoint.save()
 
