@@ -6,10 +6,12 @@ from flask_restx import Resource
 from mongoengine import ValidationError
 from mongoengine.queryset.visitor import Q
 
-from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
+from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
 from task_runner.runner import check_endpoint
 
-from ..model.database import *
+from ..model.database import Endpoint, TaskQueue, Test, Task, \
+            EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, \
+            QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX
 from ..util.dto import EndpointDto
 from ..util.response import *
 from ..util import push_event, js2python_bool

@@ -10,10 +10,10 @@ from mongoengine import ValidationError
 from app.main.util.decorator import token_required, organization_team_required_by_args, task_required, organization_team_required_by_form
 from app.main.util.get_path import get_test_result_path, get_upload_files_root
 from ..config import get_config
-from ..model.database import *
+from ..model.database import Task
 from ..util.dto import TaskResourceDto
 from ..util.tarball import make_tarfile, pack_files
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO
 
 api = TaskResourceDto.api
 _task_resource = TaskResourceDto.task_resource

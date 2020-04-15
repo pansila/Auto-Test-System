@@ -7,7 +7,6 @@ from pathlib import Path
 from flask import request, send_from_directory
 from flask_restx import Resource
 
-from app.main.model.database import *
 from ..util.dto import CertDto
 from ..util.response import *
 from ..config import get_config

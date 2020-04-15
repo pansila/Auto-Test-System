@@ -3,17 +3,18 @@ import shutil
 from pathlib import Path
 from flask import request, send_from_directory
 from flask_restx import Resource
+from mongoengine import ValidationError
 
-from app.main.service.auth_helper import Auth
-from app.main.util.decorator import admin_token_required, token_required
-from app.main.model.database import *
+from ..service.auth_helper import Auth
+from ..util.decorator import admin_token_required, token_required
+from ..model.database import User, Test, TestResult, TaskQueue, Task, Organization, Team
 
 from ..service.user_service import get_all_users, save_new_user
 from ..service.auth_helper import Auth
 from ..util.dto import UserDto
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, USER_NOT_EXIST, TOKEN_EXPIRED, TOKEN_ILLEGAL, TOKEN_REQUIRED, USER_ALREADY_EXIST, UNKNOWN_ERROR
 from ..config import get_config
-from ..util.identicon import *
+from ..util.identicon import render_identicon
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
 

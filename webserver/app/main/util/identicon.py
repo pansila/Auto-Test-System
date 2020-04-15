@@ -48,41 +48,41 @@ class Matrix2D(list):
         return self[0:6]
 
     @classmethod
-    def translate(kls, x, y):
-        return kls([1.0, 0.0, float(x),
+    def translate(cls, x, y):
+        return cls([1.0, 0.0, float(x),
                     0.0, 1.0, float(y),
                     0.0, 0.0, 1.0])
 
     @classmethod
-    def scale(kls, x, y):
-        return kls([float(x), 0.0, 0.0,
+    def scale(cls, x, y):
+        return cls([float(x), 0.0, 0.0,
                     0.0, float(y), 0.0,
                     0.0, 0.0, 1.0])
 
     """
     # need `import math`
     @classmethod
-    def rotate(kls, theta, pivot=None):
+    def rotate(cls, theta, pivot=None):
         c = math.cos(theta)
         s = math.sin(theta)
-        matR = kls([c, -s, 0., s, c, 0., 0., 0., 1.])
+        matR = cls([c, -s, 0., s, c, 0., 0., 0., 1.])
         if not pivot:
             return matR
-        return kls.translate(-pivot[0], -pivot[1]) * matR *
-            kls.translate(*pivot)
+        return cls.translate(-pivot[0], -pivot[1]) * matR *
+            cls.translate(*pivot)
     """
 
     @classmethod
-    def rotateSquare(kls, theta, pivot=None):
+    def rotateSquare(cls, theta, pivot=None):
         theta = theta % 4
         c = [1., 0., -1., 0.][theta]
         s = [0., 1., 0., -1.][theta]
 
-        matR = kls([c, -s, 0., s, c, 0., 0., 0., 1.])
+        matR = cls([c, -s, 0., s, c, 0., 0., 0., 1.])
         if not pivot:
             return matR
-        return kls.translate(-pivot[0], -pivot[1]) * matR * \
-               kls.translate(*pivot)
+        return cls.translate(-pivot[0], -pivot[1]) * matR * \
+               cls.translate(*pivot)
 
 
 class IdenticonRendererBase(object):

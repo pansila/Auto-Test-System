@@ -1,11 +1,9 @@
 from flask import request
 from flask_restx import Resource
 
-from app.main.service.auth_helper import Auth
-from app.main.model.database import *
+from ..service.auth_helper import Auth
+from ..model.database import User
 from ..util.dto import AuthDto
-from ..util.response import *
-from task_runner.runner import initialize_runner
 
 api = AuthDto.api
 user_auth = AuthDto.user_auth
@@ -28,7 +26,6 @@ class UserLogin(Resource):
             return msg, status
 
         user = User.objects(email=post_data.get('email')).first()
-        initialize_runner(user)
 
         return msg, status
 

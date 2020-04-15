@@ -5,13 +5,13 @@ from pathlib import Path
 from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
-from app.main.util.decorator import token_required, organization_team_required_by_args
-from app.main.util.get_path import get_test_result_path, get_back_scripts_root
+from ..util.decorator import token_required, organization_team_required_by_args
+from ..util.get_path import get_test_result_path, get_back_scripts_root
 from ..config import get_config
-from ..model.database import *
+from ..model.database import Task, Test
 from ..util.dto import TestDto
 from ..util.tarball import make_tarfile, pack_files
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO
 
 api = TestDto.api
 _test_cases = TestDto.test_cases

@@ -5,8 +5,8 @@ from flask import request, send_from_directory
 from flask_restx import Resource
 from bson import ObjectId
 
-from app.main.util.decorator import token_required
-from app.main.model.database import *
+from ..util.decorator import token_required
+from ..model.database import Organization, Team, User, Test, Task, TaskQueue, TestResult
 
 from ..service.auth_helper import Auth
 from ..util.dto import OrganizationDto

@@ -1,21 +1,20 @@
 import os
 from pathlib import Path
-import datetime
 from datetime import date, datetime, timedelta
 
 from flask import request, Response, send_from_directory, current_app
 from flask_restx import Resource
 from mongoengine import ValidationError
 
-from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
-from app.main.util.get_path import get_test_result_path
+from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
+from ..util.get_path import get_test_result_path
 from ..util import push_event, js2python_bool
 from ..util.tarball import path_to_dict
-from ..model.database import *
+from ..model.database import Task, Test, Endpoint, TaskQueue, EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN
 from ..util.dto import TaskDto
 # from ..util.dto import Organization_team as _organization_team
 from ..config import get_config
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, ERANGE, EPERM, UNKNOWN_ERROR
 
 api = TaskDto.api
 _task = TaskDto.task
@@ -105,11 +104,11 @@ class TaskController(Resource):
         organization = kwargs['organization']
         team = kwargs['team']
 
-        start_date = request.args.get('start_date', default=(datetime.datetime.utcnow().timestamp()-86300)*1000)
-        end_date = request.args.get('end_date', default=(datetime.datetime.utcnow().timestamp() * 1000))
+        start_date = request.args.get('start_date', default=(datetime.utcnow().timestamp()-86300)*1000)
+        end_date = request.args.get('end_date', default=(datetime.utcnow().timestamp() * 1000))
 
-        start_date = datetime.datetime.fromtimestamp(int(start_date)/1000)
-        end_date = datetime.datetime.fromtimestamp(int(end_date)/1000)
+        start_date = datetime.fromtimestamp(int(start_date)/1000)
+        end_date = datetime.fromtimestamp(int(end_date)/1000)
 
         if (start_date - end_date).days > 0:
             return response_message(EINVAL, 'start date {} is larger than end date {}'.format(start_date, end_date)), 401

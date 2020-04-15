@@ -8,14 +8,14 @@ from pkg_resources import parse_version
 from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
-from app.main.util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
-from app.main.util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root, get_package_name
+from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
+from ..util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root, get_package_name
 from task_runner.util.dbhelper import get_package_info
 from ..config import get_config
-from ..model.database import *
+from ..model.database import Package, Test
 from ..util.dto import StoreDto
 from ..util.tarball import path_to_dict
-from ..util.response import *
+from ..util.response import response_message, ENOENT, EINVAL, SUCCESS, EIO
 from ..util import js2python_bool
 
 api = StoreDto.api

@@ -10,10 +10,10 @@ from app.main.util.decorator import token_required, organization_team_required_b
 from app.main.util.get_path import get_user_scripts_root, get_back_scripts_root, is_path_secure
 from task_runner.util.dbhelper import db_update_test
 from ..config import get_config
-from ..model.database import *
+from ..model.database import Test
 from ..util.dto import ScriptDto
 from ..util.tarball import path_to_dict
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, UNKNOWN_ERROR, SUCCESS, EIO
 
 api = ScriptDto.api
 _update_script = ScriptDto.update_script

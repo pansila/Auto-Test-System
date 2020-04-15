@@ -5,14 +5,14 @@ from flask import request, send_from_directory
 from flask_restx import Resource
 from bson import ObjectId
 
-from app.main.util.decorator import token_required
-from app.main.model.database import *
+from ..util.decorator import token_required
+from ..model.database import User, Organization, Team, Test, TestResult, TaskQueue, Task
 
 from ..service.auth_helper import Auth
 from ..util.dto import TeamDto
-from ..util.response import *
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EEXIST, EPERM, USER_NOT_EXIST, TOKEN_REQUIRED, TOKEN_ILLEGAL
 from ..config import get_config
-from ..util.identicon import *
+from ..util.identicon import render_identicon
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
 

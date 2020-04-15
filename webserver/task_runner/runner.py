@@ -564,7 +564,7 @@ def start_xmlrpc_server(app):
     thread.daemon = True
     thread.start()
 
-def initialize_runner(user):
+def initialize_runner():
     notification_chain_init()
 
 if __name__ == '__main__':
