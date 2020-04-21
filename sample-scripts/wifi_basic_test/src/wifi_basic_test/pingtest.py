@@ -1,9 +1,9 @@
 import re
 
-from customtestlibs.wifi_test import wifi_basic_test
+from wifi_test import wifi_dut
 
 
-class pingtest(wifi_basic_test):
+class pingtest(wifi_dut):
 
     def ping(self, deviceName, target, times):
         ping_dst = target

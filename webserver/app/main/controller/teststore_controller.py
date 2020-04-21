@@ -1,36 +1,36 @@
 import os
 import re
 import shutil
+import tempfile
 import zipfile
+import distutils.core
 from pathlib import Path
 from pkg_resources import parse_version
 
 from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
-from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form
-from ..util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root, get_package_name
-from task_runner.util.dbhelper import get_package_info
+from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form, token_required_if_proprietary
+from ..util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root
+from task_runner.util.dbhelper import get_package_info, get_package_requires, install_test_suite, get_internal_packages
 from ..config import get_config
 from ..model.database import Package, Test
 from ..util.dto import StoreDto
 from ..util.tarball import path_to_dict
-from ..util.response import response_message, ENOENT, EINVAL, SUCCESS, EIO
+from ..util.response import response_message, ENOENT, EINVAL, SUCCESS, EIO, EPERM
 from ..util import js2python_bool
 
 api = StoreDto.api
 _upload_package = StoreDto.upload_package
 _delete_package = StoreDto.delete_package
 
+SCRIPT_FILES_FIND = re.compile(r'^.*?/scripts/.*$').match
+
 @api.route('/')
-class ScriptManagement(Resource):
-    @token_required
-    @organization_team_required_by_args
-    @api.doc('return script list or script file')
+class PackageManagement(Resource):
+    @token_required_if_proprietary
+    @api.doc('return the package list')
     def get(self, **kwargs):
-        organization = kwargs['organization']
-        team = kwargs['team']
-        user = kwargs['user']
         data = request.args
         page = data.get('page', default=1)
         limit = data.get('limit', default=10)
@@ -59,9 +59,10 @@ class ScriptManagement(Resource):
                 'name': package.name,
                 'summary': package.description,
                 'description': package.long_description,
-                'stars': package.rating,
+                'stars': package.stars,
                 'download_times': package.download_times,
-                'versions': list(reversed(sorted(map(lambda x: p.search(x).group(), package.files), key=parse_version)))
+                'package_type': package.package_type,
+                'versions': package.versions
             })
         return {'items': ret, 'total': packages.count()}
 
@@ -89,49 +90,182 @@ class ScriptManagement(Resource):
         if not package_type:
             return response_message(EINVAL, 'Field package_type is required'), 400
         
-        root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
-        if not os.path.exists(root):
-            os.mkdir(root)
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+        if not os.path.exists(pypi_root):
+            os.mkdir(pypi_root)
 
         query = {'proprietary': proprietary, 'package_type': package_type}
         if proprietary:
             query['organization'] = organization
             query['team'] = team
+        else:
+            query['organization'] = None
+            query['team'] = None
 
         for name, file in request.files.items():
             if not is_path_secure(file.filename):
                 return response_message(EINVAL, 'Illegal file name'), 401
             found = True
-            filename = str(root / file.filename)
-            file.save(filename)
+            with tempfile.TemporaryDirectory() as tempDir:
+                filename = str(Path(tempDir) / file.filename)
+                file.save(filename)
 
-            name, pkg_name, description, long_description = get_package_info(filename)
-            if not name:
-                os.unlink(filename)
-                return response_message(EINVAL, 'Package name not found'), 401
+                with zipfile.ZipFile(filename) as zf:
+                    for f in zf.namelist():
+                        if SCRIPT_FILES_FIND(f):
+                            break
+                    else:
+                        return response_message(EINVAL, 'All test scripts should be put in the scripts directory'), 401
 
-            package = Package.objects(name=name, **query).first()
-            if not package:
-                package = Package(name=name, **query)
+                name, description, long_description = get_package_info(filename)
+                if not name:
+                    return response_message(EINVAL, 'Package name not found'), 401
 
-            if proprietary:
-                package.organization = organization
-                package.team = team
-            try:
-                os.mkdir(root / pkg_name)
-            except FileExistsError:
-                pass
-            shutil.move(filename, root / pkg_name / file.filename)
-            package.description = description
-            package.long_description = long_description
-            if file.filename not in package.files:
-                package.files.append(file.filename)
-            package.save()
+                package = Package.objects(name=name, **query).first()
+                if not package:
+                    package = Package(name=name, **query)
+
+                if proprietary:
+                    package.organization = organization
+                    package.team = team
+                try:
+                    os.mkdir(pypi_root / package.package_name)
+                except FileExistsError:
+                    pass
+                package.py_packages = get_internal_packages(filename)
+                shutil.move(filename, pypi_root / package.package_name / file.filename)
+                package.uploader = user
+                package.description = description
+                package.long_description = long_description
+                if file.filename not in package.files:
+                    package.files.append(file.filename)
+                    package.files.sort(key=lambda x: parse_version(package.version_re(x).group('ver')), reverse=True)
+                package.save()
 
         if not found:
             return response_message(EINVAL, 'File not found'), 404
 
         return response_message(SUCCESS)
+
+    @token_required
+    @organization_team_required_by_json
+    @api.doc('delete the package')
+    @api.expect(_delete_package)
+    def delete(self, **kwargs):
+        """Delete the package"""
+        organization = kwargs['organization']
+        team = kwargs['team']
+        user = kwargs['user']
+
+        data = request.json
+        proprietary = js2python_bool(data.get('proprietary', False))
+        package_type = data.get('package_type', None)
+        if not package_type:
+            return response_message(EINVAL, 'Field package_type is required'), 400
+        version = data.get('version', None)
+        if not version:
+            return response_message(EINVAL, 'Field version is required'), 400
+        package_name = data.get('name', None)
+        if not package_name:
+            return response_message(EINVAL, 'Field name is required'), 400
+        
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+
+        query = {'name': package_name, 'proprietary': proprietary, 'package_type': package_type}
+        if proprietary:
+            query['organization'] = organization
+            query['team'] = team
+        else:
+            query['organization'] = None
+            query['team'] = None
+        
+        package = Package.objects(**query).first()
+        if not package:
+            return response_message(ENOENT, 'Package not found'), 404
+        pkg_file = package.get_package_by_version(version)
+        if not pkg_file:
+            return response_message(ENOENT, f'Package for version {version} not found'), 404
+
+        try:
+            os.unlink(pypi_root / package.package_name / pkg_file)
+        except FileNotFoundError:
+            pass
+
+        package.modify(pull__files=pkg_file)
+        if len(package.files) == 0:
+            try:
+                shutil.rmtree(pypi_root / package.package_name)
+            except FileNotFoundError:
+                pass
+            package.delete()
+
+        return response_message(SUCCESS)
+
+@api.route('/package')
+class PackageInfo(Resource):
+    @token_required_if_proprietary
+    @api.doc('return the package description of a specified version')
+    def get(self, **kwargs):
+        data = request.args
+        organization = kwargs.get('organization', None)
+        team = kwargs.get('team', None)
+
+        proprietary = js2python_bool(data.get('proprietary', False))
+        package_name = data.get('name', None)
+        if not package_name:
+            return response_message(EINVAL, 'Field name is required'), 400
+        package_type = data.get('package_type', None)
+        if not package_type:
+            return response_message(EINVAL, 'Field package_type is required'), 400
+        version = data.get('version', None)
+        if not version:
+            return response_message(EINVAL, 'Field version is required'), 400
+        
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+        package = Package.objects(proprietary=proprietary, package_type=package_type, name=package_name).first()
+        if not package:
+            return response_message(ENOENT, 'Package not found'), 404
+        package_path = pypi_root / package.package_name / package.get_package_by_version(version)
+        _, _, description = get_package_info(package_path)
+        return response_message(SUCCESS, description=description)
+
+    @token_required_if_proprietary
+    @api.doc('update the package')
+    @api.expect(_upload_package)
+    def patch(self, **kwargs):
+        organization = kwargs.get('organization', None)
+        team = kwargs.get('team', None)
+
+        data = request.json
+        proprietary = js2python_bool(data.get('proprietary', False))
+        stars = data.get('stars', None)
+        if not stars:
+            return response_message(EINVAL, 'Field stars is required'), 400
+        package_name = data.get('name', None)
+        if not package_name:
+            return response_message(EINVAL, 'Field name is required'), 400
+        package_type = data.get('package_type', None)
+        if not package_type:
+            return response_message(EINVAL, 'Field package_type is required'), 400
+        
+        query = {'proprietary': proprietary, 'package_type': package_type, 'name': package_name}
+        if proprietary:
+            query['organization'] = organization
+            query['team'] = team
+        else:
+            query['organization'] = None
+            query['team'] = None
+
+        package = Package.objects(**query).first()
+        if not package:
+            return response_message(ENOENT, 'Package not found'), 404
+
+        rating_times = package.rating_times + 1
+        rating = package.rating_times / rating_times * package.rating + 1 / rating_times * stars
+        package.modify(rating=rating)
+        package.modify(rating_times=rating_times)
+
+        return response_message(SUCCESS, stars=package.stars)
 
     @token_required
     @organization_team_required_by_json
@@ -147,103 +281,84 @@ class ScriptManagement(Resource):
         package_type = data.get('package_type', None)
         if not package_type:
             return response_message(EINVAL, 'Field package_type is required'), 400
-        package_info = data.get('package', None)
-        if not package_info:
-            return response_message(EINVAL, 'Field package is required'), 400
+        package_name = data.get('name', None)
+        if not package_name:
+            return response_message(EINVAL, 'Field name is required'), 400
         version = data.get('version', None)
         if not version:
             return response_message(EINVAL, 'Field version is required'), 400
         
-        root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
-        if not os.path.exists(root):
-            os.mkdir(root)
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
 
-        query = {'proprietary': proprietary, 'package_type': package_type, 'name': package_info['name']}
+        query = {'proprietary': proprietary, 'package_type': package_type, 'name': package_name}
         if proprietary:
             query['organization'] = organization
             query['team'] = team
+        else:
+            query['organization'] = None
+            query['team'] = None
 
         package = Package.objects(**query).first()
         if not package:
             return response_message(ENOENT, 'Package not found'), 404
 
         if package_type == 'Test Suite':
-            package_name = get_package_name(package.name).lower()
-            pkg_name = package_name.lower()
-
-            scripts_root = get_user_scripts_root(organization=organization, team=team)
-            try:
-                shutil.rmtree(scripts_root / pkg_name)
-            except FileNotFoundError:
-                pass
-
-            libraries_root = get_back_scripts_root(organization=organization, team=team)
-            try:
-                shutil.rmtree(libraries_root / pkg_name)
-            except FileNotFoundError:
-                pass
-
-            with zipfile.ZipFile(root / package_name / package.get_package_by_version(version)) as fp:
-                libraries = (f for f in fp.namelist() if f.startswith(pkg_name + '/') and not f.startswith(pkg_name + '/scripts/'))
-                for l in libraries:
-                    fp.extract(l, libraries_root)
-                scripts = (f for f in fp.namelist() if f.startswith(pkg_name + '/scripts/'))
-                for s in scripts:
-                    fp.extract(s, scripts_root)
-                for f in os.listdir(scripts_root / pkg_name / 'scripts'):
-                    shutil.move(str(scripts_root / pkg_name / 'scripts' / f), scripts_root / pkg_name)
-                shutil.rmtree(scripts_root / pkg_name / 'scripts')
-
-        package.modify(inc__download_times=1)
+            ret = install_test_suite(package, user, organization, team, pypi_root, proprietary, version=version)
+            if not ret:
+                return response_message(EPERM, 'Test package installation failed'), 400
 
         return response_message(SUCCESS)
 
     @token_required
     @organization_team_required_by_json
-    @api.doc('delete the file')
+    @api.doc('uninstall the package')
     @api.expect(_delete_package)
     def delete(self, **kwargs):
-        """Delete the script file"""
+        """Uninstall the package"""
         organization = kwargs['organization']
         team = kwargs['team']
-        
-        script = request.json.get('file', None)
-        if not script:
-            return response_message(EINVAL, 'Field file is required'), 400
-        if not is_path_secure(script):
-            return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+        user = kwargs['user']
 
-        script_type = request.json.get('script_type', None)
-        if script_type is None:
-            return response_message(EINVAL, 'Field script_type is required'), 400
+        data = request.json
+        proprietary = js2python_bool(data.get('proprietary', False))
+        package_type = data.get('package_type', None)
+        if not package_type:
+            return response_message(EINVAL, 'Field package_type is required'), 400
+        version = data.get('version', None)
+        if not version:
+            return response_message(EINVAL, 'Field version is required'), 400
+        package_name = data.get('name', None)
+        if not package_name:
+            return response_message(EINVAL, 'Field name is required'), 400
 
-        if script_type == 'user_scripts':
-            root = get_user_scripts_root(team=team, organization=organization)
-        elif script_type == 'backing_scripts':
-            root = get_back_scripts_root(team=team, organization=organization)
+        query = {'name': package_name, 'proprietary': proprietary, 'package_type': package_type}
+        if proprietary:
+            query['organization'] = organization
+            query['team'] = team
         else:
-            return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
+            query['organization'] = None
+            query['team'] = None
 
-        if not os.path.exists(root / script):
-            return response_message(ENOENT, 'File/directory doesn\'t exist'), 404
+        package = Package.objects(**query).first()
+        if not package:
+            return response_message(ENOENT, 'Package not found'), 404
 
-        if os.path.isfile(root / script):
-            try:
-                os.remove(root / script)
-            except OSError as err:
-                current_app.logger.exception(err)
-                return response_message(EIO, 'Error happened while deleting a file'), 401
-
-            if script_type == 'user_scripts':
-                cnt = Test.objects(path=os.path.abspath(root / script)).delete()
-                if cnt == 0:
-                    return response_message(ENOENT, 'Test suite not found in the database'), 404
-        else:
-            try:
-                Test.objects(path__contains=os.path.abspath(root / script)).delete()
-                shutil.rmtree(root / script)
-            except OSError as err:
-                current_app.logger.exception(err)
-                return response_message(EIO, 'Error happened while deleting a directory'), 401
+        scripts_root = get_user_scripts_root(organization=organization, team=team)
+        libraries_root = get_back_scripts_root(organization=organization, team=team)
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+        package_path = pypi_root / package.package_name / package.get_package_by_version(version)
+        pkg_names = get_internal_packages(package_path)
+        for pkg_name in pkg_names:
+            if os.path.exists(scripts_root / pkg_name):
+                shutil.rmtree(scripts_root / pkg_name)
+            if os.path.exists(libraries_root / pkg_name):
+                shutil.rmtree(libraries_root / pkg_name)
+        for pkg_name in pkg_names:
+            for script in os.listdir(scripts_root / pkg_name):
+                test = Test.objects(test_suite=os.path.splitext(script)[0], path=pkg_name).first()
+                if test:
+                    test.modify(staled=True)
+                else:
+                    current_app.logger.error(f'test not found for {script}')
 
         return response_message(SUCCESS)

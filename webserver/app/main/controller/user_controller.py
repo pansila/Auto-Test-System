@@ -137,7 +137,7 @@ class UserInfoCheck(Resource):
             user = User.objects(email=email).first()
             if user:
                 return response_message(USER_ALREADY_EXIST), 401
-            return response_message(SUCCESS), 200
+            return response_message(SUCCESS)
         else:
             return response_message(UNKNOWN_ERROR, 'No query data found'), 401
 

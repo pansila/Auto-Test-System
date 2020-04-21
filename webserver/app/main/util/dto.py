@@ -75,6 +75,7 @@ class TestDto:
     test_suite = api.model('test_suite', {
         'id': fields.String(),
         'test_suite': fields.String(),
+        'path': fields.String(),
         'test_cases': fields.List(fields.String()),
         'variables': fields.Raw(),
         'author': fields.String()
@@ -105,6 +106,7 @@ class TaskDto:
     })
     task = api.inherit('task', organization_team, {
         'test_suite': fields.String(required=True, description='The test suite name'),
+        'path': fields.String(required=True, description='The test suite\'s path name'),
         'endpoint_list': fields.List(fields.String(description='The endpoints to run the test')),
         'priority': fields.Integer(description='The priority of the task(larger number means higher importance)'),
         'parallelization': fields.Boolean(default=False),
@@ -218,18 +220,18 @@ class ScriptDto:
 
     update_script = api.inherit('update_script', organization_team, {
         'file': fields.String(description='Path to the queried file'),
-        'script_type': fields.String(description='File type {user_scripts | backing_scripts}'),
+        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
         'new_name': fields.String(description='New file name if want to rename'),
         'content': fields.String(description='The file content'),
     })
 
     delete_script = api.inherit('delete_script', organization_team, {
         'file': fields.String(description='Path to the queried file'),
-        'script_type': fields.String(description='File type {user_scripts | backing_scripts}'),
+        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
     })
 
     upload_scripts = api.inherit('upload_scripts', organization_team, {
-        'script_type': fields.String(description='File type {user_scripts | backing_scripts}'),
+        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
         'example_file': fields.String(description='Content-Type: application/text')
     })
 

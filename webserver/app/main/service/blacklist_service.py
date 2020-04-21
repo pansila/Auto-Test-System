@@ -9,7 +9,7 @@ def save_token(token):
     try:
         # insert the token
         blacklist_token.save()
-        return response_message(SUCCESS), 200
+        return response_message(SUCCESS)
     except Exception as e:
         current_app.logger.exception(e)
         return response_message(UNKNOWN_ERROR), 401

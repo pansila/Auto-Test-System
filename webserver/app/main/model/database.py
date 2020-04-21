@@ -6,7 +6,7 @@ import re
 from flask import current_app
 from .. import flask_bcrypt
 from ..config import key
-from mongoengine import Document, StringField, EmailField, ListField, ReferenceField, DateTimeField, DictField, URLField, BooleanField, IntField, UUIDField
+from mongoengine import Document, StringField, EmailField, ListField, ReferenceField, DateTimeField, DictField, URLField, BooleanField, IntField, UUIDField, FloatField
 from urllib.parse import urlparse
 
 QUEUE_PRIORITY_MIN = 1
@@ -168,12 +168,15 @@ class Test(Document):
     test_suite = StringField(max_length=100, required=True)
     test_cases = ListField(StringField(max_length=100))
     variables = DictField()
-    path = StringField(max_length=300, unique=True)
+    path = StringField(max_length=300, default='')
     author = ReferenceField(User)
     create_date = DateTimeField()
     update_date = DateTimeField()
     organization = ReferenceField(Organization)
     team = ReferenceField(Team)
+    staled = BooleanField(default=False)
+    package = ReferenceField('Package')
+    package_version = StringField()
 
     meta = {'collection': 'tests'}
 
@@ -355,16 +358,38 @@ class Package(Document):
     proprietary = BooleanField(default=True)
     description = StringField()
     long_description = StringField()
-    rating = IntField(default=4)
+    rating = FloatField(default=4)
+    rating_times = IntField(default=1)
     download_times = IntField(default=0)
     organization = ReferenceField(Organization)
     team = ReferenceField(Team)
+    uploader = ReferenceField(User)
+    py_packages = ListField(StringField())  # python packages defined by the test package
 
-    version_re = re.compile(r'\d+\.\d+\.\d+')
+    version_re = re.compile(r"^(?P<name>.+?)(-(?P<ver>\d.+?))-.*$").match
 
     meta = {'collection': 'packages'}
 
-    def get_package_by_version(self, version):
+    def get_package_by_version(self, version=None):
+        if version is None and len(self.files) > 0:
+            return self.files[0]
         for f in self.files:
-            if self.version_re.search(f):
+            if self.version_re(f).group('ver') == version:
                 return f
+        return None
+
+    @property
+    def versions(self):
+        return [self.version_re(f).group('ver') for f in self.files]
+
+    @property
+    def stars(self):
+        return round(self.rating)
+
+    @property
+    def package_name(self):
+        return self.name.replace('-', '_').replace(' ', '_')
+
+    @property
+    def latest_version(self):
+        return self.version_re(self.files[0]).group('ver')

@@ -8,10 +8,10 @@ import time
 from subprocess import PIPE
 
 import netifaces
-from customtestlibs.wifi_test import wifi_basic_test
+from wifi_test import wifi_dut
 
 
-class iperftest(wifi_basic_test):
+class iperftest(wifi_dut):
     unit_conversion = {
         '': 1,
         'K': 1024,

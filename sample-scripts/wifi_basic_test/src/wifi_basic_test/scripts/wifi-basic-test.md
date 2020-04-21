@@ -63,7 +63,7 @@ Notes:
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|
 | Ping test |
-| | [Setup] | Setup DUT | pingtest.py | pingtestlib | ${dut1} |
+| | [Setup] | Setup DUT | wifi_basic_test/pingtest.py | pingtestlib | ${dut1} |
 | | [Teardown] | Teardown DUT | pingtestlib | ${dut1} |
 | | pingtestlib.download | ${dut1} | ${firmware} | ${flash_address} |
 | | pingtestlib.open wifi | ${dut1} |
@@ -79,7 +79,7 @@ We only check whether a traffic is running successfully and throughput is not ze
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|---|
 | iperf UDP RX test |
-| | [Setup] | Setup DUT | iperftest.py | iperftestlib | ${dut1} |
+| | [Setup] | Setup DUT | wifi_basic_test/iperftest.py | iperftestlib | ${dut1} |
 | | [Teardown] | Teardown DUT | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
@@ -91,7 +91,7 @@ Reboot the device after the test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|---|
 | iperf TCP RX test |
-| | [Setup] | Setup DUT | iperftest.py | iperftestlib | ${dut1} |
+| | [Setup] | Setup DUT | wifi_basic_test/iperftest.py | iperftestlib | ${dut1} |
 | | [Teardown] | Teardown DUT | iperftestlib | ${dut1} |
 | | ${dut_ip} = | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | iperftestlib.iperf3 start rx server | ${dut1} |
@@ -109,7 +109,7 @@ Reboot the device after the test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|
 | iperf UDP TX test |
-| | [Setup] | Setup DUT | iperftest.py | iperftestlib | ${dut1} |
+| | [Setup] | Setup DUT | wifi_basic_test/iperftest.py | iperftestlib | ${dut1} |
 | | [Teardown] | Teardown Iperf TX Server | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |
@@ -120,7 +120,7 @@ Reboot the device after the test due to a bug.
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 |---|---|---|---|---|---|---|---|
 | iperf TCP TX test |
-| | [Setup] | Setup DUT | iperftest.py | iperftestlib | ${dut1} |
+| | [Setup] | Setup DUT | wifi_basic_test/iperftest.py | iperftestlib | ${dut1} |
 | | [Teardown] | Teardown Iperf TX Server | iperftestlib | ${dut1} |
 | | iperftestlib.connect to network | ${dut1} | ${ap_ssid} | ${ap_password} |
 | | ${dut_ip} = | iperftestlib.iperf3 start tx server | ${dut1} |

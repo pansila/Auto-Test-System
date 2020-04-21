@@ -24,10 +24,11 @@ import mongoengine
 import websockets
 from mongoengine import ValidationError
 from app.main.config import get_config
-from app.main.model.database import *
+from app.main.model.database import Endpoint, Task, TaskQueue, EventQueue, Organization, Team, \
+        EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, EVENT_CODE_UPDATE_USER_SCRIPT, QUEUE_PRIORITY
 from app.main.util import get_room_id
-from app.main.util.get_path import get_test_result_path, get_upload_files_root
-from app.main.util.tarball import make_tarfile
+from app.main.util.get_path import get_test_result_path, get_upload_files_root, get_user_scripts_root
+from app.main.util.tarball import make_tarfile_from_dir
 from bson import DBRef, ObjectId
 from mongoengine import connect
 from sanic import Sanic
@@ -131,6 +132,8 @@ def event_handler_start_task(app, event):
         app.logger.info('Schedule the task to the pending queue')
 
 def event_handler_update_user_script(app, event):
+    # TODO:
+    return
     script = event.message['script']
     user = event.message['user']
     db_update_test(script=script, user=user)
@@ -294,6 +297,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             app.logger.info('Start to run task {} in the thread {}'.format(task.id, threading.current_thread().name))
 
             result_dir = get_test_result_path(task)
+            scripts_dir = get_user_scripts_root(task)
             args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
                     '--consolecolors', 'on', '--consolemarkers', 'on']
             os.makedirs(result_dir)
@@ -309,7 +313,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
                         '-v', f'task_id:{task.id}', '-v', f'endpoint_uid:{endpoint_uid}'])
-            args.append(task.test.path)
+            args.append(os.path.join(scripts_dir, task.test.path, task.test.test_suite + '.md'))
             app.logger.info('Arguments: ' + str(args))
 
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
@@ -372,7 +376,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             if task.upload_dir:
                 resource_dir_tmp = get_upload_files_root(task)
                 if os.path.exists(resource_dir_tmp):
-                    make_tarfile(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
+                    make_tarfile_from_dir(str(result_dir / 'resource.tar.gz'), resource_dir_tmp)
 
             result_dir_tmp = result_dir / 'temp'
             if os.path.exists(result_dir_tmp):

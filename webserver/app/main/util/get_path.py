@@ -75,16 +75,14 @@ def get_user_scripts_root(task=None, team=None, organization=None):
 def get_upload_files_root(task):
     return UPLOAD_ROOT / task.upload_dir
 
-def get_test_store_root(proprietary=False, task=None, team=None, organization=None):
-    if not proprietary:
-        return STORE_ROOT
-
+def get_test_store_root(task=None, proprietary=False, team=None, organization=None):
     if task:
-        if team or organization:
-            current_app.logger.error('team or organization should not used along wite task')
-            return None
         organization = task.organization
         team = task.team
+        proprietary = task.test.package.proprietary if task.test.package else False
+
+    if not proprietary or (not team and not organization):
+        return STORE_ROOT
 
     store_dir = USERS_ROOT / organization.path
     if team:
@@ -99,20 +97,3 @@ def is_path_secure(path):
     if os.path.pardir in path or path.startswith('/'):
         return False
     return True
-
-def get_package_name(name):
-    return name.replace(' ', '_').replace('-', '_')
-
-def empty_folder(folder):
-    for root, dirs, files in os.walk(folder):
-        for f in files:
-            os.unlink(os.path.join(root, f))
-        for d in dirs:
-            shutil.rmtree(os.path.join(root, d))
-
-# illegal = ':<>|"?*'
-# table = str.maketrans(illegal, '_' * len(illegal))
-# def sanitize_windows_name(cls, arcname, pathsep):
-#     """Replace bad characters"""
-#     arcname = arcname.translate(table)
-#     return arcname

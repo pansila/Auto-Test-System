@@ -1,6 +1,6 @@
 # This test demonstrates how you can run a robot test in a markdown file.
 
-### Every test data file needs to include the `setup.robot` which does some magic work to be able to run the test
+### Every test data file needs to include the `setup.robot`
 | Settings | Value |
 | -------- | ----- |
 | Resource | setup.robot |
@@ -22,7 +22,7 @@ Keyword `Teardown Remote` is also introduced by `setup.robot`. It closes the tes
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 | ---------- | ------ | -------- | -------- | -------- | -------- | -------- |
 | hello world |  |  |  |  |  |  |
-|  | [Setup] | Setup Remote | demotest.py | testlib |  |  |
+|  | [Setup] | Setup Remote | demo_test/demotest.py | testlib |  |  |
 |  | [Teardown] | Teardown Remote |  |  |  |  |
 |  | ${ret} = | testlib.hello world | ${echo_message} |  |  |  |
 |  | Should be equal | ${ret} | ${echo_message} |  |  |  |

@@ -1,9 +1,9 @@
 import os.path
 import re
 
-from .device_test import device_test
+from robotest_utilities.dut import serial_dut
 
-class wifi_basic_test(device_test):
+class wifi_dut(serial_dut):
     SCAN_TIMEOUT = 5        # seconds
     CONNECT_TIMEOUT = 25    # seconds
 

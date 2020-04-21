@@ -1,17 +1,23 @@
 import os
+import shutil
+import tempfile
 import time
 from pathlib import Path
+from setuptools import sandbox
+from contextlib import redirect_stdout
+from io import StringIO
 
 from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
 from ..util.decorator import token_required, organization_team_required_by_args
-from ..util.get_path import get_test_result_path, get_back_scripts_root
+from ..util.get_path import get_test_result_path, get_back_scripts_root, get_test_store_root
+from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup
 from ..config import get_config
-from ..model.database import Task, Test
+from ..model.database import Task, Test, Package
 from ..util.dto import TestDto
-from ..util.tarball import make_tarfile, pack_files
-from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO
+from ..util.tarball import pack_files, make_tarfile, make_tarfile_from_dir
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, EMFILE
 
 api = TestDto.api
 _test_cases = TestDto.test_cases
@@ -36,39 +42,55 @@ class ScriptDownload(Resource):
         if not task_id:
             return response_message(EINVAL, 'Field id is required'), 400
 
-        test_suite = request.args.get('test', None)
-        if not test_suite:
+        test_script = request.args.get('test', None)
+        if not test_script:
             return response_message(EINVAL, 'Field test is required'), 400
 
         task = Task.objects(pk=task_id).first()
         if not task:
             return response_message(ENOENT, 'Task not found'), 404
 
-        if test_suite.endswith('.py'):
-            test_suite = test_suite[0:-3]
+        test_path = None if '/' not in test_script else test_script.split('/', 1)[0]
 
         result_dir = get_test_result_path(task)
         scripts_root = get_back_scripts_root(task)
+        pypi_root = get_test_store_root(task=task)
 
-        results_tmp = result_dir / 'temp'
-        try:
-            os.mkdir(results_tmp)
-        except FileExistsError:
-            pass
-        script_file = scripts_root / (test_suite + '.py')
+        script_file = scripts_root / test_script
         if not os.path.exists(script_file):
             return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
-        for _ in range(3):
-            tarball = pack_files(test_suite, scripts_root, results_tmp)
-            if tarball is None:
-                current_app.logger.warning("retry packaging files")
-                time.sleep(1)
-            else:
-                tarball = os.path.basename(tarball)
-                return send_from_directory(Path(os.getcwd()) / results_tmp, tarball)
+        test_script_name = os.path.splitext(test_script)[0]
+        if task.test.package:
+            package = task.test.package
+        elif test_path:
+            packages = Package.objects(py_packages=test_path)
+            if packages.count() == 0:
+                return response_message(ENOENT, f"Package {test_path} not found"), 404
+            if packages.count() > 1:
+                return response_message(EMFILE, f"Multiple packages found for {test_path}"), 401
+            package = packages.first()
         else:
-            return response_message(EIO, "packaging files failed"), 404
+            with tempfile.TemporaryDirectory(prefix='egg-dist-tmp-', dir=result_dir) as tempDir:
+                deps = find_local_dependencies(scripts_root, test_script, task.organization, task.team)
+                generate_setup(scripts_root, tempDir, deps, test_script_name, test_script_name, '0.0.1')
+                with StringIO() as buf, redirect_stdout(buf):
+                    sandbox.run_setup(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
+                deps = find_dependencies(script_file, task.organization, task.team, 'Test Suite')
+                dist = os.path.join(tempDir, 'dist')
+                for pkg, version in deps:
+                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+                make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
+                return send_from_directory(Path(os.getcwd()) / result_dir, f'{test_script_name}.tar.gz')
+
+        with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
+            dist = os.path.join(tempDir, 'dist')
+            os.mkdir(dist)
+            deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
+            for pkg, version in deps:
+                shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+            make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
+            return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'The test suite to query')
@@ -107,11 +129,15 @@ class TestSuitesList(Resource):
 
         ret = []
         for t in tests:
+            if t.staled:
+                continue
             ret.append({
                 'id': str(t.id),
                 'test_suite': t.test_suite,
+                'path': t.path,
                 'test_cases': t.test_cases,
                 'variables': t.variables,
                 'author': t.author.name
             })
+        ret.sort(key=lambda x: x['path'])
         return ret

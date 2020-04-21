@@ -208,7 +208,7 @@ class TeamMember(Resource):
                 return response_message(EPERM, "Can't quit the team as you are the owner"), 403
             team.modify(pull__members=user)
             user.modify(pull__teams=team)
-            return response_message(SUCCESS), 200
+            return response_message(SUCCESS)
         else:
             return response_message(EINVAL, "User is not in the team"), 400
 

@@ -1,3 +1,4 @@
+import sys
 from flask import current_app
 
 from ..model.database import *
@@ -37,3 +38,16 @@ def js2python_bool(value):
     if bool(value) == value and value:
         return True
     return False
+
+class temp_sys_path():
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
+        sys.path.append(self.path)
+
+    def __exit__(self, exception_type, exception_value, traceback):
+        if sys.path.index(self.path) == len(sys.path) - 1:
+            sys.path.pop(sys.path.index(self.path))
+        else:
+            raise Exception('Can\'t find temporary path in the sys.path added before')

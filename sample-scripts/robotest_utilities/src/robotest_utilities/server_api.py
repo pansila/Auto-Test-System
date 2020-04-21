@@ -11,7 +11,7 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
-class rest_api():
+class server_api():
     def __init__(self, config, task_id):
         self.config = config
         self.task_id = task_id

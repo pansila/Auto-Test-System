@@ -42,24 +42,24 @@ class ScriptManagement(Resource):
         organization = kwargs['organization']
         team = kwargs['team']
 
-        back_scripts_root = get_back_scripts_root(team=team, organization=organization)
-        user_scripts_root = get_user_scripts_root(team=team, organization=organization)
+        test_libraries_root = get_back_scripts_root(team=team, organization=organization)
+        test_scripts_root = get_user_scripts_root(team=team, organization=organization)
 
         if script_path:
             if script_type is None:
                 return response_message(EINVAL, 'Field script_type is required'), 400
-            if script_type == 'user_scripts':
-                return send_from_directory(Path(os.getcwd()) / user_scripts_root, script_path)
-            elif script_type == 'backing_scripts':
-                return send_from_directory(Path(os.getcwd()) / back_scripts_root, script_path)
+            if script_type == 'test_scripts':
+                return send_from_directory(Path(os.getcwd()) / test_scripts_root, script_path)
+            elif script_type == 'test_libraries':
+                return send_from_directory(Path(os.getcwd()) / test_libraries_root, script_path)
             else:
                 return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
         elif script_type:
             return response_message(EINVAL, 'Field file is required'), 400
 
-        user_scripts = path_to_dict(user_scripts_root)
-        back_scripts = path_to_dict(back_scripts_root)
-        return {'user_scripts': user_scripts, 'backing_scripts': back_scripts}
+        test_scripts = path_to_dict(test_scripts_root)
+        test_libraries = path_to_dict(test_libraries_root)
+        return {'test_scripts': test_scripts, 'test_libraries': test_libraries}
 
     @token_required
     @organization_team_required_by_json
@@ -71,7 +71,7 @@ class ScriptManagement(Resource):
         if not script:
             return response_message(EINVAL, 'Field file is required'), 400
         if not is_path_secure(script):
-            return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
+            return response_message(EINVAL, 'Illegal file path'), 401
 
         new_name = request.json.get('new_name', None)
         if new_name:
@@ -90,9 +90,9 @@ class ScriptManagement(Resource):
         team = kwargs['team']
         user = kwargs['user']
         
-        if script_type == 'user_scripts':
+        if script_type == 'test_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
-        elif script_type == 'backing_scripts':
+        elif script_type == 'test_libraries':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
             return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
@@ -105,9 +105,9 @@ class ScriptManagement(Resource):
             pass
 
         if content or content == '':
-            if script_type == 'user_scripts':
+            if script_type == 'test_scripts':
                 content = re.sub(r'\\([{}*_\.])', r'\1', content)
-            elif script_type == 'backing_scripts':
+            elif script_type == 'test_liraries':
                 content = re.sub(r'\r\n', '\n', content)
 
             if basename:
@@ -116,16 +116,18 @@ class ScriptManagement(Resource):
 
         if new_name:
             if basename:
-                Test.objects(path=os.path.abspath(root / script)).delete()
-                os.rename(root / script, root / dirname / new_name)
+                new_path = os.path.join(dirname, new_name)
+                os.rename(root / script, root / new_path)
+                if script_type == 'test_scripts':
+                    Test.objects(path=script).modify(path=new_path)
             else:
                 os.rename(root / script, root / os.path.dirname(dirname) / new_name)
 
-        if basename and script_type == 'user_scripts':
+        if basename and script_type == 'test_scripts':
             _script = str(Path(dirname) / new_name) if new_name else script
             if _script.endswith('.md'):
-                ret = db_update_test(scripts_dir=root, script=_script, user=user.email, organization=organization, team=team)
-                if ret:
+                ret = db_update_test(root, _script, user, organization, team)
+                if not ret:
                     return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
 
         return response_message(SUCCESS)
@@ -149,9 +151,9 @@ class ScriptManagement(Resource):
         if script_type is None:
             return response_message(EINVAL, 'Field script_type is required'), 400
 
-        if script_type == 'user_scripts':
+        if script_type == 'test_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
-        elif script_type == 'backing_scripts':
+        elif script_type == 'test_libraries':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
             return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
@@ -166,7 +168,7 @@ class ScriptManagement(Resource):
                 current_app.logger.exception(err)
                 return response_message(EIO, 'Error happened while deleting a file'), 401
 
-            if script_type == 'user_scripts':
+            if script_type == 'test_scripts':
                 cnt = Test.objects(path=os.path.abspath(root / script)).delete()
                 if cnt == 0:
                     return response_message(ENOENT, 'Test suite not found in the database'), 404
@@ -204,9 +206,9 @@ class ScriptUpload(Resource):
         if script_type is None:
             return response_message(EINVAL, 'Field script_type is required'), 400
 
-        if script_type == 'user_scripts':
+        if script_type == 'test_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
-        elif script_type == 'backing_scripts':
+        elif script_type == 'test_libraries':
             root = get_back_scripts_root(team=team, organization=organization)
         else:
             return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
@@ -222,10 +224,12 @@ class ScriptUpload(Resource):
             file.save(str(filename))
 
         if not found:
-            return response_message(ENOENT, 'No files are found in the request'), 404
+            return response_message(EINVAL, 'No files are found in the request'), 401
 
-        if script_type == 'user_scripts':
+        if script_type == 'test_scripts':
             for name, file in request.files.items():
-                ret = db_update_test(scripts_dir=root, script=file.filename, user=user.email, organization=organization, team=team)
-                if ret:
+                if not file.filename.endswith('.md'):
+                    continue
+                ret = db_update_test(root, file.filename, user, organization, team)
+                if not ret:
                     return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401

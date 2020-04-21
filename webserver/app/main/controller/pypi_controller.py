@@ -73,5 +73,5 @@ class ScriptManagement(Resource):
         if not package:
             return response_message(ENOENT, f'Package {file} not found'), 404
 
-        root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
-        return send_from_directory(Path(os.getcwd()) / root / directory, file)
+        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+        return send_from_directory(Path(os.getcwd()) / pypi_root / directory, file)

@@ -12,7 +12,7 @@ from app.main.util.get_path import get_test_result_path, get_upload_files_root
 from ..config import get_config
 from ..model.database import Task
 from ..util.dto import TaskResourceDto
-from ..util.tarball import make_tarfile, pack_files
+from ..util.tarball import pack_files
 from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO
 
 api = TaskResourceDto.api
@@ -136,4 +136,4 @@ class TaskResourceUpload(Resource):
         if not found:
             return response_message(ENOENT, 'No files are found in the request'), 404
 
-        return response_message(SUCCESS, resource_id=temp_id), 200
+        return response_message(SUCCESS, resource_id=temp_id)

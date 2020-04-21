@@ -173,6 +173,9 @@ class TaskController(Resource):
         test_suite = data.get('test_suite', None)
         if test_suite == None:
             return response_message(EINVAL, 'Field test_suite is required'), 400
+        test_path = data.get('path', None)
+        if test_path == None:
+            return response_message(EINVAL, 'Field path is required'), 400
 
         task.test_suite = test_suite
 
@@ -180,9 +183,7 @@ class TaskController(Resource):
         team = kwargs['team']
         user = kwargs['user']
 
-        query = {'test_suite': task.test_suite, 'organization': organization}
-        if team:
-            query['team'] = team
+        query = {'test_suite': task.test_suite, 'path': test_path, 'organization': organization, 'team': team}
         test = Test.objects(**query)
         if not test:
             return response_message(ENOENT, 'The requested test suite is not found'), 404
@@ -297,7 +298,7 @@ class TaskController(Resource):
                 task.delete()
         if len(failed) != 0:
             return response_message(UNKNOWN_ERROR, 'Task scheduling failed'), 401
-        return response_message(SUCCESS, failed=failed, succeeded=succeeded, running=[t for t in running if t in succeeded]), 200
+        return response_message(SUCCESS, failed=failed, succeeded=succeeded, running=[t for t in running if t in succeeded])
 
     @token_required
     @organization_team_required_by_json

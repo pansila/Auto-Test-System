@@ -16,7 +16,7 @@ import threading
 import time
 import traceback
 import uuid
-from contextlib import closing
+from contextlib import closing, contextmanager
 from io import BytesIO
 from pathlib import Path
 
@@ -34,6 +34,7 @@ from wsrpc import WebsocketRPC
 DOWNLOAD_LIB = "testlibs"
 RESOURCE_DIR = "resources"
 
+__TEST_LIB__ = 'daemon'
 
 
 class SecureWebsocketRPC(WebsocketRPC):
@@ -64,6 +65,16 @@ def empty_folder(folder):
         for d in dirs:
             shutil.rmtree(os.path.join(root, d))
 
+@contextmanager
+def install_eggs(egg_path):
+    org_path = sys.path
+    for f in os.listdir(egg_path):
+        egg_path = os.path.join(egg_path, f)
+        if egg_path not in sys.path:
+            sys.path.append(egg_path)
+    yield
+    sys.path = org_path
+
 class SignalHandler(object):
 
     def __init__(self, handler):
@@ -84,14 +95,14 @@ class SignalHandler(object):
             name, handler = self._original.popitem()
             signal.signal(getattr(signal, name), handler)
 
-class task_daemon(object):
+class daemon(object):
 
     def __init__(self, config, task_id):
         self.running_test = None
         self.config = config
         self.task_id = None
 
-        sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
+        # sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
 
     def start_test(self, test_case, backing_file, task_id=None):
         # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
@@ -103,6 +114,7 @@ class task_daemon(object):
         self.task_id = task_id
         self._download(backing_file, self.task_id)
         self._verify(backing_file)
+        self._install_eggs()
 
         self._create_test_result(test_case)
         server = start_remote_server(backing_file,
@@ -135,12 +147,12 @@ class task_daemon(object):
         print('Start to download file from {}'.format(url))
 
         r = requests.get(url)
-        if r.status_code == 404:
-            raise AssertionError('Downloading file failed')
-
         if r.status_code == 406:
             print('No files need to download')
             return
+
+        if r.status_code != 200:
+            raise AssertionError('Downloading file failed')
 
         temp = BytesIO()
         temp.write(r.content)
@@ -150,22 +162,21 @@ class task_daemon(object):
         with tarfile.open(fileobj=temp) as tarFile:
             tarFile.extractall(dest_dir)
 
-    def _download(self, testcase, task_id):
-        if testcase.endswith(".py"):
-            testcase = testcase[0:-3]
-
-        self._download_file('test/script?id={}&test={}'.format(task_id, testcase), self.config["test_dir"])
+    def _download(self, backing_file, task_id):
+        self._download_file(f'test/script?id={task_id}&test={backing_file}', self.config["test_dir"])
         if task_id:
             ObjectId(task_id)  # validate the task id
             self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
 
-    def _verify(self, testcase):
-        if not testcase.endswith(".py"):
-            testcase += ".py"
-
-        testlib = Path(self.config["test_dir"]) / testcase
-        if not os.path.exists(testlib):
-            raise AssertionError("Verifying downloaded file %s failed" % testcase)
+    def _verify(self, backing_file):
+        found = False
+        for f in os.listdir(self.config["test_dir"]):
+            if not f.endswith('.egg'):
+                raise AssertionError("Verifying downloaded file failed")
+            else:
+                found = True
+        if not found:
+            raise AssertionError("No downloaded files found")
 
     def start(self):
         """ start the daemon """
@@ -215,17 +226,35 @@ class test_library(threading.Thread):
     def run(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        self.loop.run_until_complete(self.go())
+        with install_eggs(self.config['test_dir']):
+            self.loop.run_until_complete(self.go())
 
     def is_ready(self):
         return self.websocket is not None
 
     async def go(self):
-        module_name = self.backing_file.rpartition('.')[0]
+        module_name = os.path.splitext(self.backing_file)[0].replace('/', '.')
         importlib.invalidate_caches()
         test_module = importlib.import_module(module_name)
         test_module = importlib.reload(test_module)
-        test_lib = getattr(test_module, module_name)
+        items = []
+        for name, value in inspect.getmembers(test_module):
+            if inspect.isclass(value) and str(value).split('\'')[1].startswith(module_name):
+                items.append(value)
+        if len(items) == 1:
+            test_lib = items[0]
+        elif len(items) > 1:
+            test_lib_name = getattr(test_module, '__TEST_LIB__', None)
+            if not test_lib_name:
+                print('More than one class is defined but "__TEST_LIB__" not defined')
+                return
+            test_lib = getattr(test_module, test_lib_name, None)
+            if not test_lib:
+                print(f'Could not find the test library {test_lib_name} in the module {module_name}')
+                return
+        else:
+            print(f'Could not find any test library in the module {module_name}')
+            return
 
         while True:
             try:
@@ -302,6 +331,8 @@ def read_config(config_file = "config.yml", host=None, port=None):
         config['uuid'] = str(uuid.uuid1())
         with open(config_file, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, Dumper=yaml.RoundTripDumper)
+        print(f"Generating endpoint's UUID {config['uuid']}")
+        print("Please authorize it on the server's endpoint page to activate it")
 
     if host:
         config["server_host"] = host
@@ -352,27 +383,27 @@ class Config_Handler(FileSystemEventHandler):
             self.restart = True
 
 def run(config_watchdog, handler, host, port):
-    task_daemon = None
+    daemon = None
     while config_watchdog.is_alive():
         if handler.restart:
-            if task_daemon:
-                task_daemon.stop()
+            if daemon:
+                daemon.stop()
             config = read_config(host=host, port=port)
-            task_daemon = start_daemon(config, host, port)
+            daemon = start_daemon(config, host, port)
             handler.restart = False
 
         try:
-            task_daemon.join(1)
+            daemon.join(1)
         except KeyboardInterrupt:
             config_watchdog.stop()
-            task_daemon.stop()
+            daemon.stop()
             break
 
-        if not task_daemon.is_alive():
+        if not daemon.is_alive():
             config_watchdog.stop()
             break
     else:
-        task_daemon.stop()
+        daemon.stop()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
