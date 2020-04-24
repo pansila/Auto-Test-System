@@ -12,7 +12,7 @@ from flask_restx import Resource
 
 from ..util.decorator import token_required, organization_team_required_by_args
 from ..util.get_path import get_test_result_path, get_back_scripts_root, get_test_store_root
-from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup
+from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup, query_package
 from ..config import get_config
 from ..model.database import Task, Test, Package
 from ..util.dto import TestDto
@@ -55,25 +55,22 @@ class ScriptDownload(Resource):
         result_dir = get_test_result_path(task)
         scripts_root = get_back_scripts_root(task)
         pypi_root = get_test_store_root(task=task)
+        package = None
 
         script_file = scripts_root / test_script
         if not os.path.exists(script_file):
             return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
-        test_script_name = os.path.splitext(test_script)[0]
-        if task.test.package:
+        if task.test.package and test_path in task.test.package.py_packages:
             package = task.test.package
         elif test_path:
-            packages = Package.objects(py_packages=test_path)
-            if packages.count() == 0:
-                return response_message(ENOENT, f"Package {test_path} not found"), 404
-            if packages.count() > 1:
-                return response_message(EMFILE, f"Multiple packages found for {test_path}"), 401
-            package = packages.first()
-        else:
-            with tempfile.TemporaryDirectory(prefix='egg-dist-tmp-', dir=result_dir) as tempDir:
+            package = query_package(test_path, task.organization, task.team, 'Test Suite')
+
+        if not package:
+            with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
+                test_script_name = os.path.splitext(test_script)[0].split('/', 1)[0]
                 deps = find_local_dependencies(scripts_root, test_script, task.organization, task.team)
-                generate_setup(scripts_root, tempDir, deps, test_script_name, test_script_name, '0.0.1')
+                generate_setup(scripts_root, tempDir, deps, test_script_name, '0.0.1')
                 with StringIO() as buf, redirect_stdout(buf):
                     sandbox.run_setup(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
                 deps = find_dependencies(script_file, task.organization, task.team, 'Test Suite')
@@ -82,15 +79,15 @@ class ScriptDownload(Resource):
                     shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
                 return send_from_directory(Path(os.getcwd()) / result_dir, f'{test_script_name}.tar.gz')
-
-        with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
-            dist = os.path.join(tempDir, 'dist')
-            os.mkdir(dist)
-            deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
-            for pkg, version in deps:
-                shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
-            make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
-            return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
+        else:
+            with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
+                dist = os.path.join(tempDir, 'dist')
+                os.mkdir(dist)
+                deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
+                for pkg, version in deps:
+                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+                make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
+                return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
 
 @api.route('/<test_suite>')
 @api.param('test_suite', 'The test suite to query')

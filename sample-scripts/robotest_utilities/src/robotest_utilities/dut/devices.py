@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from ruamel import yaml
 
 import serial
 
@@ -15,9 +16,11 @@ class serial_dut(server_api):
     TIMEOUT_ERR = -1
     TIMEOUT = 1
 
-    def __init__(self, config, task_id):
-        super().__init__(config, task_id)
+    def __init__(self, daemon_config, task_id):
+        super().__init__(daemon_config, task_id)
         self.configDut = {}
+        with open('config.yml', 'r', encoding='utf-8') as f:
+            self.config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut

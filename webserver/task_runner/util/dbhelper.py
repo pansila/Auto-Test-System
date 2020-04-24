@@ -35,7 +35,7 @@ WHEEL_INFO_RE = re.compile(
     \.whl|\.dist-info)$""",
     re.VERBOSE).match
 VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|<=|!=)\s*)?(?P<version>\d.+?)?$').match
-MODULE_IMPORT = re.compile(r'^\s*(import|from)\s+(?P<module>.+?)($|\s+import\s+.+$)').match
+MODULE_IMPORT = re.compile(r'^\s*(import|from)\s+(?P<module>.+?)(#|$|\s+import\s+.+$)').match
 
 def filter_kw(item):
     item = item.strip()
@@ -105,6 +105,16 @@ def meet_version(versions, compare, version):
                 break
         return versions[0] if len(versions) > 0 else None
     return None
+
+def query_package(package_name, organization, team, type):
+    package = Package.objects(py_packages=package_name, organization=organization, team=team, package_type=type).first()
+    if not package:
+        package = Package.objects(py_packages=package_name, organization=organization, team=None, package_type=type).first()
+        if not package:
+            package = Package.objects(py_packages=package_name, organization=None, team=None, package_type=type).first()
+            if not package:
+                return None
+    return package
 
 def get_package_requires(package, organization, team, type):
     if not package.endswith('.egg') or not zipfile.is_zipfile(package):
@@ -302,7 +312,7 @@ def get_internal_packages(package_path):
 def find_local_dependencies(scripts_root, script, organization, team):
     modules = find_modules(os.path.join(scripts_root, script))
     modules_dep = modules[:]
-    ret = []
+    ret = [os.path.splitext(script)[0].split('/', 1)[0]]
     for module in modules:
         tests = Test.objects(organization=organization, team=team)
         for test in tests:
@@ -315,10 +325,9 @@ def find_local_dependencies(scripts_root, script, organization, team):
                 ret.append(f)
     return ret
 
-def generate_setup(src_dir, dst_dir, dependencies, script, project_name, version):
+def generate_setup(src_dir, dst_dir, dependencies, project_name, version):
     packages = []
-    py_modules = [script]
-    shutil.copy(os.path.join(src_dir, script + '.py'), dst_dir)
+    py_modules = []
 
     for f in dependencies:
         src = os.path.join(src_dir, f)

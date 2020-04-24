@@ -457,7 +457,7 @@ async def rpc_proxy(request, ws):
     except Exception as e:
         # print(f'Received an unknown format json data: {e}')
         return
-    organization_id = data['organization_id']
+    join_id = data['join_id']
     uid = data['uid']
     backing_file = data['backing_file']
     organization, team = None, None
@@ -467,9 +467,9 @@ async def rpc_proxy(request, ws):
         if endpoint.status == 'Forbidden' or endpoint.status == 'Unauthorized':
             #await ws.send('Rejected')
             return
-    organization = Organization.objects(pk=organization_id).first()
+    organization = Organization.objects(pk=join_id).first()
     if not organization:
-        team = Team.objects(pk=organization_id).first()
+        team = Team.objects(pk=join_id).first()
         if not team:
             #await ws.send('Organization not found')
             return

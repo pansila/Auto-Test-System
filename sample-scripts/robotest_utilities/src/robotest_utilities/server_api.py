@@ -12,8 +12,8 @@ def json_serial(obj):
     raise TypeError ("Type %s not serializable" % type(obj))
 
 class server_api():
-    def __init__(self, config, task_id):
-        self.config = config
+    def __init__(self, daemon_config, task_id):
+        self.daemon_config = daemon_config
         self.task_id = task_id
         self.result = {}
         self._update_result()
@@ -21,7 +21,7 @@ class server_api():
     def _update_result(self, new_result=None):
         if new_result:
             self.result = {**self.result, **new_result}
-        ret = requests.post('{}/testresult/{}'.format(self.config['server_url'],
+        ret = requests.post('{}/testresult/{}'.format(self.daemon_config['server_url'],
                             self.task_id),
                             json=json.dumps(self.result, default=json_serial))
         if ret.status_code != 200:

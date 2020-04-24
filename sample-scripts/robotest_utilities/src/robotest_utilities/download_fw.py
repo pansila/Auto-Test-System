@@ -1,5 +1,6 @@
 import os, sys
 import subprocess
+import tempfile
 from pathlib import Path
 
 class download_interface():
@@ -31,20 +32,23 @@ class download_interface():
                 if flashAddr.startswith('0x'):
                     flashAddr = flashAddr[2:]
 
-                firmwarePath = Path(self.config["resource_dir"]) / firmwareName
-                script = Path(self.config["tmp_dir"]) / 'download_script.jlink'
-                script_contents = ("r\n"
-                                   "exec EnableEraseAllFlashBanks\n"
-                                   "erase\n"
-                                   "loadbin {} {} SWDSelect\n"
-                                   "verifybin {} {}\n"
-                                   "r\n"
-                                   "g\n"
-                                   "qc\n".format(firmwarePath, flashAddr, firmwarePath, flashAddr))
-                with open(script, 'w') as f:
-                    f.write(script_contents)
-                cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1', '-JTAGConf', '-1,-1', '-CommanderScript', str(script)]
-                subprocess.run(cmd, check=True)
+                firmwarePath = Path("resources") / firmwareName
+                if not firmwarePath.exists():
+                    raise AssertionError(f'Firmware {firmwarePath} not found')
+                with tempfile.TemporaryFile() as tempDir:
+                    script = Path(tempDir) / 'download_script.jlink'
+                    script_contents = ("r\n"
+                                       "exec EnableEraseAllFlashBanks\n"
+                                       "erase\n"
+                                       "loadbin {} {} SWDSelect\n"
+                                       "verifybin {} {}\n"
+                                       "r\n"
+                                       "g\n"
+                                       "qc\n".format(firmwarePath, flashAddr, firmwarePath, flashAddr))
+                    with open(script, 'w') as f:
+                        f.write(script_contents)
+                    cmd = [d['path'], '-device', d['device'], '-if', d['interface'], '-speed', str(d['speed']), '-autoconnect', '1', '-JTAGConf', '-1,-1', '-CommanderScript', str(script)]
+                    subprocess.run(cmd, check=True)
                 break
             print('Firmware downloading failed by {}, try next tool...'.format(d['tool'].upper()))
         else:

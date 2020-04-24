@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "endpoint-workspace"
+version = "0.0.1"
+description = "Work space to that the poetry's virtual environment will create for"
+authors = ["panzi <panzilla@163.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+netifaces = "0.10.7"
+pyserial = "3.4"
+requests = "2.20.1"
+pexpect = "4.7.0"
+ruamel-yaml = "0.15.89"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

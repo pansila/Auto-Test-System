@@ -16,25 +16,23 @@ import threading
 import time
 import traceback
 import uuid
+import subprocess
+import site
 from contextlib import closing, contextmanager
 from io import BytesIO
 from pathlib import Path
+from copy import copy
 
 import requests
 import websockets
 from bson.objectid import ObjectId
 from robotremoteserver import RobotRemoteServer, RemoteLibraryFactory
-from ruamel import yaml
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 from wsrpc import WebsocketRPC
+import toml
 # import daemon as Daemon
 # from daemoniker import Daemonizer, SignalHandler1
-
-DOWNLOAD_LIB = "testlibs"
-RESOURCE_DIR = "resources"
-
-__TEST_LIB__ = 'daemon'
 
 
 class SecureWebsocketRPC(WebsocketRPC):
@@ -58,159 +56,60 @@ class WebsocketRemoteServer(RobotRemoteServer):
     def __init__(self, library):
         self._library = RemoteLibraryFactory(library)
 
-def empty_folder(folder):
-    for root, dirs, files in os.walk(folder):
-        for f in files:
-            os.unlink(os.path.join(root, f))
-        for d in dirs:
-            shutil.rmtree(os.path.join(root, d))
-
 @contextmanager
 def install_eggs(egg_path):
     org_path = sys.path
-    for f in os.listdir(egg_path):
-        egg_path = os.path.join(egg_path, f)
-        if egg_path not in sys.path:
-            sys.path.append(egg_path)
+    eggs = [os.path.join(egg_path, f) for f in os.listdir(egg_path) if f.endswith('.egg')]
+    sys.path[:0] = eggs
     yield
     sys.path = org_path
 
-class SignalHandler(object):
+@contextmanager
+def pushd(new_path):
+    old_path = os.getcwd()
+    os.chdir(new_path)
+    yield
+    os.chdir(old_path)
 
-    def __init__(self, handler):
-        self._handler = lambda signum, frame: handler()
-        self._original = {}
+@contextmanager
+def activate_venv(venv):
+    old_os_path = os.environ.get('PATH', '')
+    if sys.platform == 'win32':
+        os.environ['PATH'] = os.path.dirname(os.path.join(venv, 'Scripts')) + os.pathsep + old_os_path
+        site_packages = os.path.join(venv, 'Lib', 'site-packages')
+    else:
+        os.environ['PATH'] = os.path.dirname(os.path.join(venv, 'bin')) + os.pathsep + old_os_path
+        site_packages = os.path.join(venv, 'lib', 'python%s' % sys.version[:3], 'site-packages')
+    prev_sys_path = list(sys.path)
+    site.addsitedir(site_packages)
+    sys.real_prefix = sys.prefix
+    sys.prefix = venv
+    # Move the added items to the front of the path:
+    new_sys_path = []
+    for item in list(sys.path):
+        if item not in prev_sys_path:
+            new_sys_path.append(item)
+            sys.path.remove(item)
+    sys.path[:0] = new_sys_path
+    yield
+    os.environ['PATH'] = old_os_path
+    sys.path = prev_sys_path
 
-    def __enter__(self):
-        for name in 'SIGINT', 'SIGTERM', 'SIGHUP':
-            if hasattr(signal, name):
-                try:
-                    orig = signal.signal(getattr(signal, name), self._handler)
-                except ValueError:  # Not in main thread
-                    return
-                self._original[name] = orig
+@contextmanager
+def activate_workspace(workspace):
+    if not os.path.exists(os.path.join(workspace, 'pyproject.toml')):
+        raise RuntimeError('Project\'s configuration file not found')
+    with pushd(workspace):
+        try:
+            env = copy(dict(os.environ))
+            del env['VIRTUAL_ENV']
+            venv = subprocess.check_output('poetry env info --path', shell=True, text=True, env=env)
+        except subprocess.CalledProcessError:
+            raise
+        with activate_venv(venv):
+            yield
 
-    def __exit__(self, *exc_info):
-        while self._original:
-            name, handler = self._original.popitem()
-            signal.signal(getattr(signal, name), handler)
-
-class daemon(object):
-
-    def __init__(self, config, task_id):
-        self.running_test = None
-        self.config = config
-        self.task_id = None
-
-        # sys.path.insert(0, os.path.realpath(self.config["test_dir"]))
-
-    def start_test(self, test_case, backing_file, task_id=None):
-        # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
-        self.stop_test('', 'ABORT')
-
-        if not backing_file.endswith(".py"):
-            backing_file += '.py'
-
-        self.task_id = task_id
-        self._download(backing_file, self.task_id)
-        self._verify(backing_file)
-        self._install_eggs()
-
-        self._create_test_result(test_case)
-        server = start_remote_server(backing_file,
-                                    self.config,
-                                    host=self.config["server_host"],
-                                    port=self.config["server_rpc_port"],
-                                    task_id=self.task_id
-                                    )
-        self.running_test = server
-
-        for i in range(5):
-            if not server.is_ready():
-                time.sleep(1)
-            else:
-                break
-        else:
-            raise AssertionError("RPC server can't be ready")
-
-    def stop_test(self, test_case, status):
-        if self.running_test:
-            self._update_test_result(status)
-            self.running_test.stop()
-            self.running_test = None
-            self.task_id = None
-
-    def _download_file(self, endpoint, dest_dir):
-        empty_folder(dest_dir)
-
-        url = "{}/{}".format(self.config["server_url"], endpoint)
-        print('Start to download file from {}'.format(url))
-
-        r = requests.get(url)
-        if r.status_code == 406:
-            print('No files need to download')
-            return
-
-        if r.status_code != 200:
-            raise AssertionError('Downloading file failed')
-
-        temp = BytesIO()
-        temp.write(r.content)
-        print('Downloading test file succeeded')
-
-        temp.seek(0)
-        with tarfile.open(fileobj=temp) as tarFile:
-            tarFile.extractall(dest_dir)
-
-    def _download(self, backing_file, task_id):
-        self._download_file(f'test/script?id={task_id}&test={backing_file}', self.config["test_dir"])
-        if task_id:
-            ObjectId(task_id)  # validate the task id
-            self._download_file('taskresource/{}'.format(task_id), self.config["resource_dir"])
-
-    def _verify(self, backing_file):
-        found = False
-        for f in os.listdir(self.config["test_dir"]):
-            if not f.endswith('.egg'):
-                raise AssertionError("Verifying downloaded file failed")
-            else:
-                found = True
-        if not found:
-            raise AssertionError("No downloaded files found")
-
-    def start(self):
-        """ start the daemon """
-        pass
-
-    def stop(self):
-        """ stop the daemon """
-        pass
-
-    def clear_log(self):
-        pass
-
-    def upload_log(self):
-        pass
-
-    def _update_test_result(self, status):
-        if not self.task_id:
-            return
-        data = {'status': status}
-        ret = requests.post('{}/testresult/{}'.format(self.config['server_url'], self.task_id),
-                            json=data)
-        if ret.status_code != 200:
-            print('Updating the task result on the server failed')
-
-    def _create_test_result(self, test_case):
-        if not self.task_id:
-            return
-        data = {'task_id': self.task_id, 'test_case': test_case}
-        ret = requests.post('{}/testresult/'.format(self.config['server_url']),
-                            json=data)
-        if ret.status_code != 200:
-            print('Creating the task result on the server failed')
-
-class test_library(threading.Thread):
+class test_library_rpc(threading.Thread):
     def __init__(self, backing_file, task_id, config, host, port, rpc_daemon=False):
         super().__init__()
         self.backing_file = backing_file
@@ -226,7 +125,11 @@ class test_library(threading.Thread):
     def run(self):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
-        with install_eggs(self.config['test_dir']):
+        if not self.rpc_daemon:
+            with activate_workspace('workspace'):
+                with install_eggs(self.config['download_dir']):
+                    self.loop.run_until_complete(self.go())
+        else:
             self.loop.run_until_complete(self.go())
 
     def is_ready(self):
@@ -259,7 +162,7 @@ class test_library(threading.Thread):
         while True:
             try:
                 async with websockets.connect(f'ws://{self.host}:{self.port}/') as ws:
-                    await ws.send(json.dumps({'organization_id': self.config['organization_id'],
+                    await ws.send(json.dumps({'join_id': self.config['join_id'],
                                    'uid': self.config['uuid'],
                                    'backing_file': self.backing_file if not self.rpc_daemon else ''
                                    }))
@@ -269,7 +172,7 @@ class test_library(threading.Thread):
                         await asyncio.sleep(10)
                         continue
                     self.websocket = ws
-                    print(f'Start RPC server - {threading.current_thread().name}')
+                    print('Start the RPC server')
                     try:
                         await SecureWebsocketRPC(ws, WebsocketRemoteServer(test_lib(self.config, self.task_id)), method_prefix='').run()
                     except websockets.exceptions.ConnectionClosedError:
@@ -277,9 +180,9 @@ class test_library(threading.Thread):
             except ConnectionRefusedError:
                 print('Network connection is not ready')
             if not self.rpc_daemon:
-                print(f'Exit RPC server - {threading.current_thread().name}')
+                print('Exit RPC server')
                 break
-            print(f'Restart due to network connection closed - {threading.current_thread().name}')
+            print('Restart due to network connection closed')
 
     async def stop_websocket(self):
         if self.websocket:
@@ -298,7 +201,7 @@ class test_library(threading.Thread):
             self.loop.stop()
 
 def start_remote_server(backing_file, config, host='127.0.0.1', port=5555, task_id=None, rpc_daemon=False):
-    thread = test_library(backing_file, task_id, config, host, port, rpc_daemon)
+    thread = test_library_rpc(backing_file, task_id, config, host, port, rpc_daemon)
     thread.start()
     return thread
 
@@ -311,53 +214,37 @@ def get_rpc_port(url):
         return None
     return ret.json()['port']
 
-def read_config(config_file = "config.yml", host=None, port=None):
+def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
+    toml_config = toml.load(config_file)
+    if 'join_id' not in toml_config['tool']['robotest']['settings'] or not toml_config['tool']['robotest']['settings']['join_id']:
+        print("'join_id' must be specified in the pyproject.toml, it's either organization's id or team's id you want to join.")
+        print("You can find it on the server's global settings sidebar")
+        return None
+
     build_uuid = False
-    with open(config_file, 'r', encoding='utf-8') as f:
-        config = yaml.load(f, Loader=yaml.RoundTripLoader)
-
-    if 'organization_id' not in config or not config['organization_id']:
-        print('organization ID must be specified before connecting, you can find it on the user profile page on the server')
-        sys.exit(1)
-
-    if 'uuid' not in config or not config['uuid']:
+    if 'uuid' not in toml_config['tool']['robotest']['settings'] or not toml_config['tool']['robotest']['settings']['uuid']:
         build_uuid = True
     else:
         try:
-            uuid.UUID(config['uuid'])
+            uuid.UUID(toml_config['tool']['robotest']['settings']['uuid'])
         except Exception:
             build_uuid = True
     if build_uuid:
-        config['uuid'] = str(uuid.uuid1())
-        with open(config_file, 'w', encoding='utf-8') as f:
-            yaml.dump(config, f, Dumper=yaml.RoundTripDumper)
-        print(f"Generating endpoint's UUID {config['uuid']}")
-        print("Please authorize it on the server's endpoint page to activate it")
+        toml_config['tool']['robotest']['settings']['uuid'] = str(uuid.uuid1())
+        with open(config_file, 'w') as fp:
+            toml.dump(toml_config, fp)
 
+    config = {
+        **toml_config['tool']['robotest']['settings'],
+        'download_dir': os.path.abspath(os.path.join('workspace', 'downloads')),
+        'resource_dir': os.path.abspath(os.path.join('workspace', 'resources')),
+    }
     if host:
         config["server_host"] = host
-    elif "host" not in config:
-        config["server_host"] = '127.0.0.1'
-
     if port:
         config["server_port"] = port
-    elif "port" not in config:
-        config["server_port"] = 5000
 
-    if "test_dir" not in config:
-        config["test_dir"] = DOWNLOAD_LIB
-    try:
-        os.makedirs(config["test_dir"])
-    except FileExistsError:
-        pass
-    if "resource_dir" not in config:
-        config["resource_dir"] = RESOURCE_DIR
-    try:
-        os.makedirs(config["resource_dir"])
-    except FileExistsError:
-        pass
-
-    config['server_url'] = 'http://{}:{}'.format(config['server_ip'], config['server_port'])
+    config['server_url'] = 'http://{}:{}'.format(config['server_host'], config['server_port'])
     try:
         rpc_port = get_rpc_port(config['server_url'])
     except requests.exceptions.ConnectionError:
@@ -367,29 +254,31 @@ def read_config(config_file = "config.yml", host=None, port=None):
             config['server_rpc_port'] = rpc_port
         else:
             config['server_rpc_port'] = 5555
-
     return config
 
-def start_daemon(config, host, port):
-    server = start_remote_server(__file__, config, host=config['server_host'], port=config['server_rpc_port'], rpc_daemon=True)
-    return server
+def start_daemon(config):
+    return start_remote_server('test_endpoint/test_library.py', config, host=config['server_host'], port=config['server_rpc_port'], rpc_daemon=True)
 
 class Config_Handler(FileSystemEventHandler):
     def __init__(self):
         self.restart = True
 
     def on_modified(self, event):
-        if not event.is_directory and event.src_path.endswith("config.yml"):
+        if not event.is_directory and event.src_path.endswith("pyproject.toml"):
             self.restart = True
 
-def run(config_watchdog, handler, host, port):
+def watchdog_run(config_watchdog, handler, host, port):
     daemon = None
     while config_watchdog.is_alive():
         if handler.restart:
             if daemon:
                 daemon.stop()
-            config = read_config(host=host, port=port)
-            daemon = start_daemon(config, host, port)
+            config = read_toml_config(host=host, port=port)
+            if not config:
+                config_watchdog.stop()
+                break
+            # config = read_config(host=host, port=port)
+            daemon = start_daemon(config)
             handler.restart = False
 
         try:
@@ -405,7 +294,7 @@ def run(config_watchdog, handler, host, port):
     else:
         daemon.stop()
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--host', type=str,
                         help='the server IP for daemon to connect',
@@ -421,9 +310,9 @@ if __name__ == '__main__':
     watch = ob.schedule(handler, path='.')
     ob.start()
 
-    run(ob, handler, host, port)
+    watchdog_run(ob, handler, host, port)
 
-    sys.exit(0)
+    return 0
 
     """
     if os.name == 'nt':
@@ -449,3 +338,6 @@ if __name__ == '__main__':
     else:
         raise AssertionError(os.name + ' is not supported')
     """
+
+if __name__ == '__main__':
+    sys.exit(main())
