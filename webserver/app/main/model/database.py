@@ -393,3 +393,6 @@ class Package(Document):
     @property
     def latest_version(self):
         return self.version_re(self.files[0]).group('ver')
+
+    def __hash__(self):
+        return str(self.id)

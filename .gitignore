@@ -117,10 +117,8 @@ log.html
 /webserver/static/
 /webserver/upload/
 /webserver/logs/
-/endpoint/testlibs/
-/endpoint/resources/
-/endpoint/tmp/
-/endpoint/data/keys
 /tools/easy-rsa/Windows/keys
 /tools/easy-rsa/Windows/vars.bat
 /tools/easy-rsa/Linux/keys
+/endpoint/workspace/downloads/
+/endpoint/workspace/resources/

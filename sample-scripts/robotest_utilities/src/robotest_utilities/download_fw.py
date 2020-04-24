@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-class download_interface():
+class download_fw_intf():
     def download(self, deviceName, firmwareName=None, flashAddr=None):
         dut = self.configDut[deviceName]
         if 'download' not in dut:

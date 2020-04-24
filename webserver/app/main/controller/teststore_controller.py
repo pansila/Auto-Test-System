@@ -51,10 +51,24 @@ class PackageManagement(Resource):
         else:
             query = {'proprietary': proprietary, 'package_type': package_type}
 
-        packages = Package.objects(**query)
         ret = []
+        top_packages = Package.objects(name='Robot-Test-Utility', package_type=package_type, proprietary=False)
+        for package in top_packages:
+            ret.append({
+                'name': package.name,
+                'summary': package.description,
+                'description': package.long_description,
+                'stars': package.stars,
+                'download_times': package.download_times,
+                'package_type': package.package_type,
+                'versions': package.versions
+            })
+
+        packages = Package.objects(**query)
         p = re.compile(r'\d+\.\d+\.\d+')
         for package in packages[(page-1)*limit:page*limit]:
+            if package in top_packages:
+                continue
             ret.append({
                 'name': package.name,
                 'summary': package.description,
@@ -112,10 +126,8 @@ class PackageManagement(Resource):
 
                 with zipfile.ZipFile(filename) as zf:
                     for f in zf.namelist():
-                        if SCRIPT_FILES_FIND(f):
-                            break
-                    else:
-                        return response_message(EINVAL, 'All test scripts should be put in the scripts directory'), 401
+                        if (f.endswith('.md') or f.endswith('.robot')) and not SCRIPT_FILES_FIND(f):
+                            return response_message(EINVAL, 'All test scripts should be put in the scripts directory'), 401
 
                 name, description, long_description = get_package_info(filename)
                 if not name:

@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="WiFi Basic Test",
-    version="0.0.1",
+    version="0.1.0",
     author="Robotest Co.,Ltd",
     author_email="author@robotest.com",
     description="A Test Package To Run Tests For A WiFi device",

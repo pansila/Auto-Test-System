@@ -2,8 +2,9 @@ import os.path
 import re
 
 from robotest_utilities.dut import serial_dut
+from robotest_utilities.download_fw import download_fw_intf
 
-class wifi_dut(serial_dut):
+class base_wifi_dut(serial_dut, download_fw_intf):
     SCAN_TIMEOUT = 5        # seconds
     CONNECT_TIMEOUT = 25    # seconds
 
@@ -11,10 +12,12 @@ class wifi_dut(serial_dut):
 
     def __init__(self, config, task_id):
         super().__init__(config, task_id)
-        self._iperf_path = os.path.join(os.path.dirname(__file__),
-                                      '..', 'sut', 'login.py')
         self.ip_AP = None
         self.ip_DUT = None
+        self.configAP = {}
+
+        for ap in self.config['AP']:
+            self.configAP[ap['name']] = ap
 
     def open_wifi(self, deviceName):
         dut = self.configDut[deviceName]
@@ -74,3 +77,20 @@ class wifi_dut(serial_dut):
         if elapsedTime == self.TIMEOUT_ERR:
             raise AssertionError('Disconnecting timeout')
         print('Disconnecting used time {0}s'.format(elapsedTime))
+
+    def create_softap(self, deviceName):
+        self._flush_serial_output(deviceName)
+
+        dut = self.configDut[deviceName]
+        dut['serialport'].write('wifi_ap_adv {} {} {} {}\r'.format(ssid, passwd, channel, hidden).encode())
+        (result, elapsedTime, _) = self._serial_read(deviceName, self.CONNECT_TIMEOUT, 'softap {} started!'.format(re.escape(ssid)))
+        print(result)
+
+        if elapsedTime == self.TIMEOUT_ERR:
+            raise AssertionError('Setup softap timeout')
+        print('Setup softap used time {0}s'.format(elapsedTime))
+        # we need return softap ip address
+        self.ip_DUT = dut['softap_ip']
+        self.SSID = ssid
+        self.INFRA_MODE = 'Soft AP'
+        return self.ip_DUT

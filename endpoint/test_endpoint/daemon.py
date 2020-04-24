@@ -102,6 +102,7 @@ def activate_workspace(workspace):
     with pushd(workspace):
         try:
             env = copy(dict(os.environ))
+            # workaround, otherwise we get the wrong result as we are already in a virtual environment
             del env['VIRTUAL_ENV']
             venv = subprocess.check_output('poetry env info --path', shell=True, text=True, env=env)
         except subprocess.CalledProcessError:

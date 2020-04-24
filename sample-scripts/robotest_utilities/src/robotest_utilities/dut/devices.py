@@ -18,10 +18,10 @@ class serial_dut(server_api):
 
     def __init__(self, daemon_config, task_id):
         super().__init__(daemon_config, task_id)
-        self.configDut = {}
         with open('config.yml', 'r', encoding='utf-8') as f:
             self.config = yaml.load(f, Loader=yaml.RoundTripLoader)
 
+        self.configDut = {}
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut
 
