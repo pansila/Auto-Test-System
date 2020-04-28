@@ -294,7 +294,11 @@ class MyStringIO(StringIO):
     def write(self, s):
         super().write(s)
         if self.ws:
-            asyncio.run_coroutine_threadsafe(self.ws.send(json.dumps({'task_id': self.task_id, 'data': s})), asyncio.get_event_loop())
+            ss = json.dumps({
+                'task_id': self.task_id,
+                'data': s.replace('\r\n', '\n').replace('\n', '\r\n')
+            })
+            asyncio.run_coroutine_threadsafe(self.ws.send(ss), asyncio.get_event_loop())
 
 class StandardStreamInterceptor(object):
 

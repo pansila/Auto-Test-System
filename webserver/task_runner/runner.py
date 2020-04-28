@@ -542,8 +542,8 @@ async def rpc_proxy(request, ws):
         pass
     try:
         await RPC_PROXIES[url].close()
-    except Exception as e:
-        print(e)
+    except websockets.exceptions.ConnectionClosedError:
+        pass
     del RPC_PROXIES[url]
 
 def restart_interrupted_tasks(app, organization=None, team=None):

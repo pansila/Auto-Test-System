@@ -4,6 +4,7 @@ import re
 import subprocess
 import sys
 import time
+import chardet
 from pathlib import Path
 from ruamel import yaml
 
@@ -68,18 +69,22 @@ class serial_dut(server_api):
         tic = time.time()
         buff = dut['serialport'].readline()
         ret = buff
+        encoding = chardet.detect(buff)['encoding'] or 'utf-8'
 
         while (time.time() - tic) < timeout:
             if term:
-                match = matcher.search(buff.decode())
+                enc = chardet.detect(buff)['encoding'] or encoding
+                match = matcher.search(buff.decode(encoding=enc))
                 if match:
                     break
             buff = dut['serialport'].readline()
             ret += buff
         else:
-            return (ret.decode(), self.TIMEOUT_ERR, None)
+            print(encoding)
+            return (ret.decode(encoding=encoding), self.TIMEOUT_ERR, None)
 
-        return (ret.decode(), time.time() - tic, match.groups() if match else None)
+        print(encoding)
+        return (ret.decode(encoding=encoding), time.time() - tic, match.groups() if match else None)
 
     def _flush_serial_output(self, deviceName, wait_time=1):
         '''

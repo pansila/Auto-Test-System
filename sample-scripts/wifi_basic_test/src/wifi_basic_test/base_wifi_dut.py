@@ -82,7 +82,7 @@ class base_wifi_dut(serial_dut, download_fw_intf):
             raise AssertionError('Disconnecting timeout')
         print('Disconnecting used time {0}s'.format(elapsedTime))
 
-    def create_softap(self, deviceName):
+    def create_softap(self, deviceName, ssid, passwd, channel, hidden):
         self._flush_serial_output(deviceName)
 
         dut = self.configDut[deviceName]
