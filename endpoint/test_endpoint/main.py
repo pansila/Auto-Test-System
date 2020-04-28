@@ -115,7 +115,6 @@ class test_library_rpc(Process):
         self.config = config
         self.host = config['server_host']
         self.rpc_port = config['server_rpc_port']
-        self.msg_port = config['server_msg_port']
         self.name = backing_file
         self.websocket = None
         self.loop = None
@@ -170,7 +169,7 @@ class test_library_rpc(Process):
 
         while True:
             try:
-                async with websockets.connect(f'ws://{self.host}:{self.rpc_port}/') as rpc_ws, websockets.connect(f'ws://{self.host}:{self.msg_port}/') as msg_ws:
+                async with websockets.connect(f'ws://{self.host}:{self.rpc_port}/rpc') as rpc_ws, websockets.connect(f'ws://{self.host}:{self.rpc_port}/msg') as msg_ws:
                     await rpc_ws.send(json.dumps({'join_id': self.config['join_id'],
                                    'uid': self.config['uuid'],
                                    'backing_file': self.backing_file if not self.rpc_daemon else ''
@@ -207,9 +206,9 @@ def get_websocket_ports(url):
         print('Failed to get the server RPC port')
         return None
     ret = ret.json()
-    if 'rpc_port' not in ret or 'msg_port' not in ret:
+    if 'rpc_port' not in ret:
         return None
-    return ret['rpc_port'], ret['msg_port']
+    return ret['rpc_port']
 
 def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
     toml_config = toml.load(config_file)
@@ -247,17 +246,14 @@ def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
 
     config['server_url'] = 'http://{}:{}'.format(config['server_host'], config['server_port'])
     try:
-        rpc_port, msg_port = get_websocket_ports(config['server_url'])
+        rpc_port = get_websocket_ports(config['server_url'])
     except requests.exceptions.ConnectionError:
         config['server_rpc_port'] = 5555
-        config['server_msg_port'] = 5556
     else:
         if rpc_port:
             config['server_rpc_port'] = rpc_port
-            config['server_msg_port'] = msg_port
         else:
             config['server_rpc_port'] = 5555
-            config['server_msg_port'] = 5556
     return config
 
 def start_daemon(config):
@@ -271,13 +267,13 @@ class Config_Handler(FileSystemEventHandler):
         if not event.is_directory and event.src_path.endswith("pyproject.toml"):
             self.restart = True
 
-async def watchdog_run(config_watchdog, handler, host, port):
+def watchdog_run(config_watchdog, handler, host, port):
     daemon = None
     queue = None
     while config_watchdog.is_alive():
         if handler.restart:
             if daemon:
-                await daemon.terminate()
+                daemon.terminate()
             config = read_toml_config(host=host, port=port)
             if not config:
                 config_watchdog.stop()
@@ -290,14 +286,14 @@ async def watchdog_run(config_watchdog, handler, host, port):
             daemon.join(1)
         except KeyboardInterrupt:
             config_watchdog.stop()
-            await daemon.terminate()
+            daemon.terminate()
             break
 
         if not daemon.is_alive():
             config_watchdog.stop()
             break
     else:
-        await daemon.terminate()
+        daemon.terminate()
 
 def run():
     parser = argparse.ArgumentParser()
@@ -313,7 +309,7 @@ def run():
     watch = ob.schedule(handler, path='.')
     ob.start()
 
-    asyncio.get_event_loop().run_until_complete(watchdog_run(ob, handler, host, port))
+    watchdog_run(ob, handler, host, port)
 
     return 0
 

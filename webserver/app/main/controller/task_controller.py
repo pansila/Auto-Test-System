@@ -340,7 +340,7 @@ class TaskController(Resource):
             return response_message(EINVAL, 'Field priority is required'), 400
 
         message = {
-            'endpoint_uid': task.endpoint_run.uid,
+            'endpoint_uid': task.endpoint_run.uid if task.endpoint_run else '',
             'priority': priority,
             'task_id': str(task.id)
         }

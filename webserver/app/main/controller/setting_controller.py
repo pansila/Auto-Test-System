@@ -12,7 +12,7 @@ class rpc_request(Resource):
         """
         Get RPC settings
         """
-        return {'rpc_port': 5555, 'msg_port': 5556}
+        return {'rpc_port': 5555}
 
 
 @api.route('/get-endpoint/<file>')

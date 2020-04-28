@@ -50,7 +50,6 @@ RPC_SOCKET = None
 TASKS_CACHED = {}
 
 RPC_APP = Sanic('RPC Proxy app')
-MSG_APP = Sanic('RPC Message app')
 
 def install_sio(sio):
     global RPC_SOCKET
@@ -62,19 +61,29 @@ def event_handler_cancel_task(app, event):
     priority = event.message['priority']
     task_id = event.message['task_id']
 
-    endpoint = Endpoint.objects(uid=endpoint_uid, organization=event.organization, team=event.team).first()
-    if not endpoint:
-        app.logger.error('Endpoint not found for {}'.format(endpoint_uid))
-        return
-
-    taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint=endpoint, priority=priority).first()
-    if not taskqueue:
-        app.logger.error('Task queue not found for {}:{}'.format(endpoint_uid, priority))
-        return
-
     task = Task.objects(pk=task_id).first()
     if not task:
         app.logger.error('Task not found for ' + task_id)
+        return
+
+    if endpoint_uid:
+        endpoint = Endpoint.objects(uid=endpoint_uid, organization=event.organization, team=event.team).first()
+        if not endpoint:
+            app.logger.error('Endpoint not found for {}'.format(endpoint_uid))
+            return
+
+        taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, endpoint=endpoint, priority=priority).first()
+        if not taskqueue:
+            app.logger.error('Task queue not found for {}:{}'.format(endpoint_uid, priority))
+            return
+    else:
+        taskqueue = TaskQueue.objects(organization=event.organization, team=event.team, priority=priority, tasks=task).first()
+        if not taskqueue:
+            app.logger.error('Task queue not found for task {}'.format(task_id))
+            return
+        taskqueue.modify(pull__tasks=task)
+        task.modify(status='cancelled')
+        app.logger.info('Waiting task cancelled')
         return
 
     if task.status == 'waiting':
@@ -378,7 +387,8 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             RPC_SOCKET.emit('task finished', {'task_id': task_id, 'status': task.status}, room=room_id)
             ROOM_MESSAGES[room_id][task_id].close()
             del ROOM_MESSAGES[room_id][task_id]
-            del TASKS_CACHED[task_id]
+            if task_id in TASKS_CACHED:
+                del TASKS_CACHED[task_id]
 
             taskqueue.modify(running_task=None)
             endpoint.modify(last_run_date=datetime.datetime.utcnow())
@@ -455,7 +465,7 @@ def normalize_url(url):
         url = url[:-1]
     return url
 
-@MSG_APP.websocket('/')
+@RPC_APP.websocket('/msg')
 async def rpc_message_relay(request, ws):
     global TASKS_CACHED
     while True:
@@ -479,7 +489,7 @@ async def rpc_message_relay(request, ws):
         room_id = get_room_id(str(task.organization.id), str(task.team.id) if task.team else '')
         RPC_SOCKET.emit('test log', {'task_id': task_id, 'message': data}, room=room_id)
 
-@RPC_APP.websocket('/')
+@RPC_APP.websocket('/rpc')
 async def rpc_proxy(request, ws):
     # need to protect from DDos attacking
     global RPC_PROXIES
@@ -593,16 +603,9 @@ def start_heartbeat_thread(app):
 def bootstrap_rpc_proxy(app):
     RPC_APP.run(host='0.0.0.0', port=5555, debug=True, protocol=WebSocketProtocol)
 
-def bootstrap_rpc_msg(app):
-    MSG_APP.run(host='0.0.0.0', port=5556, debug=True, protocol=WebSocketProtocol)
-
 def start_rpc_proxy(app):
     app.logger.info('Start RPC proxy thread')
     thread = threading.Thread(target=bootstrap_rpc_proxy, name='rpc_proxy', args=(app,))
-    thread.daemon = True
-    thread.start()
-
-    thread = threading.Thread(target=bootstrap_rpc_msg, name='rpc_msg', args=(app,))
     thread.daemon = True
     thread.start()
 
