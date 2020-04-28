@@ -12,14 +12,13 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.8"
 requests = "2.20.1"
-robotremoteserver = "1.1"
 bson = "0.5.8"
 watchdog = "0.10.2"
 websocket-rpc = "^0.0.5"
 toml = "^0.10.0"
 
 [tool.poetry.scripts]
-daemon = "test_endpoint.daemon:main"
+daemon = "test_endpoint.main:run"
 
 [tool.robotest.settings]
 server_host = "127.0.0.1"

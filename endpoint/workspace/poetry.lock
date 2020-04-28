@@ -16,6 +16,14 @@ version = "3.0.4"
 
 [[package]]
 category = "main"
+description = "Easy to use python subprocess interface."
+name = "easyprocess"
+optional = false
+python-versions = "*"
+version = "0.2.10"
+
+[[package]]
+category = "main"
 description = "Internationalized Domain Names in Applications (IDNA)"
 name = "idna"
 optional = false
@@ -59,6 +67,17 @@ version = "3.4"
 
 [[package]]
 category = "main"
+description = "python wrapper for Xvfb, Xephyr and Xvnc"
+name = "pyvirtualdisplay"
+optional = false
+python-versions = "*"
+version = "0.2.5"
+
+[package.dependencies]
+EasyProcess = "*"
+
+[[package]]
+category = "main"
 description = "Python HTTP for Humans."
 name = "requests"
 optional = false
@@ -78,14 +97,39 @@ socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7)", "win-inet-pton"]
 [[package]]
 category = "main"
 description = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
-name = "ruamel-yaml"
+name = "ruamel.yaml"
 optional = false
 python-versions = "*"
-version = "0.15.89"
+version = "0.16.10"
+
+[package.dependencies]
+[package.dependencies."ruamel.yaml.clib"]
+python = "<3.9"
+version = ">=0.1.2"
 
 [package.extras]
 docs = ["ryd"]
 jinja2 = ["ruamel.yaml.jinja2 (>=0.2)"]
+
+[[package]]
+category = "main"
+description = "C version of reader, parser and emitter for ruamel.yaml derived from libyaml"
+marker = "platform_python_implementation == \"CPython\" and python_version < \"3.9\""
+name = "ruamel.yaml.clib"
+optional = false
+python-versions = "*"
+version = "0.2.0"
+
+[[package]]
+category = "main"
+description = "Python bindings for Selenium"
+name = "selenium"
+optional = false
+python-versions = "*"
+version = "3.141.0"
+
+[package.dependencies]
+urllib3 = "*"
 
 [[package]]
 category = "main"
@@ -100,7 +144,7 @@ secure = ["pyOpenSSL (>=0.14)", "cryptography (>=1.3.4)", "idna (>=2.0.0)", "cer
 socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7,<2.0)"]
 
 [metadata]
-content-hash = "fc2ba9657d2e1c03afb20b68ed9c843d6a641489132641f9ba66e7bf71df323b"
+content-hash = "b90dcd24e7a0adea5d7a429847b2d47b0df6f00e89231f4f82d70a59b52a4534"
 python-versions = "^3.6"
 
 [metadata.files]
@@ -111,6 +155,10 @@ certifi = [
 chardet = [
     {file = "chardet-3.0.4-py2.py3-none-any.whl", hash = "sha256:fc323ffcaeaed0e0a02bf4d117757b98aed530d9ed4531e3e15460124c106691"},
     {file = "chardet-3.0.4.tar.gz", hash = "sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae"},
+]
+easyprocess = [
+    {file = "EasyProcess-0.2.10-py2.py3-none-any.whl", hash = "sha256:0f62037295e5bdbaf73b28415e712965b738c67999fd2c53aaa984db5dea40e0"},
+    {file = "EasyProcess-0.2.10.tar.gz", hash = "sha256:636b5e30222cde1e881fafc0112b35d516bce41ddee83ecbac656dec9befea1b"},
 ]
 idna = [
     {file = "idna-2.7-py2.py3-none-any.whl", hash = "sha256:156a6814fb5ac1fc6850fb002e0852d56c0c8d2531923a51032d1b70760e186e"},
@@ -149,33 +197,42 @@ pyserial = [
     {file = "pyserial-3.4-py2.py3-none-any.whl", hash = "sha256:e0770fadba80c31013896c7e6ef703f72e7834965954a78e71a3049488d4d7d8"},
     {file = "pyserial-3.4.tar.gz", hash = "sha256:6e2d401fdee0eab996cf734e67773a0143b932772ca8b42451440cfed942c627"},
 ]
+pyvirtualdisplay = [
+    {file = "PyVirtualDisplay-0.2.5-py2.py3-none-any.whl", hash = "sha256:cab4ce130be34a9f62b402954451e829035616d39d7a1ba485dabbf77afb9fb4"},
+    {file = "PyVirtualDisplay-0.2.5.tar.gz", hash = "sha256:5b267c8ffc98fcbd084ba852ab4caef3f22e9362bc5d117e1697e767553eaf41"},
+]
 requests = [
     {file = "requests-2.20.1-py2.py3-none-any.whl", hash = "sha256:65b3a120e4329e33c9889db89c80976c5272f56ea92d3e74da8a463992e3ff54"},
     {file = "requests-2.20.1.tar.gz", hash = "sha256:ea881206e59f41dbd0bd445437d792e43906703fff75ca8ff43ccdb11f33f263"},
 ]
-ruamel-yaml = [
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:c3c1af293b9e6a84b5da3954f4ae81b30d07a626717cfb6f099ffe0901ff1eac"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:f004249eb8b873c4f48361dc814450e47dab53b5312334cff0a9d381a4589f03"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-win32.whl", hash = "sha256:0ae64b150ec39667ce2815227271207d27a6218bc501b73e70a7403f2cf987ee"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-win_amd64.whl", hash = "sha256:76aadb21b3186599057c8874104c8467270307e12faed124dc5ee1cfcd4e240f"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:1bafe5773c559ef8e06d53f35bfcaad0510ef069db8b3fb50bf9816b3c531633"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-macosx_10_6_intel.whl", hash = "sha256:325b5b1df1b29ecaaa3dab6745ee0a35d51e58aa19b90cab8ba11c498d438cb7"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-manylinux1_x86_64.whl", hash = "sha256:fc6a2b2f4453944ab8bbe4d6d2eba0c864c098baa8487b08e4340a93a1f811c7"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-win32.whl", hash = "sha256:551142c578813ee25e4952dda820701f0201d0292e8807e8fb5490d19bab8181"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-win_amd64.whl", hash = "sha256:b76a4cf08e9392765cf6a25eae63a12fb27c6cc4a8ee5416a49cd54627151f46"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-macosx_10_6_intel.whl", hash = "sha256:c64ae6da2da174fce281a088d7634c6e545db5fb989a3cecec2aa9cef2634a92"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:fffc4dd4097451c0ae1c6cb89bbff1a8248fda6366adb08d1c7bbc4ea2e6a637"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-win32.whl", hash = "sha256:6d8bf658b64ebeccb67bccccd01833cdbe5369c1436365d41052d23e5cbf716f"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-win_amd64.whl", hash = "sha256:bd9976f13d14f6cb6da1748c7678198b6f9346cbbe0ad18eb74c024a7a2c0d08"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:ca742877ea6948cb80c70aaf5d76011694eb072d98264a704b04ffc2d4c0d440"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:0e6aa488ec65fcaf7cca609d83a2b0e13d429a6080dd6ef3fd89dcbf67f13c1d"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-win32.whl", hash = "sha256:aa4bfa597c58f2efcae98add337ada85ded45288936a15ddc2d29ff3f5ce3ddf"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-win_amd64.whl", hash = "sha256:cfefc391d5a3a7e8b1c6195f364d2f11f898f07eef277ef8e93a4e3ccafbd7c2"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:181aeecf6d037e34c325c191b0a14188921964dd02c34a4d01bf7881060c22d0"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:1085219e373381c8a4ac911be2f167d2c67485af82199db0abee11cfe06283d5"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-win32.whl", hash = "sha256:20bc4549b86f7e5a558c06e51c97821d8b7658d4b01d3e21713a53db6f45779a"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-win_amd64.whl", hash = "sha256:3e89d657a11fee61120d304efcab92409ea4a21c9629626cbb7aabbac7b713d9"},
-    {file = "ruamel.yaml-0.15.89.tar.gz", hash = "sha256:86d034aa9e2ab3eacc5f75f5cd6a469a2af533b6d9e60ea92edbba540d21b9b7"},
+"ruamel.yaml" = [
+    {file = "ruamel.yaml-0.16.10-py2.py3-none-any.whl", hash = "sha256:0962fd7999e064c4865f96fb1e23079075f4a2a14849bcdc5cdba53a24f9759b"},
+    {file = "ruamel.yaml-0.16.10.tar.gz", hash = "sha256:099c644a778bf72ffa00524f78dd0b6476bca94a1da344130f4bf3381ce5b954"},
+]
+"ruamel.yaml.clib" = [
+    {file = "ruamel.yaml.clib-0.2.0-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:9c6d040d0396c28d3eaaa6cb20152cb3b2f15adf35a0304f4f40a3cf9f1d2448"},
+    {file = "ruamel.yaml.clib-0.2.0-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:4d55386129291b96483edcb93b381470f7cd69f97585829b048a3d758d31210a"},
+    {file = "ruamel.yaml.clib-0.2.0-cp27-cp27m-win32.whl", hash = "sha256:8073c8b92b06b572e4057b583c3d01674ceaf32167801fe545a087d7a1e8bf52"},
+    {file = "ruamel.yaml.clib-0.2.0-cp27-cp27m-win_amd64.whl", hash = "sha256:615b0396a7fad02d1f9a0dcf9f01202bf9caefee6265198f252c865f4227fcc6"},
+    {file = "ruamel.yaml.clib-0.2.0-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:a0ff786d2a7dbe55f9544b3f6ebbcc495d7e730df92a08434604f6f470b899c5"},
+    {file = "ruamel.yaml.clib-0.2.0-cp35-cp35m-macosx_10_6_intel.whl", hash = "sha256:ea4362548ee0cbc266949d8a441238d9ad3600ca9910c3fe4e82ee3a50706973"},
+    {file = "ruamel.yaml.clib-0.2.0-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:77556a7aa190be9a2bd83b7ee075d3df5f3c5016d395613671487e79b082d784"},
+    {file = "ruamel.yaml.clib-0.2.0-cp35-cp35m-win32.whl", hash = "sha256:392b7c371312abf27fb549ec2d5e0092f7ef6e6c9f767bfb13e83cb903aca0fd"},
+    {file = "ruamel.yaml.clib-0.2.0-cp35-cp35m-win_amd64.whl", hash = "sha256:ed5b3698a2bb241b7f5cbbe277eaa7fe48b07a58784fba4f75224fd066d253ad"},
+    {file = "ruamel.yaml.clib-0.2.0-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:7aee724e1ff424757b5bd8f6c5bbdb033a570b2b4683b17ace4dbe61a99a657b"},
+    {file = "ruamel.yaml.clib-0.2.0-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:d0d3ac228c9bbab08134b4004d748cf9f8743504875b3603b3afbb97e3472947"},
+    {file = "ruamel.yaml.clib-0.2.0-cp36-cp36m-win32.whl", hash = "sha256:f9dcc1ae73f36e8059589b601e8e4776b9976effd76c21ad6a855a74318efd6e"},
+    {file = "ruamel.yaml.clib-0.2.0-cp36-cp36m-win_amd64.whl", hash = "sha256:1e77424825caba5553bbade750cec2277ef130647d685c2b38f68bc03453bac6"},
+    {file = "ruamel.yaml.clib-0.2.0-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:d10e9dd744cf85c219bf747c75194b624cc7a94f0c80ead624b06bfa9f61d3bc"},
+    {file = "ruamel.yaml.clib-0.2.0-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:550168c02d8de52ee58c3d8a8193d5a8a9491a5e7b2462d27ac5bf63717574c9"},
+    {file = "ruamel.yaml.clib-0.2.0-cp37-cp37m-win32.whl", hash = "sha256:57933a6986a3036257ad7bf283529e7c19c2810ff24c86f4a0cfeb49d2099919"},
+    {file = "ruamel.yaml.clib-0.2.0-cp37-cp37m-win_amd64.whl", hash = "sha256:b1b7fcee6aedcdc7e62c3a73f238b3d080c7ba6650cd808bce8d7761ec484070"},
+    {file = "ruamel.yaml.clib-0.2.0-cp38-cp38-manylinux1_x86_64.whl", hash = "sha256:be018933c2f4ee7de55e7bd7d0d801b3dfb09d21dad0cce8a97995fd3e44be30"},
+    {file = "ruamel.yaml.clib-0.2.0.tar.gz", hash = "sha256:b66832ea8077d9b3f6e311c4a53d06273db5dc2db6e8a908550f3c14d67e718c"},
+]
+selenium = [
+    {file = "selenium-3.141.0-py2.py3-none-any.whl", hash = "sha256:2d7131d7bc5a5b99a2d9b04aaf2612c411b03b8ca1b1ee8d3de5845a9be2cb3c"},
+    {file = "selenium-3.141.0.tar.gz", hash = "sha256:deaf32b60ad91a4611b98d8002757f29e6f2c2d5fcaf202e1c9ad06d6772300d"},
 ]
 urllib3 = [
     {file = "urllib3-1.24.3-py2.py3-none-any.whl", hash = "sha256:a637e5fae88995b256e3409dc4d52c2e2e0ba32c42a6365fee8bbd2238de3cfb"},

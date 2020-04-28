@@ -365,6 +365,8 @@ class Package(Document):
     team = ReferenceField(Team)
     uploader = ReferenceField(User)
     py_packages = ListField(StringField())  # python packages defined by the test package
+    upload_date = DateTimeField()
+    modified = BooleanField(default=False)
 
     version_re = re.compile(r"^(?P<name>.+?)(-(?P<ver>\d.+?))-.*$").match
 

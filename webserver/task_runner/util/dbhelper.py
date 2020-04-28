@@ -199,6 +199,8 @@ def db_update_test(scripts_dir, script, user, organization, team, package=None, 
         test = Test(path=dirname, author=user, organization=organization, team=team,
                     test_suite=test_suite, package=package, package_version=version)
         test.create_date = datetime.datetime.utcnow()
+    else:
+        test.modify(package=package, package_version=version)
 
     ret = update_test_from_md(os.path.join(scripts_dir, script), test)
     if ret:

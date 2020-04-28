@@ -28,27 +28,11 @@ version = "3.0.4"
 
 [[package]]
 category = "main"
-description = "Docutils -- Python Documentation Utilities"
-name = "docutils"
-optional = false
-python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-version = "0.16"
-
-[[package]]
-category = "main"
 description = "Internationalized Domain Names in Applications (IDNA)"
 name = "idna"
 optional = false
 python-versions = "*"
 version = "2.7"
-
-[[package]]
-category = "main"
-description = "Platform-independent file locking module"
-name = "lockfile"
-optional = false
-python-versions = "*"
-version = "0.12.2"
 
 [[package]]
 category = "main"
@@ -60,59 +44,11 @@ version = "1.0.0"
 
 [[package]]
 category = "main"
-description = "Portable network interface information."
-name = "netifaces"
-optional = false
-python-versions = "*"
-version = "0.10.7"
-
-[[package]]
-category = "main"
 description = "File system general utilities"
 name = "pathtools"
 optional = false
 python-versions = "*"
 version = "0.1.2"
-
-[[package]]
-category = "main"
-description = "Pexpect allows easy control of interactive console applications."
-name = "pexpect"
-optional = false
-python-versions = "*"
-version = "4.7.0"
-
-[package.dependencies]
-ptyprocess = ">=0.5"
-
-[[package]]
-category = "main"
-description = "Run a subprocess in a pseudo terminal"
-name = "ptyprocess"
-optional = false
-python-versions = "*"
-version = "0.6.0"
-
-[[package]]
-category = "main"
-description = "Python Serial Port Extension"
-name = "pyserial"
-optional = false
-python-versions = "*"
-version = "3.4"
-
-[[package]]
-category = "main"
-description = "Library to implement a well-behaved Unix daemon process."
-name = "python-daemon"
-optional = false
-python-versions = "*"
-version = "2.2.3"
-
-[package.dependencies]
-docutils = "*"
-lockfile = ">=0.10"
-setuptools = "*"
 
 [[package]]
 category = "main"
@@ -142,26 +78,6 @@ urllib3 = ">=1.21.1,<1.25"
 [package.extras]
 security = ["pyOpenSSL (>=0.14)", "cryptography (>=1.3.4)", "idna (>=2.0.0)"]
 socks = ["PySocks (>=1.5.6,<1.5.7 || >1.5.7)", "win-inet-pton"]
-
-[[package]]
-category = "main"
-description = "Robot Framework remote server implemented with Python"
-name = "robotremoteserver"
-optional = false
-python-versions = "*"
-version = "1.1"
-
-[[package]]
-category = "main"
-description = "ruamel.yaml is a YAML parser/emitter that supports roundtrip preservation of comments, seq/map flow style, and map key order"
-name = "ruamel-yaml"
-optional = false
-python-versions = "*"
-version = "0.15.89"
-
-[package.extras]
-docs = ["ryd"]
-jinja2 = ["ruamel.yaml.jinja2 (>=0.2)"]
 
 [[package]]
 category = "main"
@@ -226,7 +142,7 @@ python-versions = ">=3.6.1"
 version = "8.1"
 
 [metadata]
-content-hash = "fa93d85478af10decebf60ee83844f74ee8dfb668dccc883a51200c1661f793b"
+content-hash = "f144c3b2fbafd5dc5869ce0f6383513336178ed1eca1ec1cea014b4dc3381006"
 python-versions = "^3.8"
 
 [metadata.files]
@@ -241,17 +157,9 @@ chardet = [
     {file = "chardet-3.0.4-py2.py3-none-any.whl", hash = "sha256:fc323ffcaeaed0e0a02bf4d117757b98aed530d9ed4531e3e15460124c106691"},
     {file = "chardet-3.0.4.tar.gz", hash = "sha256:84ab92ed1c4d4f16916e05906b6b75a6c0fb5db821cc65e70cbd64a3e2a5eaae"},
 ]
-docutils = [
-    {file = "docutils-0.16-py2.py3-none-any.whl", hash = "sha256:0c5b78adfbf7762415433f5515cd5c9e762339e23369dbe8000d84a4bf4ab3af"},
-    {file = "docutils-0.16.tar.gz", hash = "sha256:c2de3a60e9e7d07be26b7f2b00ca0309c207e06c100f9cc2a94931fc75a478fc"},
-]
 idna = [
     {file = "idna-2.7-py2.py3-none-any.whl", hash = "sha256:156a6814fb5ac1fc6850fb002e0852d56c0c8d2531923a51032d1b70760e186e"},
     {file = "idna-2.7.tar.gz", hash = "sha256:684a38a6f903c1d71d6d5fac066b58d7768af4de2b832e426ec79c30daa94a16"},
-]
-lockfile = [
-    {file = "lockfile-0.12.2-py2.py3-none-any.whl", hash = "sha256:6c3cb24f344923d30b2785d5ad75182c8ea7ac1b6171b08657258ec7429d50fa"},
-    {file = "lockfile-0.12.2.tar.gz", hash = "sha256:6aed02de03cba24efabcd600b30540140634fc06cfa603822d508d5361e9f799"},
 ]
 msgpack = [
     {file = "msgpack-1.0.0-cp35-cp35m-manylinux1_i686.whl", hash = "sha256:cec8bf10981ed70998d98431cd814db0ecf3384e6b113366e7f36af71a0fca08"},
@@ -273,45 +181,8 @@ msgpack = [
     {file = "msgpack-1.0.0-cp38-cp38-win_amd64.whl", hash = "sha256:39c54fdebf5fa4dda733369012c59e7d085ebdfe35b6cf648f09d16708f1be5d"},
     {file = "msgpack-1.0.0.tar.gz", hash = "sha256:9534d5cc480d4aff720233411a1f765be90885750b07df772380b34c10ecb5c0"},
 ]
-netifaces = [
-    {file = "netifaces-0.10.7-cp27-cp27m-macosx_10_13_x86_64.whl", hash = "sha256:aea569ce1a5a75b010758097199f84d9a3a109a696473c635bcf82f8a43cc551"},
-    {file = "netifaces-0.10.7-cp27-cp27m-manylinux1_i686.whl", hash = "sha256:4817871b226082600b64578549b9932bb07c1a42e9311ddd7c9dad08ff1fb22f"},
-    {file = "netifaces-0.10.7-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:2acb23ca092cc53b2b1f374132bbef5dd843767f6b10d31024f958474a1dfe96"},
-    {file = "netifaces-0.10.7-cp27-cp27m-win32.whl", hash = "sha256:a77263e046636a761a2c3eeb0a56b5f8fa64f865efec91a9be008a46412b4ddd"},
-    {file = "netifaces-0.10.7-cp27-cp27mu-manylinux1_i686.whl", hash = "sha256:e6d52aee254f9cf6192b54c156c67d54dcf451bec6781580844af892e4bf36bb"},
-    {file = "netifaces-0.10.7-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:9cf8cb2de7524c34808e6111dfb9f89e3b7c568e6953b3e02b8397447a6d8303"},
-    {file = "netifaces-0.10.7-cp33-cp33m-manylinux1_i686.whl", hash = "sha256:7ea8eb1e824f74c161396f0d6d76fa3943462ee9a4629c387c10399d2aee058c"},
-    {file = "netifaces-0.10.7-cp34-cp34m-manylinux1_i686.whl", hash = "sha256:38969c101f1e61c2a53af6a7b635f63e81085ae87413f1f5551a4d7057f5f773"},
-    {file = "netifaces-0.10.7-cp34-cp34m-manylinux1_x86_64.whl", hash = "sha256:e76d38d9cff51ecf9fd5b8d0adf63f7b8875e1ac8548ccb52264939e308b771e"},
-    {file = "netifaces-0.10.7-cp34-cp34m-win32.whl", hash = "sha256:674498dad41dacd86ec82e9e1793f9d8716755085c3776f051a266b1634a0b60"},
-    {file = "netifaces-0.10.7-cp35-cp35m-manylinux1_i686.whl", hash = "sha256:e1037cfad0e99a23fb4829f40302f3696395358950ba9f0315363a0e1eb04af6"},
-    {file = "netifaces-0.10.7-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:1edeea7d739b1d716d15214039386e999f2e374aaeac0703092132b4e55ba461"},
-    {file = "netifaces-0.10.7-cp35-cp35m-win32.whl", hash = "sha256:19df6feff2af7a9179e42afdd01d79616d85b7ff4401b55ffce2df29d512a017"},
-    {file = "netifaces-0.10.7-cp36-cp36m-macosx_10_13_x86_64.whl", hash = "sha256:0083ff8d89c559d0da0811c4930cf36e4945da0f03749e0f108678098d7d1607"},
-    {file = "netifaces-0.10.7-cp36-cp36m-manylinux1_i686.whl", hash = "sha256:1a4082a52f521ceeaf3d0ff25c61a06d46444f3578f487935652ecc93becf538"},
-    {file = "netifaces-0.10.7-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:4bb6b02b7c485a595a9d75346df3a77fcaa12d2352437c49c2d73ed968572d72"},
-    {file = "netifaces-0.10.7-cp36-cp36m-win32.whl", hash = "sha256:8a69dc2743dcbb9b87fa3453820852f0feabc17b03d3841619e8e63f5d3902d5"},
-    {file = "netifaces-0.10.7-cp36-cp36m-win_amd64.whl", hash = "sha256:179f2463469fe69c829c96c7b332c7fd3f01652311e36ae11e409e5b34eb9dad"},
-    {file = "netifaces-0.10.7.tar.gz", hash = "sha256:bd590fcb75421537d4149825e1e63cca225fd47dad861710c46bd1cb329d8cbd"},
-]
 pathtools = [
     {file = "pathtools-0.1.2.tar.gz", hash = "sha256:7c35c5421a39bb82e58018febd90e3b6e5db34c5443aaaf742b3f33d4655f1c0"},
-]
-pexpect = [
-    {file = "pexpect-4.7.0-py2.py3-none-any.whl", hash = "sha256:2094eefdfcf37a1fdbfb9aa090862c1a4878e5c7e0e7e7088bdb511c558e5cd1"},
-    {file = "pexpect-4.7.0.tar.gz", hash = "sha256:9e2c1fd0e6ee3a49b28f95d4b33bc389c89b20af6a1255906e90ff1262ce62eb"},
-]
-ptyprocess = [
-    {file = "ptyprocess-0.6.0-py2.py3-none-any.whl", hash = "sha256:d7cc528d76e76342423ca640335bd3633420dc1366f258cb31d05e865ef5ca1f"},
-    {file = "ptyprocess-0.6.0.tar.gz", hash = "sha256:923f299cc5ad920c68f2bc0bc98b75b9f838b93b599941a6b63ddbc2476394c0"},
-]
-pyserial = [
-    {file = "pyserial-3.4-py2.py3-none-any.whl", hash = "sha256:e0770fadba80c31013896c7e6ef703f72e7834965954a78e71a3049488d4d7d8"},
-    {file = "pyserial-3.4.tar.gz", hash = "sha256:6e2d401fdee0eab996cf734e67773a0143b932772ca8b42451440cfed942c627"},
-]
-python-daemon = [
-    {file = "python-daemon-2.2.3.tar.gz", hash = "sha256:affeca9e5adfce2666a63890af9d6aff79f670f7511899edaddca7f96593cc25"},
-    {file = "python_daemon-2.2.3-py2.py3-none-any.whl", hash = "sha256:1d9a541f74822ac87045163ebd5473f9a7b22ab4031ed28293aba81fdaf6c156"},
 ]
 python-dateutil = [
     {file = "python-dateutil-2.8.1.tar.gz", hash = "sha256:73ebfe9dbf22e832286dafa60473e4cd239f8592f699aa5adaf10050e6e1823c"},
@@ -320,34 +191,6 @@ python-dateutil = [
 requests = [
     {file = "requests-2.20.1-py2.py3-none-any.whl", hash = "sha256:65b3a120e4329e33c9889db89c80976c5272f56ea92d3e74da8a463992e3ff54"},
     {file = "requests-2.20.1.tar.gz", hash = "sha256:ea881206e59f41dbd0bd445437d792e43906703fff75ca8ff43ccdb11f33f263"},
-]
-robotremoteserver = [
-    {file = "robotremoteserver-1.1-py2.py3-none-any.whl", hash = "sha256:1d78ebc63738838a638042407c1da472811853892d64498fd89e061f7f15addd"},
-    {file = "robotremoteserver-1.1.tar.gz", hash = "sha256:b95e75d5de49f4ba5eefb985469ee6dd3604042faed7198d2a77be35e56aea9e"},
-]
-ruamel-yaml = [
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:c3c1af293b9e6a84b5da3954f4ae81b30d07a626717cfb6f099ffe0901ff1eac"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-manylinux1_x86_64.whl", hash = "sha256:f004249eb8b873c4f48361dc814450e47dab53b5312334cff0a9d381a4589f03"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-win32.whl", hash = "sha256:0ae64b150ec39667ce2815227271207d27a6218bc501b73e70a7403f2cf987ee"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27m-win_amd64.whl", hash = "sha256:76aadb21b3186599057c8874104c8467270307e12faed124dc5ee1cfcd4e240f"},
-    {file = "ruamel.yaml-0.15.89-cp27-cp27mu-manylinux1_x86_64.whl", hash = "sha256:1bafe5773c559ef8e06d53f35bfcaad0510ef069db8b3fb50bf9816b3c531633"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-macosx_10_6_intel.whl", hash = "sha256:325b5b1df1b29ecaaa3dab6745ee0a35d51e58aa19b90cab8ba11c498d438cb7"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-manylinux1_x86_64.whl", hash = "sha256:fc6a2b2f4453944ab8bbe4d6d2eba0c864c098baa8487b08e4340a93a1f811c7"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-win32.whl", hash = "sha256:551142c578813ee25e4952dda820701f0201d0292e8807e8fb5490d19bab8181"},
-    {file = "ruamel.yaml-0.15.89-cp34-cp34m-win_amd64.whl", hash = "sha256:b76a4cf08e9392765cf6a25eae63a12fb27c6cc4a8ee5416a49cd54627151f46"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-macosx_10_6_intel.whl", hash = "sha256:c64ae6da2da174fce281a088d7634c6e545db5fb989a3cecec2aa9cef2634a92"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-manylinux1_x86_64.whl", hash = "sha256:fffc4dd4097451c0ae1c6cb89bbff1a8248fda6366adb08d1c7bbc4ea2e6a637"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-win32.whl", hash = "sha256:6d8bf658b64ebeccb67bccccd01833cdbe5369c1436365d41052d23e5cbf716f"},
-    {file = "ruamel.yaml-0.15.89-cp35-cp35m-win_amd64.whl", hash = "sha256:bd9976f13d14f6cb6da1748c7678198b6f9346cbbe0ad18eb74c024a7a2c0d08"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-macosx_10_9_x86_64.whl", hash = "sha256:ca742877ea6948cb80c70aaf5d76011694eb072d98264a704b04ffc2d4c0d440"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-manylinux1_x86_64.whl", hash = "sha256:0e6aa488ec65fcaf7cca609d83a2b0e13d429a6080dd6ef3fd89dcbf67f13c1d"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-win32.whl", hash = "sha256:aa4bfa597c58f2efcae98add337ada85ded45288936a15ddc2d29ff3f5ce3ddf"},
-    {file = "ruamel.yaml-0.15.89-cp36-cp36m-win_amd64.whl", hash = "sha256:cfefc391d5a3a7e8b1c6195f364d2f11f898f07eef277ef8e93a4e3ccafbd7c2"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:181aeecf6d037e34c325c191b0a14188921964dd02c34a4d01bf7881060c22d0"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-manylinux1_x86_64.whl", hash = "sha256:1085219e373381c8a4ac911be2f167d2c67485af82199db0abee11cfe06283d5"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-win32.whl", hash = "sha256:20bc4549b86f7e5a558c06e51c97821d8b7658d4b01d3e21713a53db6f45779a"},
-    {file = "ruamel.yaml-0.15.89-cp37-cp37m-win_amd64.whl", hash = "sha256:3e89d657a11fee61120d304efcab92409ea4a21c9629626cbb7aabbac7b713d9"},
-    {file = "ruamel.yaml-0.15.89.tar.gz", hash = "sha256:86d034aa9e2ab3eacc5f75f5cd6a469a2af533b6d9e60ea92edbba540d21b9b7"},
 ]
 six = [
     {file = "six-1.14.0-py2.py3-none-any.whl", hash = "sha256:8f3cd2e254d8f793e7f3d6d9df77b92252b52637291d0f0da013c76ea2724b6c"},

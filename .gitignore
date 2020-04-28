@@ -114,7 +114,9 @@ log.html
 .mypy_cache/
 /migrations
 .gitreview
-/webserver/static/
+/webserver/static/pypi
+/webserver/static/results
+/webserver/static/users
 /webserver/upload/
 /webserver/logs/
 /tools/easy-rsa/Windows/keys

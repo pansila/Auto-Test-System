@@ -318,6 +318,20 @@ class StoreDto:
     upload_package = api.inherit('upload_package', organization_team, {
         'example_file': fields.String(description='Content-Type: application/text')
     })
+    package_summary = api.model('package_summary', {
+        'name': fields.String(),
+        'summary': fields.String(),
+        'description': fields.String(),
+        'stars': fields.Integer(),
+        'download_times': fields.Integer(),
+        'package_type': fields.String(),
+        'versions': fields.List(fields.String()),
+        'upload_date': fields.DateTime(dt_format='rfc822')
+    })
+    packages = api.model('packages', {
+        'items': fields.List(fields.Nested(package_summary)),
+        'total': fields.Integer(),
+    })
 
 class PypiDto:
     api = Namespace('pypi', description='local python package index repository')

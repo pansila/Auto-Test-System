@@ -24,6 +24,6 @@ setuptools.setup(
         '': ['scripts/*.md', 'scripts/*.robot'],   # robotframework test scripts should under scripts
     },
     install_requires=[
-        'robotest_utilities>=0.1',
+        'robotest_utilities>=0.1.1',
     ],
 )

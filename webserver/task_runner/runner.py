@@ -38,14 +38,23 @@ from task_runner.util.notification import (notification_chain_call,
                                            notification_chain_init)
 from task_runner.util.xmlrpcserver import XMLRPCServer
 from wsrpc import WebsocketRPC
+from asyncio.exceptions import CancelledError
+from sanic.websocket import ConnectionClosed
 
 ROBOT_PROCESSES = {}  # {task id: process instance}
 TASK_THREADS = {}     # {taskqueue id: idle counter (int)}}
 TASK_LOCK = threading.Lock()
 ROOM_MESSAGES = {}  # {"organziation:team": old_message, new_message}
 RPC_PROXIES = {}    # {"endpoint_id": (websocket, rpc)}
+RPC_SOCKET = None
+TASKS_CACHED = {}
 
-WS_APP = Sanic(__name__)
+RPC_APP = Sanic('RPC Proxy app')
+MSG_APP = Sanic('RPC Message app')
+
+def install_sio(sio):
+    global RPC_SOCKET
+    RPC_SOCKET = sio
 
 def event_handler_cancel_task(app, event):
     global ROBOT_PROCESSES, TASK_THREADS
@@ -229,13 +238,12 @@ def convert_json_to_robot_variable(args, variables, variable_file):
     args.extend(['--variablefile', str(variable_file)])
 
 def process_task_per_endpoint(app, endpoint, organization=None, team=None):
-    global ROBOT_PROCESSES
+    global ROBOT_PROCESSES, TASKS_CACHED
 
     if not organization and not team:
         app.logger.error('Argument organization and team must neither be None')
         return
     room_id = get_room_id(str(organization.id), str(team.id) if team else '')
-    socketio = app.config['socketio']
 
     taskqueues = TaskQueue.objects(organization=organization, team=team, endpoint=endpoint)
     if taskqueues.count() == 0:
@@ -278,8 +286,9 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             task = taskqueue.pop()
             if not task:
                 continue
+            task_id = str(task.id)
             if isinstance(task, DBRef):
-                app.logger.warning('task {} has been deleted, ignore it'.format(task.id))
+                app.logger.warning('task {} has been deleted, ignore it'.format(task_id))
                 taskqueue.modify(running_task=None)
                 break
 
@@ -294,7 +303,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 taskqueue.modify(running_task=None)
                 break
 
-            app.logger.info('Start to run task {} in the thread {}'.format(task.id, threading.current_thread().name))
+            app.logger.info('Start to run task {} in the thread {}'.format(task_id, threading.current_thread().name))
 
             result_dir = get_test_result_path(task)
             scripts_dir = get_user_scripts_root(task)
@@ -312,7 +321,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
 
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
-                        '-v', f'task_id:{task.id}', '-v', f'endpoint_uid:{endpoint_uid}'])
+                        '-v', f'task_id:{task_id}', '-v', f'endpoint_uid:{endpoint_uid}'])
             args.append(os.path.join(scripts_dir, task.test.path, task.test.test_suite + '.md'))
             app.logger.info('Arguments: ' + str(args))
 
@@ -324,14 +333,14 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             task.run_date = datetime.datetime.utcnow()
             task.endpoint_run = endpoint
             task.save()
-            socketio.emit('task started', {'task_id': str(task.id)}, room=room_id)
+            RPC_SOCKET.emit('task started', {'task_id': task_id}, room=room_id)
 
             log_msg = StringIO()
             if room_id not in ROOM_MESSAGES:
-                ROOM_MESSAGES[room_id] = {str(task.id): log_msg}
+                ROOM_MESSAGES[room_id] = {task_id: log_msg}
             else:
-                if str(task.id) not in ROOM_MESSAGES[room_id]:
-                    ROOM_MESSAGES[room_id][str(task.id)] = log_msg
+                if task_id not in ROOM_MESSAGES[room_id]:
+                    ROOM_MESSAGES[room_id][task_id] = log_msg
             ss = b''
             while True:
                 c = p.stdout.read(1)
@@ -344,7 +353,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 else:
                     c = '\r\n' if c == '\n' else c
                     log_msg.write(c)
-                    socketio.emit('console log', {'task_id': str(task.id), 'message': c}, room=room_id)
+                    RPC_SOCKET.emit('test report', {'task_id': task_id, 'message': c}, room=room_id)
             del ROBOT_PROCESSES[task.id]
 
             if ss != b'':
@@ -353,7 +362,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 log_msg_all.write(ss)
                 log_msg_all.write(log_msg.getvalue())
                 app.logger.info('\n' + log_msg_all.getvalue())
-                socketio.emit('console log', {'task_id': str(task.id), 'message': ss}, room=room_id)
+                RPC_SOCKET.emit('test report', {'task_id': task_id, 'message': ss}, room=room_id)
             else:
                 app.logger.info('\n' + log_msg.getvalue())
             #app.logger.info('\n' + log_msg.getvalue().replace('\r\n', '\n'))
@@ -366,9 +375,10 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 if task.status != 'cancelled':
                     task.status = 'failed'
             task.save()
-            socketio.emit('task finished', {'task_id': str(task.id), 'status': task.status}, room=room_id)
-            ROOM_MESSAGES[room_id][str(task.id)].close()
-            del ROOM_MESSAGES[room_id][str(task.id)]
+            RPC_SOCKET.emit('task finished', {'task_id': task_id, 'status': task.status}, room=room_id)
+            ROOM_MESSAGES[room_id][task_id].close()
+            del ROOM_MESSAGES[room_id][task_id]
+            del TASKS_CACHED[task_id]
 
             taskqueue.modify(running_task=None)
             endpoint.modify(last_run_date=datetime.datetime.utcnow())
@@ -445,7 +455,31 @@ def normalize_url(url):
         url = url[:-1]
     return url
 
-@WS_APP.websocket('/')
+@MSG_APP.websocket('/')
+async def rpc_message_relay(request, ws):
+    global TASKS_CACHED
+    while True:
+        try:
+            ret = await ws.recv()
+            ret = json.loads(ret)
+        except Exception as e:
+            pass
+        if 'task_id' not in ret:
+            return
+        task_id = ret['task_id']
+        if not task_id:
+            # task daemon's message
+            continue
+        data = ret['data']
+        if task_id not in TASKS_CACHED:
+            task = Task.objects(pk=task_id).first()
+            TASKS_CACHED[task_id] = task
+        else:
+            task = TASKS_CACHED[task_id]
+        room_id = get_room_id(str(task.organization.id), str(task.team.id) if task.team else '')
+        RPC_SOCKET.emit('test log', {'task_id': task_id, 'message': data}, room=room_id)
+
+@RPC_APP.websocket('/')
 async def rpc_proxy(request, ws):
     # need to protect from DDos attacking
     global RPC_PROXIES
@@ -492,9 +526,14 @@ async def rpc_proxy(request, ws):
         del RPC_PROXIES[url]
     RPC_PROXIES[url] = rpc
 
-    await ws.wait_closed()
-
-    await RPC_PROXIES[url].close()
+    try:
+        await ws.wait_closed()
+    except (CancelledError, ConnectionClosed):
+        pass
+    try:
+        await RPC_PROXIES[url].close()
+    except Exception as e:
+        print(e)
     del RPC_PROXIES[url]
 
 def restart_interrupted_tasks(app, organization=None, team=None):
@@ -552,11 +591,18 @@ def start_heartbeat_thread(app):
     thread.start()
 
 def bootstrap_rpc_proxy(app):
-    WS_APP.run(host='0.0.0.0', port=5555, debug=True, protocol=WebSocketProtocol)
+    RPC_APP.run(host='0.0.0.0', port=5555, debug=True, protocol=WebSocketProtocol)
+
+def bootstrap_rpc_msg(app):
+    MSG_APP.run(host='0.0.0.0', port=5556, debug=True, protocol=WebSocketProtocol)
 
 def start_rpc_proxy(app):
     app.logger.info('Start RPC proxy thread')
     thread = threading.Thread(target=bootstrap_rpc_proxy, name='rpc_proxy', args=(app,))
+    thread.daemon = True
+    thread.start()
+
+    thread = threading.Thread(target=bootstrap_rpc_msg, name='rpc_msg', args=(app,))
     thread.daemon = True
     thread.start()
 

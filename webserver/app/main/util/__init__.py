@@ -28,8 +28,8 @@ def get_room_id(*data):
         if 'team' in data[0]:
             team = data[0]['team']
     else:
-        organization, team = data[0], data[1]
-    org_team = organization + ':' + team
+        organization, team = data[:2]
+    org_team = organization + ':' + team if team else ''
     return org_team
 
 def js2python_bool(value):

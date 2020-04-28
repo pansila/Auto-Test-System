@@ -1,3 +1,4 @@
+import datetime
 import os
 import re
 import shutil
@@ -23,6 +24,7 @@ from ..util import js2python_bool
 api = StoreDto.api
 _upload_package = StoreDto.upload_package
 _delete_package = StoreDto.delete_package
+_packages = StoreDto.packages
 
 SCRIPT_FILES_FIND = re.compile(r'^.*?/scripts/.*$').match
 
@@ -30,6 +32,7 @@ SCRIPT_FILES_FIND = re.compile(r'^.*?/scripts/.*$').match
 class PackageManagement(Resource):
     @token_required_if_proprietary
     @api.doc('return the package list')
+    @api.marshal_list_with(_packages)
     def get(self, **kwargs):
         data = request.args
         page = data.get('page', default=1)
@@ -61,7 +64,8 @@ class PackageManagement(Resource):
                 'stars': package.stars,
                 'download_times': package.download_times,
                 'package_type': package.package_type,
-                'versions': package.versions
+                'versions': package.versions,
+                'upload_date': package.upload_date
             })
 
         packages = Package.objects(**query)
@@ -76,7 +80,8 @@ class PackageManagement(Resource):
                 'stars': package.stars,
                 'download_times': package.download_times,
                 'package_type': package.package_type,
-                'versions': package.versions
+                'versions': package.versions,
+                'upload_date': package.upload_date
             })
         return {'items': ret, 'total': packages.count()}
 
@@ -147,6 +152,7 @@ class PackageManagement(Resource):
                 package.py_packages = get_internal_packages(filename)
                 shutil.move(filename, pypi_root / package.package_name / file.filename)
                 package.uploader = user
+                package.upload_date = datetime.datetime.utcnow
                 package.description = description
                 package.long_description = long_description
                 if file.filename not in package.files:
@@ -318,6 +324,7 @@ class PackageInfo(Resource):
             ret = install_test_suite(package, user, organization, team, pypi_root, proprietary, version=version)
             if not ret:
                 return response_message(EPERM, 'Test package installation failed'), 400
+            package.modify(modified=False)
 
         return response_message(SUCCESS)
 

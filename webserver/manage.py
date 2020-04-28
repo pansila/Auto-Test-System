@@ -11,7 +11,7 @@ from app import blueprint
 from app.main import create_app
 from mongoengine import connect
 from app.main.config import get_config
-from task_runner.runner import start_event_thread, start_heartbeat_thread, start_rpc_proxy, initialize_runner
+from task_runner.runner import start_event_thread, start_heartbeat_thread, start_rpc_proxy, initialize_runner, install_sio
 from flask_socketio import SocketIO, send, emit
 from app.main.controller.socketio_controller import handle_message, \
             handle_join_room, handle_enter_room, handle_leave_room
@@ -23,8 +23,7 @@ app.register_blueprint(blueprint)
 async_mode = 'threading' if os.name == 'nt' else 'eventlet'
 cors_allowed_origins = '*' if os.getenv('BOILERPLATE_ENV') != 'prod' else None
 socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins=cors_allowed_origins)
-
-app.config['socketio'] = socketio
+install_sio(socketio)
 
 app.app_context().push()
 if os.getenv('BOILERPLATE_ENV') != 'prod':

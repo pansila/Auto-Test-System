@@ -10,10 +10,12 @@ class base_wifi_dut(serial_dut, download_fw_intf):
 
     REGEXP_IP = r'(\d{1,3}(\.\d{1,3}){3})'
 
-    def __init__(self, config, task_id):
-        super().__init__(config, task_id)
+    def __init__(self, daemon_config, task_id):
+        super().__init__(daemon_config, task_id)
         self.ip_AP = None
         self.ip_DUT = None
+        self.SSID = None
+        self.INFRA_MODE = None
         self.configAP = {}
 
         for ap in self.config['AP']:
@@ -62,6 +64,8 @@ class base_wifi_dut(serial_dut, download_fw_intf):
             ip.pop()
             ip.append('1')
             self.IP_AP = '.'.join(ip)
+            self.SSID = ssid
+            self.INFRA_MODE = 'Station'
         else:
             raise AssertionError("Can't get device's IP")
         return self.ip_DUT

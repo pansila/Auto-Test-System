@@ -99,6 +99,12 @@ class ScriptManagement(Resource):
 
         dirname = os.path.dirname(script)
         basename = os.path.basename(script)
+
+        if script_type == 'test_scripts':
+            test = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).first()
+            if not test:
+                return response_message(ENOENT, 'test not found'), 404
+
         try:
             os.makedirs(root / dirname)
         except FileExistsError:
@@ -119,7 +125,7 @@ class ScriptManagement(Resource):
                 new_path = os.path.join(dirname, new_name)
                 os.rename(root / script, root / new_path)
                 if script_type == 'test_scripts':
-                    Test.objects(path=script).modify(path=new_path)
+                    test.modify(test_suite=os.path.splitext(new_name)[0])
             else:
                 os.rename(root / script, root / os.path.dirname(dirname) / new_name)
 
@@ -129,6 +135,9 @@ class ScriptManagement(Resource):
                 ret = db_update_test(root, _script, user, organization, team)
                 if not ret:
                     return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
+
+        if script_type == 'test_scripts' and test.package:
+            test.package.modify(modified=True)
 
         return response_message(SUCCESS)
 
