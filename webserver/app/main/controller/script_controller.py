@@ -10,7 +10,7 @@ from app.main.util.decorator import token_required, organization_team_required_b
 from app.main.util.get_path import get_user_scripts_root, get_back_scripts_root, is_path_secure
 from task_runner.util.dbhelper import db_update_test
 from ..config import get_config
-from ..model.database import Test
+from ..model.database import Test, Package
 from ..util.dto import ScriptDto
 from ..util.tarball import path_to_dict
 from ..util.response import response_message, EINVAL, ENOENT, UNKNOWN_ERROR, SUCCESS, EIO
@@ -89,6 +89,7 @@ class ScriptManagement(Resource):
         organization = kwargs['organization']
         team = kwargs['team']
         user = kwargs['user']
+        package = None
         
         if script_type == 'test_scripts':
             root = get_user_scripts_root(team=team, organization=organization)
@@ -104,6 +105,10 @@ class ScriptManagement(Resource):
             test = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).first()
             if not test:
                 return response_message(ENOENT, 'test not found'), 404
+        elif script_type == 'test_libraries' and dirname:
+            package = Package.objects(py_packages=dirname).first()
+            if not package:
+                return response_message(ENOENT, 'package not found'), 404
 
         try:
             os.makedirs(root / dirname)
@@ -136,8 +141,8 @@ class ScriptManagement(Resource):
                 if not ret:
                     return response_message(UNKNOWN_ERROR, 'Failed to update test suite'), 401
 
-        if script_type == 'test_scripts' and test.package:
-            test.package.modify(modified=True)
+        if script_type == 'test_libraries' and package:
+            package.modify(modified=True)
 
         return response_message(SUCCESS)
 

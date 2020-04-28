@@ -16,6 +16,7 @@ import pkg_resources
 from pkg_resources import Distribution, EggMetadata, parse_version
 from wheel import wheelfile
 from wheel import pkginfo
+from distutils import dir_util
 
 import mistune
 from mongoengine import connect
@@ -326,6 +327,25 @@ def find_local_dependencies(scripts_root, script, organization, team):
             if f == module:
                 ret.append(f)
     return ret
+
+def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
+    unpack_root = os.path.join(dest_root, 'unpack')
+    # os.mkdir(unpack_root)
+    package_file = package.get_package_by_version(pkg_version)
+    pkg_file = pypi_root / package.package_name / package_file
+    with zipfile.ZipFile(pkg_file) as zf:
+        zf.extractall(unpack_root)
+    for py_pkg in package.py_packages:
+        ret = dir_util.copy_tree(os.path.join(scripts_root, py_pkg), os.path.join(unpack_root, py_pkg))
+    pkg_file = os.path.join(dest_root, package_file)
+    leading_path = os.path.abspath(unpack_root)
+    cwd_path = os.getcwd()
+    leading_path = leading_path[len(cwd_path):]
+    with zipfile.ZipFile(pkg_file, mode='w') as zf:
+        for root, dirs, files in os.walk(unpack_root):
+            for f in files:
+                zf.write(os.path.join(root, f), arcname=os.path.join(root[len(leading_path):], f))
+    return pkg_file
 
 def generate_setup(src_dir, dst_dir, dependencies, project_name, version):
     packages = []

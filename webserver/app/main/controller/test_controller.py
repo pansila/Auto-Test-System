@@ -12,7 +12,7 @@ from flask_restx import Resource
 
 from ..util.decorator import token_required, organization_team_required_by_args
 from ..util.get_path import get_test_result_path, get_back_scripts_root, get_test_store_root
-from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup, query_package
+from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup, query_package, repack_package
 from ..config import get_config
 from ..model.database import Task, Test, Package
 from ..util.dto import TestDto
@@ -86,6 +86,9 @@ class ScriptDownload(Resource):
                 deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
                 for pkg, version in deps:
                     shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+                if package.modified:
+                    pack_file = repack_package(pypi_root, scripts_root, package, task.test.package_version, tempDir)
+                    shutil.copy(pack_file, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
                 return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
 
