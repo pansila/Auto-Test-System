@@ -50,7 +50,7 @@ class PackageManagement(Resource):
             return response_message(EINVAL, 'Field package_type is required'), 400
 
         if title:
-            query = {'name__contains': title, 'proprietary': proprietary, 'package_type': package_type}
+            query = {'name__contains': title.replace(' ', '-'), 'proprietary': proprietary, 'package_type': package_type}
         else:
             query = {'proprietary': proprietary, 'package_type': package_type}
 

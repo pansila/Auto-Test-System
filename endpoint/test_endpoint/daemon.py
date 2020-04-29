@@ -11,15 +11,8 @@ from contextlib import contextmanager
 import requests
 from bson.objectid import ObjectId
 
-from .main import start_remote_server
+from .main import start_remote_server, empty_folder
 
-
-def empty_folder(folder):
-    for root, dirs, files in os.walk(folder):
-        for f in files:
-            os.unlink(os.path.join(root, f))
-        for d in dirs:
-            shutil.rmtree(os.path.join(root, d))
 
 class daemon(object):
 

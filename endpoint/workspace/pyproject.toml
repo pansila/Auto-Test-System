@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "endpoint-workspace"
 version = "0.0.1"
-description = "Work space to that the poetry's virtual environment will create for"
+description = "Workspace that a virtual environment poetry will create for"
 authors = ["panzi <panzilla@163.com>"]
 license = "MIT"
 

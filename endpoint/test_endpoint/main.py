@@ -36,6 +36,13 @@ import toml
 # from daemoniker import Daemonizer, SignalHandler1
 
 
+def empty_folder(folder):
+    for root, dirs, files in os.walk(folder):
+        for f in files:
+            os.unlink(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
+
 class SecureWebsocketRPC(WebsocketRPC):
     def __init__(
         self,
@@ -101,7 +108,7 @@ def activate_workspace(workspace):
             env = copy(dict(os.environ))
             # workaround, otherwise we get the wrong result as we are already in a virtual environment
             del env['VIRTUAL_ENV']
-            venv = subprocess.check_output('poetry env info --path', shell=True, text=True, env=env)
+            venv = subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True, env=env)
         except subprocess.CalledProcessError as e:
             raise AssertionError(f'Failed to get the virtual environment path, please ensure that poetry is in the PATH and virtualenv for workspace has been created')
         with activate_venv(venv):

@@ -4,13 +4,13 @@ build-backend = "poetry.masonry.api"
 
 [tool.poetry]
 name = "test-endpoint"
-version = "0.1.0"
+version = "0.0.1"
 description = "A distributed test endpoint to perform the actual test jobs"
 authors = [ "panzi <panzilla@163.com>",]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.6"
 requests = "2.20.1"
 bson = "0.5.8"
 watchdog = "0.10.2"
@@ -19,6 +19,7 @@ toml = "^0.10.0"
 
 [tool.poetry.scripts]
 daemon = "test_endpoint.main:run"
+bundle = "test_endpoint.bundle:run"
 
 [tool.robotest.settings]
 server_host = "127.0.0.1"

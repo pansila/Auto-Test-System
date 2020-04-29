@@ -118,7 +118,7 @@ class ScriptManagement(Resource):
         if content or content == '':
             if script_type == 'test_scripts':
                 content = re.sub(r'\\([{}*_\.])', r'\1', content)
-            elif script_type == 'test_liraries':
+            elif script_type == 'test_libraries':
                 content = re.sub(r'\r\n', '\n', content)
 
             if basename:
@@ -161,6 +161,9 @@ class ScriptManagement(Resource):
         if not is_path_secure(script):
             return response_message(EINVAL, 'Referencing to Upper level directory is not allowed'), 401
 
+        dirname = os.path.dirname(script)
+        basename = os.path.basename(script)
+
         script_type = request.json.get('script_type', None)
         if script_type is None:
             return response_message(EINVAL, 'Field script_type is required'), 400
@@ -180,19 +183,22 @@ class ScriptManagement(Resource):
                 os.remove(root / script)
             except OSError as err:
                 current_app.logger.exception(err)
-                return response_message(EIO, 'Error happened while deleting a file'), 401
+                return response_message(EIO, 'Error happened while deleting the file'), 401
 
             if script_type == 'test_scripts':
-                cnt = Test.objects(path=os.path.abspath(root / script)).delete()
+                cnt = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).delete()
                 if cnt == 0:
                     return response_message(ENOENT, 'Test suite not found in the database'), 404
         else:
+            if script_type == 'test_scripts':
+                cnt = Test.objects(path__startswith=dirname).delete()
+                if cnt == 0:
+                    current_app.logger.error(f'Test suite not found in the database under the path {dirname}')
             try:
-                Test.objects(path__contains=os.path.abspath(root / script)).delete()
                 shutil.rmtree(root / script)
             except OSError as err:
                 current_app.logger.exception(err)
-                return response_message(EIO, 'Error happened while deleting a directory'), 401
+                return response_message(EIO, 'Error happened while deleting the directory'), 401
 
         return response_message(SUCCESS)
 
