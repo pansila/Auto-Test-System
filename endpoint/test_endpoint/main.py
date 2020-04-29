@@ -236,6 +236,7 @@ def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
         toml_config['tool']['robotest']['settings']['uuid'] = str(uuid.uuid1())
         with open(config_file, 'w') as fp:
             toml.dump(toml_config, fp)
+        print('Generated the endpoint\'s uuid: ' + toml_config['tool']['robotest']['settings']['uuid'] + ', please authorize it on the server\'s endpoint management page')
 
     config = {
         **toml_config['tool']['robotest']['settings'],

@@ -14,7 +14,7 @@ python = "^3.6"
 requests = "2.20.1"
 bson = "0.5.8"
 watchdog = "0.10.2"
-websocket-rpc = "^0.0.5"
+websocket-rpc = "0.0.6"
 toml = "^0.10.0"
 
 [tool.poetry.scripts]

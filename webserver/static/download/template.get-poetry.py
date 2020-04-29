@@ -218,6 +218,7 @@ if __name__ == "__main__":
 """
 
 BAT = u('@echo off\r\npython "{poetry_bin}" %*\r\n')
+SH = u('#!/bin/sh\npython3 "{poetry_bin}" $*\n')
 
 
 PRE_MESSAGE = """# Welcome to {poetry}!
@@ -532,9 +533,8 @@ class Installer:
         name = "poetry-{}-{}.tar.gz".format(version, platform)
         checksum = "poetry-{}-{}.sha256sum".format(version, platform)
 
-        print(url, checksum)
         try:
-            r = urlopen(url + "{}".format(checksum))
+            r = urlopen(url + "file={}".format(checksum))
         except HTTPError as e:
             if e.code == 404:
                 raise RuntimeError("Could not find {} file".format(checksum))
@@ -544,7 +544,7 @@ class Installer:
         checksum = r.read().decode()
 
         try:
-            r = urlopen(url + "{}".format(name))
+            r = urlopen(url + "file={}".format(name))
         except HTTPError as e:
             if e.code == 404:
                 raise RuntimeError("Could not find {} file".format(name))
@@ -595,19 +595,28 @@ class Installer:
             os.mkdir(POETRY_BIN, 0o755)
 
         if WINDOWS:
-            name = "poetry.bat"
-        else:
-            name = "poetry"
-        with open(os.path.join(POETRY_BIN, name), "w") as f:
-            f.write(
-                u(
-                    BAT.format(
-                        poetry_bin=os.path.join(POETRY_BIN, "poetry.py").replace(
-                            os.environ["USERPROFILE"], "%USERPROFILE%"
+            with open(os.path.join(POETRY_BIN, "poetry.bat"), "w") as f:
+                f.write(
+                    u(
+                        BAT.format(
+                            poetry_bin=os.path.join(POETRY_BIN, "poetry.py").replace(
+                                os.environ["USERPROFILE"], "%USERPROFILE%"
+                            )
                         )
                     )
                 )
-            )
+        else:
+            with open(os.path.join(POETRY_BIN, "poetry"), "w") as f:
+                f.write(
+                    u(
+                        SH.format(
+                            poetry_bin=os.path.join(POETRY_BIN, "poetry.py").replace(
+                                os.getenv("HOME", ""), "$HOME"
+                            )
+                        )
+                    )
+                )
+
 
         with open(os.path.join(POETRY_BIN, "poetry.py"), "w", encoding="utf-8") as f:
             f.write(u(BIN))

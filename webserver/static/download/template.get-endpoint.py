@@ -203,6 +203,7 @@ if __name__ == "__main__":
 """
 
 BAT = u('@echo off\r\npython "{robotest_bin}" %*\r\n')
+SH = u('#!/bin/sh\npython3 "{robotest_bin}" $*\n')
 
 
 PRE_MESSAGE = """# Welcome to {robotest}!
@@ -254,12 +255,18 @@ environment variable. Next time you log in this will be done
 automatically.
 
 To configure your current shell run `source {robotest_home_env}`
+
+Before running the test endpoint, you need to prepare the virtual environments of it,
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 POST_MESSAGE_FISH = """{robotest} ({version}) is installed now. Great!
 
 {robotest}'s bin directory ({robotest_home_bin}) has been added to your `PATH`
 environment variable by modifying the `fish_user_paths` universal variable.
+
+Before running the test endpoint, you need to prepare the virtual environments of it,
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 POST_MESSAGE_WINDOWS = """{robotest} ({version}) is installed now. Great!
@@ -267,6 +274,9 @@ POST_MESSAGE_WINDOWS = """{robotest} ({version}) is installed now. Great!
 To get started you need robotest's bin directory ({robotest_home_bin}) in your `PATH`
 environment variable. Future applications will automatically have the
 correct environment, but you may need to restart your current shell.
+
+Before running the test endpoint, you need to prepare the virtual environments of it,
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 POST_MESSAGE_UNIX_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
@@ -275,6 +285,9 @@ To get started you need {robotest}'s bin directory ({robotest_home_bin}) in your
 environment variable.
 
 To configure your current shell run `source {robotest_home_env}`
+
+Before running the test endpoint, you need to prepare the virtual environments of it,
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 POST_MESSAGE_FISH_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
@@ -284,6 +297,9 @@ in your `PATH` environment variable, which you can add by running
 the following command:
 
     set -U fish_user_paths {robotest_home_bin} $fish_user_paths
+
+Before running the test endpoint, you need to prepare the virtual environments of it,
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 POST_MESSAGE_WINDOWS_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
@@ -292,7 +308,7 @@ To get started you need robotest's bin directory ({robotest_home_bin}) in your `
 environment variable. This has not been done automatically.
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robottest}` to start.
+to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
 """
 
 
@@ -326,7 +342,7 @@ class Installer:
         self._preview = preview
         self._force = force
         self._modify_path = True
-        self._install_poetry = False
+        self._install_poetry = True
         self._accept_all = accept_all
         self._base_url = base_url
 
@@ -462,9 +478,9 @@ class Installer:
             if modify_path.lower() in {"n", "no"}:
                 self._modify_path = False
 
-            install_poetry = input("Install poetry? (y/[n]) ") or "n"
-            if install_poetry.lower() in {"y", "yes"}:
-                self._install_poetry = True
+            install_poetry = input("Install poetry? ([y]/n) ") or "y"
+            if install_poetry.lower() in {"n", "no"}:
+                self._install_poetry = False
 
             print("")
 
@@ -609,19 +625,27 @@ class Installer:
             os.mkdir(ROBOTEST_BIN, 0o755)
 
         if WINDOWS:
-            name = "robotest.bat"
-        else:
-            name = "robotest"
-        with open(os.path.join(ROBOTEST_BIN, name), "w") as f:
-            f.write(
-                u(
-                    BAT.format(
-                        robotest_bin=os.path.join(ROBOTEST_BIN, "robotest.py").replace(
-                            os.environ["USERPROFILE"], "%USERPROFILE%"
+            with open(os.path.join(ROBOTEST_BIN, "robotest.bat"), "w") as f:
+                f.write(
+                    u(
+                        BAT.format(
+                            robotest_bin=os.path.join(ROBOTEST_BIN, "robotest.py").replace(
+                                os.environ["USERPROFILE"], "%USERPROFILE%"
+                            )
                         )
                     )
                 )
-            )
+        else:
+            with open(os.path.join(ROBOTEST_BIN, "robotest"), "w") as f:
+                f.write(
+                    u(
+                        SH.format(
+                            robotest_bin=os.path.join(ROBOTEST_BIN, "robotest.py").replace(
+                                os.getenv("HOME", ""), "$HOME"
+                            )
+                        )
+                    )
+                )
 
         with open(os.path.join(ROBOTEST_BIN, "robotest.py"), "w", encoding="utf-8") as f:
             f.write(u(BIN))
