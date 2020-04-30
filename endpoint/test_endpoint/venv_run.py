@@ -1,8 +1,17 @@
-import os, sys
+import os
 import site
 import subprocess
+import sys
 from contextlib import contextmanager
 from copy import copy
+
+
+def empty_folder(folder):
+    for root, dirs, files in os.walk(folder):
+        for f in files:
+            os.unlink(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
 
 @contextmanager
 def pushd(new_path):
@@ -41,7 +50,10 @@ def activate_workspace(workspace):
         raise RuntimeError('workspace\'s configuration file pyproject.toml not found')
     with pushd(workspace):
         try:
-            venv = subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True)
+            env = copy(dict(os.environ))
+            if 'VIRTUAL_ENV' in os.environ:
+                del env['VIRTUAL_ENV']
+            subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True, env=env)
         except subprocess.CalledProcessError as e:
             raise AssertionError(f'Failed to get the virtual environment path, please ensure that poetry is in the PATH and virtualenv for workspace has been created')
         with activate_venv(venv):

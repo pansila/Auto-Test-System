@@ -9,39 +9,33 @@ import os.path
 import queue
 import shutil
 import signal
+import site
 import socket
+import subprocess
 import sys
 import tarfile
 import time
 import traceback
 import uuid
-import subprocess
-import site
 from contextlib import closing, contextmanager
-from io import BytesIO
-from pathlib import Path
 from copy import copy
+from io import BytesIO
 from multiprocessing import Process, Queue
+from pathlib import Path
 
 import requests
+import toml
 import websockets
 from bson.objectid import ObjectId
-# from robotremoteserver import RobotRemoteServer, RemoteLibraryFactory
-from .async_remote_library import AsyncRemoteLibrary
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 from wsrpc import WebsocketRPC
-import toml
+
+from .async_remote_library import AsyncRemoteLibrary
+from .venv_run import activate_workspace
+
 # import daemon as Daemon
 # from daemoniker import Daemonizer, SignalHandler1
-
-
-def empty_folder(folder):
-    for root, dirs, files in os.walk(folder):
-        for f in files:
-            os.unlink(os.path.join(root, f))
-        for d in dirs:
-            shutil.rmtree(os.path.join(root, d))
 
 class SecureWebsocketRPC(WebsocketRPC):
     def __init__(
@@ -68,52 +62,6 @@ def install_eggs(egg_path):
     yield
     sys.path = org_path
 
-@contextmanager
-def pushd(new_path):
-    old_path = os.getcwd()
-    os.chdir(new_path)
-    yield
-    os.chdir(old_path)
-
-@contextmanager
-def activate_venv(venv):
-    old_os_path = os.environ.get('PATH', '')
-    if sys.platform == 'win32':
-        os.environ['PATH'] = os.path.dirname(os.path.join(venv, 'Scripts')) + os.pathsep + old_os_path
-        site_packages = os.path.join(venv, 'Lib', 'site-packages')
-    else:
-        os.environ['PATH'] = os.path.dirname(os.path.join(venv, 'bin')) + os.pathsep + old_os_path
-        site_packages = os.path.join(venv, 'lib', 'python%s' % sys.version[:3], 'site-packages')
-    prev_sys_path = list(sys.path)
-    site.addsitedir(site_packages)
-    sys.real_prefix = sys.prefix
-    sys.prefix = venv
-    # Move the added items to the front of the path:
-    new_sys_path = []
-    for item in list(sys.path):
-        if item not in prev_sys_path:
-            new_sys_path.append(item)
-            sys.path.remove(item)
-    sys.path[:0] = new_sys_path
-    yield
-    os.environ['PATH'] = old_os_path
-    sys.path = prev_sys_path
-
-@contextmanager
-def activate_workspace(workspace):
-    if not os.path.exists(os.path.join(workspace, 'pyproject.toml')):
-        raise RuntimeError('workspace\'s configuration file pyproject.toml not found')
-    with pushd(workspace):
-        try:
-            env = copy(dict(os.environ))
-            # workaround, otherwise we get the wrong result as we are already in a virtual environment
-            del env['VIRTUAL_ENV']
-            venv = subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True, env=env)
-        except subprocess.CalledProcessError as e:
-            raise AssertionError(f'Failed to get the virtual environment path, please ensure that poetry is in the PATH and virtualenv for workspace has been created')
-        with activate_venv(venv):
-            yield
-
 class test_library_rpc(Process):
     def __init__(self, backing_file, task_id, config, queue, rpc_daemon=False):
         super().__init__()
@@ -136,11 +84,17 @@ class test_library_rpc(Process):
                 with install_eggs(self.config['download_dir']):
                     task = asyncio.ensure_future(self.go())
                     task.add_done_callback(self.task_done_check)
-                    self.loop.run_until_complete(task)
+                    try:
+                        self.loop.run_until_complete(task)
+                    except KeyboardInterrupt:
+                        pass
         else:
             task = asyncio.ensure_future(self.go())
             task.add_done_callback(self.task_done_check)
-            self.loop.run_until_complete(task)
+            try:
+                self.loop.run_until_complete(task)
+            except KeyboardInterrupt:
+                pass
 
     def task_done_check(self, fut):
         try:

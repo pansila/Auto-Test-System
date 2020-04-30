@@ -4,7 +4,8 @@ import shutil
 import sys
 import tarfile
 import tempfile
-from .main import empty_folder
+
+from .venv_run import empty_folder
 
 
 def bundle_cleanup(root):

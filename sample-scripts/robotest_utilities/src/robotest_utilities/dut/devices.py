@@ -69,22 +69,24 @@ class serial_dut(server_api):
         tic = time.time()
         buff = dut['serialport'].readline()
         ret = buff
-        encoding = chardet.detect(buff)['encoding'] or 'utf-8'
+        s_encoding = encoding = chardet.detect(buff)['encoding'] or 'utf-8'
+        if encoding != 'ascii':
+            s_encoding = encoding
 
         while (time.time() - tic) < timeout:
             if term:
-                enc = chardet.detect(buff)['encoding'] or encoding
-                match = matcher.search(buff.decode(encoding=enc))
+                match = matcher.search(buff.decode(encoding=encoding))
                 if match:
                     break
             buff = dut['serialport'].readline()
+            encoding = chardet.detect(buff)['encoding'] or encoding
+            if encoding != 'ascii':
+                s_encoding = encoding
             ret += buff
         else:
-            print(encoding)
-            return (ret.decode(encoding=encoding), self.TIMEOUT_ERR, None)
+            return (ret.decode(encoding=s_encoding), self.TIMEOUT_ERR, None)
 
-        print(encoding)
-        return (ret.decode(encoding=encoding), time.time() - tic, match.groups() if match else None)
+        return (ret.decode(encoding=s_encoding), time.time() - tic, match.groups() if match else None)
 
     def _flush_serial_output(self, deviceName, wait_time=1):
         '''

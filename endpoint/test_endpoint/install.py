@@ -1,6 +1,8 @@
 import argparse
-import os, sys
+import os
 import subprocess
+import sys
+
 
 def run():
     root = os.path.dirname(os.path.realpath(__file__))

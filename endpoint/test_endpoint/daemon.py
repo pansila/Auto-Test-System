@@ -1,17 +1,18 @@
 import asyncio
 import os
-from queue import Empty
-import sys
 import shutil
+import sys
 import tarfile
 import time
-from io import BytesIO
 from contextlib import contextmanager
+from io import BytesIO
+from queue import Empty
 
 import requests
 from bson.objectid import ObjectId
 
-from .main import start_remote_server, empty_folder
+from .venv_run import empty_folder
+from .main import start_remote_server
 
 
 class daemon(object):
