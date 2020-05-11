@@ -195,7 +195,7 @@ def db_update_test(scripts_dir, script, user, organization, team, package=None, 
     basename = os.path.basename(script)
     dirname = os.path.dirname(script)
     test_suite = os.path.splitext(basename)[0]
-    test = Test.objects(test_suite=test_suite, path=dirname).first()
+    test = Test.objects(test_suite=test_suite, path=dirname, organization=organization, team=team).first()
     if not test:
         test = Test(path=dirname, author=user, organization=organization, team=team,
                     test_suite=test_suite, package=package, package_version=version)
@@ -217,7 +217,7 @@ def update_test_from_md(md_file, test):
     ret = False
     test_cases = []
     variables = {}
-    with open(md_file) as f:
+    with open(md_file, encoding='utf-8') as f:
         parser = mistune.BlockLexer()
         text = f.read()
         parser.parse(mistune.preprocessing(text))

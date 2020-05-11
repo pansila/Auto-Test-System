@@ -53,7 +53,7 @@ def activate_workspace(workspace):
             env = copy(dict(os.environ))
             if 'VIRTUAL_ENV' in os.environ:
                 del env['VIRTUAL_ENV']
-            subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True, env=env)
+            venv = subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True, env=env)
         except subprocess.CalledProcessError as e:
             raise AssertionError(f'Failed to get the virtual environment path, please ensure that poetry is in the PATH and virtualenv for workspace has been created')
         with activate_venv(venv):
