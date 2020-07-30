@@ -101,10 +101,8 @@ class ScriptManagement(Resource):
         dirname = os.path.dirname(script)
         basename = os.path.basename(script)
 
-        if script_type == 'test_scripts':
+        if script_type == 'test_scripts' and basename.endswith('.md'):
             test = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).first()
-            if not test:
-                return response_message(ENOENT, 'test not found'), 404
         elif script_type == 'test_libraries' and dirname:
             package = Package.objects(py_packages=dirname).first()
             if not package:
@@ -129,7 +127,7 @@ class ScriptManagement(Resource):
             if basename:
                 new_path = os.path.join(dirname, new_name)
                 os.rename(root / script, root / new_path)
-                if script_type == 'test_scripts':
+                if script_type == 'test_scripts' and test:
                     test.modify(test_suite=os.path.splitext(new_name)[0])
             else:
                 os.rename(root / script, root / os.path.dirname(dirname) / new_name)
@@ -186,9 +184,7 @@ class ScriptManagement(Resource):
                 return response_message(EIO, 'Error happened while deleting the file'), 401
 
             if script_type == 'test_scripts':
-                cnt = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).delete()
-                if cnt == 0:
-                    return response_message(ENOENT, 'Test suite not found in the database'), 404
+                Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).delete()
         else:
             if script_type == 'test_scripts':
                 cnt = Test.objects(path__startswith=dirname).delete()
