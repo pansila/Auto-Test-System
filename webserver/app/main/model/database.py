@@ -348,13 +348,25 @@ class EventQueue(Document):
         self.release_lock()
         return True
 
+class PackageFile(Document):
+    schema_version = StringField(max_length=10, default='1')
+    filename = StringField(required=True)
+    name = StringField(required=True)
+    description = StringField()
+    long_description = StringField()
+    uploader = ReferenceField(User)
+    upload_date = DateTimeField()
+    download_times = IntField(default=0)
+    version = StringField(default='0.0.1')
+
+    meta = {'collection': 'package_files'}
 
 class Package(Document):
     schema_version = StringField(max_length=10, default='1')
     package_type = StringField(required=True)
     name = StringField(required=True)
     index_url = URLField(default='http://127.0.0.1:5000/pypi')
-    files = ListField(StringField())
+    files = ListField(ReferenceField(PackageFile))
     proprietary = BooleanField(default=True)
     description = StringField()
     long_description = StringField()
@@ -376,13 +388,13 @@ class Package(Document):
         if version is None and len(self.files) > 0:
             return self.files[0]
         for f in self.files:
-            if self.version_re(f).group('ver') == version:
+            if f.version == version:
                 return f
         return None
 
     @property
     def versions(self):
-        return [self.version_re(f).group('ver') for f in self.files]
+        return [f.version for f in self.files]
 
     @property
     def stars(self):
@@ -394,7 +406,9 @@ class Package(Document):
 
     @property
     def latest_version(self):
-        return self.version_re(self.files[0]).group('ver')
+        if len(self.files) > 0:
+            return self.files[0].version
+        return None
 
     def __hash__(self):
         return str(self.id)

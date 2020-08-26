@@ -40,7 +40,7 @@ def run():
         start_event_thread(app)
         start_heartbeat_thread(app)
         start_rpc_proxy(app)
-        initialize_runner()
+        initialize_runner(app)
     #app.run(host='0.0.0.0')
     socketio.run(app, host='0.0.0.0')
 

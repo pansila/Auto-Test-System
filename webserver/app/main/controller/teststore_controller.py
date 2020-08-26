@@ -15,7 +15,7 @@ from ..util.decorator import token_required, organization_team_required_by_args,
 from ..util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root
 from task_runner.util.dbhelper import get_package_info, get_package_requires, install_test_suite, get_internal_packages
 from ..config import get_config
-from ..model.database import Package, Test
+from ..model.database import Package, Test, PackageFile
 from ..util.dto import StoreDto
 from ..util.tarball import path_to_dict
 from ..util.response import response_message, ENOENT, EINVAL, SUCCESS, EIO, EPERM
@@ -55,21 +55,20 @@ class PackageManagement(Resource):
             query = {'proprietary': proprietary, 'package_type': package_type}
 
         ret = []
-        top_packages = Package.objects(name='Robot-Test-Utility', package_type=package_type, proprietary=False)
+        top_packages = Package.objects(name='Robot-Test-Utilities', package_type=package_type, proprietary=False)
         for package in top_packages:
             ret.append({
                 'name': package.name,
                 'summary': package.description,
                 'description': package.long_description,
                 'stars': package.stars,
-                'download_times': package.download_times,
+                'download_times': sum([pkg_file.download_times for pkg_file in package.files]),
                 'package_type': package.package_type,
                 'versions': package.versions,
                 'upload_date': package.upload_date
             })
 
         packages = Package.objects(**query)
-        p = re.compile(r'\d+\.\d+\.\d+')
         for package in packages[(page-1)*limit:page*limit]:
             if package in top_packages:
                 continue
@@ -78,7 +77,7 @@ class PackageManagement(Resource):
                 'summary': package.description,
                 'description': package.long_description,
                 'stars': package.stars,
-                'download_times': package.download_times,
+                'download_times': sum([pkg_file.download_times for pkg_file in package.files]),
                 'package_type': package.package_type,
                 'versions': package.versions,
                 'upload_date': package.upload_date
@@ -141,6 +140,26 @@ class PackageManagement(Resource):
                 package = Package.objects(name=name, **query).first()
                 if not package:
                     package = Package(name=name, **query)
+                for pkg_file in package.files:
+                    if pkg_file.version == package.version_re(file.filename).group('ver'):
+                        pkg_file.filename = file.filename
+                        pkg_file.description=description
+                        pkg_file.long_description=long_description
+                        pkg_file.uploader = user
+                        pkg_file.upload_date = datetime.datetime.utcnow
+                        pkg_file.save()
+                        break
+                else:
+                    package_file = PackageFile(name=name,
+                                               filename=file.filename,
+                                               description=description,
+                                               long_description=long_description,
+                                               uploader=user,
+                                               upload_date=datetime.datetime.utcnow,
+                                               version=package.version_re(file.filename).group('ver'))
+                    package_file.save()
+                    package.files.append(package_file)
+                    package.files.sort(key=lambda x: parse_version(x.version), reverse=True)
 
                 if proprietary:
                     package.organization = organization
@@ -155,9 +174,6 @@ class PackageManagement(Resource):
                 package.upload_date = datetime.datetime.utcnow
                 package.description = description
                 package.long_description = long_description
-                if file.filename not in package.files:
-                    package.files.append(file.filename)
-                    package.files.sort(key=lambda x: parse_version(package.version_re(x).group('ver')), reverse=True)
                 package.save()
 
         if not found:
@@ -205,7 +221,7 @@ class PackageManagement(Resource):
             return response_message(ENOENT, f'Package for version {version} not found'), 404
 
         try:
-            os.unlink(pypi_root / package.package_name / pkg_file)
+            os.unlink(pypi_root / package.package_name / pkg_file.filename)
         except FileNotFoundError:
             pass
 
@@ -216,6 +232,17 @@ class PackageManagement(Resource):
             except FileNotFoundError:
                 pass
             package.delete()
+        else:
+            latest_pkg_file = package.get_package_by_version()
+            name, description, long_description = get_package_info(pypi_root / package.package_name / latest_pkg_file.filename)
+            if not name:
+                return response_message(EINVAL, 'Package file {} not found'.format(package.files[0])), 401
+
+            package.uploader = latest_pkg_file.uploader
+            package.upload_date = latest_pkg_file.upload_date
+            package.description = latest_pkg_file.description
+            package.long_description = latest_pkg_file.long_description
+            package.save()
 
         return response_message(SUCCESS)
 
@@ -368,16 +395,17 @@ class PackageInfo(Resource):
         package_path = pypi_root / package.package_name / package.get_package_by_version(version)
         pkg_names = get_internal_packages(package_path)
         for pkg_name in pkg_names:
+            for script in os.listdir(scripts_root / pkg_name):
+                test = Test.objects(test_suite=os.path.splitext(script)[0], path=pkg_name, team=team, organization=organization).first()
+                if test:
+                    test.delete()
+                    # test.modify(staled=True)
+                else:
+                    current_app.logger.error(f'test not found for {script}')
+        for pkg_name in pkg_names:
             if os.path.exists(scripts_root / pkg_name):
                 shutil.rmtree(scripts_root / pkg_name)
             if os.path.exists(libraries_root / pkg_name):
                 shutil.rmtree(libraries_root / pkg_name)
-        for pkg_name in pkg_names:
-            for script in os.listdir(scripts_root / pkg_name):
-                test = Test.objects(test_suite=os.path.splitext(script)[0], path=pkg_name).first()
-                if test:
-                    test.modify(staled=True)
-                else:
-                    current_app.logger.error(f'test not found for {script}')
 
         return response_message(SUCCESS)

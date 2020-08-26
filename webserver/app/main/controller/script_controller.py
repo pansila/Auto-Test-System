@@ -102,7 +102,7 @@ class ScriptManagement(Resource):
         basename = os.path.basename(script)
 
         if script_type == 'test_scripts' and basename.endswith('.md'):
-            test = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).first()
+            test = Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname, organization=organization, team=team).first()
         elif script_type == 'test_libraries' and dirname:
             package = Package.objects(py_packages=dirname).first()
             if not package:
@@ -184,10 +184,10 @@ class ScriptManagement(Resource):
                 return response_message(EIO, 'Error happened while deleting the file'), 401
 
             if script_type == 'test_scripts':
-                Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname).delete()
+                Test.objects(test_suite=os.path.splitext(basename)[0], path=dirname, organization=organization, team=team).delete()
         else:
             if script_type == 'test_scripts':
-                cnt = Test.objects(path__startswith=dirname).delete()
+                cnt = Test.objects(path__startswith=dirname, organization=organization, team=team).delete()
                 if cnt == 0:
                     current_app.logger.error(f'Test suite not found in the database under the path {dirname}')
             try:

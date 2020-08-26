@@ -68,44 +68,51 @@ class ScriptDownload(Resource):
 
         if not package:
             with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
+            # tempDir = tempfile.mkdtemp(dir=result_dir)
+            # if tempDir:
                 test_script_name = os.path.splitext(test_script)[0].split('/', 1)[0]
                 deps = find_local_dependencies(scripts_root, test_script, task.organization, task.team)
                 generate_setup(scripts_root, tempDir, deps, test_script_name, '0.0.1')
+                # silence the packing messages
                 with StringIO() as buf, redirect_stdout(buf):
-                    sandbox.run_setup(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
+                    sandbox.run_setup(os.path.abspath(os.path.join(tempDir, 'setup.py')), ['bdist_egg'])
                 deps = find_dependencies(script_file, task.organization, task.team, 'Test Suite')
                 dist = os.path.join(tempDir, 'dist')
                 for pkg, version in deps:
-                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
                 return send_from_directory(Path(os.getcwd()) / result_dir, f'{test_script_name}.tar.gz')
         else:
             with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
+            # tempDir = tempfile.mkdtemp(dir=result_dir)
+            # if tempDir:
                 dist = os.path.join(tempDir, 'dist')
                 os.mkdir(dist)
                 deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
                 for pkg, version in deps:
-                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version), dist)
+                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
                 if package.modified:
                     pack_file = repack_package(pypi_root, scripts_root, package, task.test.package_version, tempDir)
                     shutil.copy(pack_file, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
                 return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
 
-@api.route('/<test_suite>')
-@api.param('test_suite', 'The test suite to query')
+@api.route('/detail')
 @api.response(404, 'Script not found.')
 class TestSuiteGet(Resource):
     @token_required
     @organization_team_required_by_args
     @api.doc('get_the_test_cases')
     @api.marshal_with(_test_cases)
-    def get(self, test_suite, **kwargs):
+    def get(self, **kwargs):
         """Get the test cases of a test suite"""
         organization = kwargs['organization']
         team = kwargs['team']
+        tid = request.args.get('id', None)
+        if not tid:
+            return response_message(EINVAL, 'Test id is required'), 401
 
-        test = Test.objects(test_suite=test_suite, organization=organization, team=team).first()
+        test = Test.objects(pk=tid, organization=organization, team=team).first()
         if not test:
             return response_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
 

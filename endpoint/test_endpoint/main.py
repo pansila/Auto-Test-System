@@ -56,11 +56,18 @@ class SecureWebsocketRPC(WebsocketRPC):
 
 @contextmanager
 def install_eggs(egg_path):
-    org_path = sys.path
+    old_path = sys.path
     eggs = [os.path.join(egg_path, f) for f in os.listdir(egg_path) if f.endswith('.egg')]
     sys.path[:0] = eggs
     yield
-    sys.path = org_path
+    sys.path = old_path
+
+@contextmanager
+def temp_environ_path(paths):
+    old_path = os.environ['PATH']
+    os.environ['PATH'] += os.pathsep + os.pathsep.join(paths)
+    yield
+    os.environ['PATH'] = old_path
 
 class test_library_rpc(Process):
     def __init__(self, backing_file, task_id, config, queue, rpc_daemon=False):
@@ -80,14 +87,17 @@ class test_library_rpc(Process):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         if not self.rpc_daemon:
-            with activate_workspace('workspace'):
-                with install_eggs(self.config['download_dir']):
-                    task = asyncio.ensure_future(self.go())
-                    task.add_done_callback(self.task_done_check)
-                    try:
-                        self.loop.run_until_complete(task)
-                    except KeyboardInterrupt:
-                        pass
+            dirs = os.listdir(os.path.join(self.config['resource_dir'], 'package_data'))
+            dirs = list(map(lambda p: os.path.abspath(os.path.join(self.config['resource_dir'], 'package_data', p)), dirs))
+            dirs.insert(0, os.path.abspath(os.path.join(self.config['resource_dir'], 'test_data')))
+
+            with activate_workspace('workspace'), install_eggs(self.config['download_dir']), temp_environ_path(dirs):
+                task = asyncio.ensure_future(self.go())
+                task.add_done_callback(self.task_done_check)
+                try:
+                    self.loop.run_until_complete(task)
+                except KeyboardInterrupt:
+                    pass
         else:
             task = asyncio.ensure_future(self.go())
             task.add_done_callback(self.task_done_check)
@@ -99,16 +109,14 @@ class test_library_rpc(Process):
     def task_done_check(self, fut):
         try:
             fut.result()
-        except:
-            exc_type, exc_value, exc_tb = sys.exc_info()
-            print(exc_type, exc_value)
-            traceback.print_tb(exc_tb)
+        except websockets.exceptions.ConnectionClosedError:
+            print('Oops, please check it')
+            # exc_type, exc_value, exc_tb = sys.exc_info()
+            # print(exc_type, exc_value)
+            # traceback.print_tb(exc_tb)
 
-    async def go(self):
-        module_name = os.path.splitext(self.backing_file)[0].replace('/', '.')
-        importlib.invalidate_caches()
-        test_module = importlib.import_module(module_name)
-        test_module = importlib.reload(test_module)
+    def get_test_library(self, test_module, module_name):
+        test_lib = None
         items = []
         for name, value in inspect.getmembers(test_module):
             if inspect.isclass(value) and str(value).split('\'')[1].startswith(module_name):
@@ -119,35 +127,57 @@ class test_library_rpc(Process):
             test_lib_name = getattr(test_module, '__TEST_LIB__', None)
             if not test_lib_name:
                 print('More than one class is defined but "__TEST_LIB__" not defined')
-                return
+                return None
             test_lib = getattr(test_module, test_lib_name, None)
             if not test_lib:
                 print(f'Could not find the test library {test_lib_name} in the module {module_name}')
-                return
+                return None
         else:
             print(f'Could not find any test library in the module {module_name}')
+            return None
+        return test_lib
+
+    async def go(self):
+        module_name = os.path.splitext(self.backing_file)[0].replace('//', '/').replace('/', '.')
+        importlib.invalidate_caches()
+        test_module = importlib.import_module(module_name)
+        test_module = importlib.reload(test_module)
+        test_lib = self.get_test_library(test_module, module_name)
+        if not test_lib:
             return
 
         while True:
             try:
                 async with websockets.connect(f'ws://{self.host}:{self.rpc_port}/rpc') as rpc_ws, websockets.connect(f'ws://{self.host}:{self.rpc_port}/msg') as msg_ws:
-                    await rpc_ws.send(json.dumps({'join_id': self.config['join_id'],
+                    await rpc_ws.send(json.dumps({
+                                   'join_id': self.config['join_id'],
                                    'uid': self.config['uuid'],
                                    'backing_file': self.backing_file if not self.rpc_daemon else ''
-                                   }))
+                                }))
                     try:
-                        await rpc_ws.recv()
+                        ret = await rpc_ws.recv()
                     except websockets.exceptions.ConnectionClosedOK:
+                        print('Main server not ready')
                         await asyncio.sleep(10)
                         continue
-                    self.queue.put(1)
-                    print('Start the RPC server')
-                    try:
-                        await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), (msg_ws, self.task_id)), method_prefix='').run()
-                    except websockets.exceptions.ConnectionClosedError:
-                        print('Websocket closed')
-            except ConnectionRefusedError:
-                pass
+                    if ret == 'OK':
+                        # inform the daemon that the test has been started successfully
+                        self.queue.put(1)
+                        print('Start the RPC server for ' + ('daemon' if self.rpc_daemon else 'test'))
+                        try:
+                            await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), (msg_ws, self.task_id)), method_prefix='').run()
+                        except websockets.exceptions.ConnectionClosedError:
+                            print('Websocket closed')
+                    else:
+                        print('Received message from the server: {}'.format(ret))
+                        await asyncio.sleep(10)
+                        continue
+            except ConnectionRefusedError as err:
+                print(err)
+                # pass
+            except OSError as err:
+                print(err)
+                # pass
                 # print('Network connection is not ready')
             if not self.rpc_daemon:
                 print('Exit RPC server')

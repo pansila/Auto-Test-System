@@ -11,7 +11,7 @@ import patch
 
 
 try:
-    venv = subprocess.check_output('poetry env info --path', shell=True).decode()
+    venv = subprocess.check_output('poetry env info --path', shell=True, universal_newlines=True).strip()
 except subprocess.CalledProcessError:
     print('poetry not found, please add it to the environment variable PATH')
     sys.exit(1)

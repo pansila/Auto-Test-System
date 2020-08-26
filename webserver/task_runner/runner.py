@@ -5,6 +5,7 @@ import datetime
 import functools
 import json
 import os
+import pymongo
 import queue
 import re
 import shutil
@@ -170,7 +171,11 @@ def event_loop(app):
     app.logger.info('Event loop started')
 
     while True:
-        event = eventqueue.pop()
+        try:
+            event = eventqueue.pop()
+        except pymongo.errors.AutoReconnect:
+            app.logger.warning('polling event queue network error')
+            event = None
         if not event:
             time.sleep(1)
             continue
@@ -499,7 +504,7 @@ async def rpc_proxy(request, ws):
     try:
         data = json.loads(ret)
     except Exception as e:
-        # print(f'Received an unknown format json data: {e}')
+        print(f'Received an unknown format json data: {e}')
         return
     join_id = data['join_id']
     uid = data['uid']
@@ -509,7 +514,7 @@ async def rpc_proxy(request, ws):
     endpoint = Endpoint.objects(uid=uid).first()
     if endpoint:
         if endpoint.status == 'Forbidden' or endpoint.status == 'Unauthorized':
-            #await ws.send('Rejected')
+            await ws.send(endpoint.status)
             return
     organization = Organization.objects(pk=join_id).first()
     if not organization:
@@ -535,15 +540,16 @@ async def rpc_proxy(request, ws):
         await RPC_PROXIES[url].close()
         del RPC_PROXIES[url]
     RPC_PROXIES[url] = rpc
+    print(f'Received an endpoint {uid}{("@"+backing_file) if backing_file else ""} connecting to {join_id}')
 
     try:
         await ws.wait_closed()
     except (CancelledError, ConnectionClosed):
-        pass
-    try:
-        await RPC_PROXIES[url].close()
-    except websockets.exceptions.ConnectionClosedError:
-        pass
+        print(f'Endpoint {uid} disconnected')
+    # try:
+    #     await RPC_PROXIES[url].close()
+    # except websockets.exceptions.ConnectionClosedError:
+    #     print(f'websocket close error for endpoint {uid}')
     del RPC_PROXIES[url]
 
 def restart_interrupted_tasks(app, organization=None, team=None):
@@ -617,8 +623,8 @@ def start_xmlrpc_server(app):
     thread.daemon = True
     thread.start()
 
-def initialize_runner():
-    notification_chain_init()
+def initialize_runner(app):
+    notification_chain_init(app)
 
 if __name__ == '__main__':
     pass
