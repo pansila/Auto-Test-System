@@ -256,7 +256,7 @@ class KeywordRunner(object):
         args = self._handle_binary(args)
         kwargs = self._handle_binary(kwargs or {})
         result = KeywordResult()
-        with StandardStreamInterceptor(ws) as interceptor:
+        with StandardStreamInterceptor(ws, debug=False) as interceptor:
             try:
                 return_value = self._keyword(*args, **kwargs)
                 if inspect.isawaitable(return_value):
@@ -302,8 +302,11 @@ class MyStringIO(StringIO):
 
 class StandardStreamInterceptor(object):
 
-    def __init__(self, ws):
+    def __init__(self, ws, debug=False):
         self.output = ''
+        self.debug = debug
+        if debug:
+            return
         self.origout = sys.stdout
         self.origerr = sys.stderr
         sys.stdout = MyStringIO(ws)
@@ -313,6 +316,8 @@ class StandardStreamInterceptor(object):
         return self
 
     def __exit__(self, *exc_info):
+        if self.debug:
+            return
         stdout = sys.stdout.getvalue()
         stderr = sys.stderr.getvalue()
         close = [sys.stdout, sys.stderr]

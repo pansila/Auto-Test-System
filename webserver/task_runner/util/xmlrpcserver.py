@@ -216,6 +216,7 @@ class XMLRPCServer(threading.Thread):
 
     def get_keyword_names(self, path):
         if path not in self.rpc_proxy:
+            # print(f'endpoint {path} not found in the proxy')
             return []
         fut = asyncio.run_coroutine_threadsafe(self.rpc_proxy[path].request.get_keyword_names(), self.rpc_loop)
         return fut.result()

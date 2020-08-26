@@ -119,6 +119,7 @@ class TestResultDto:
     api = Namespace('testresult', description='serve test result files')
     test_report_summary = api.model('test_report_summary', {
         'id': fields.String(description='The task id'),
+        'test_id': fields.String(description='The test id of the associated task'),
         'test_suite': fields.String(description='The test suite name'),
         'testcases': fields.List(fields.String()),
         'comment': fields.String(),

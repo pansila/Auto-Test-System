@@ -8,9 +8,9 @@ from socket import timeout
 
 # sys.path.append('.')
 from app.main.config import get_config
-from flask import current_app
 
 notification_chain = []
+APP = None
 
 
 BODY_TEMPLATE = 'Test suite {} is {}.\n\nFor details please see http://localhost:9527/#/test-report/test-detail?task_id={}&organization={}{}'
@@ -37,34 +37,36 @@ def send_email(task):
     msg['Subject'] = Header(SUBJECT_TEMPLATE.format(task.test.test_suite))
 
     try:
-        server = smtplib.SMTP(smtp_server, smtp_server_port, timeout=5)
+        with smtplib.SMTP(smtp_server, smtp_server_port, timeout=5) as server:
+            # server.starttls()
+            # server.set_debuglevel(1)
+            try:
+                server.login(smtp_user, password)
+            except smtplib.SMTPAuthenticationError:
+                APP.logger.error('SMTP authentication failed')
+                return
+            try:
+                server.sendmail(from_addr, [task.tester.email], msg.as_string())
+            except smtplib.SMTPServerDisconnected:
+                APP.logger.error('SMTP sending mail failed')
     except TimeoutError:
-        current_app.logger.error('SMTP server connecting timeout')
+        APP.logger.error('SMTP server connecting timeout')
         return
     except timeout:
-        current_app.logger.error('SMTP server connecting socket timeout')
+        APP.logger.error('SMTP server connecting socket timeout')
         return
     except ConnectionRefusedError:
-        current_app.logger.error('SMTP server connecting refused')
+        APP.logger.error('SMTP server connecting refused')
         return
     except socket.gaierror:
-        current_app.logger.error('Network is not available')
+        APP.logger.error('Network is not available')
         return
 
-    # server.starttls()
-    # server.set_debuglevel(1)
-    try:
-        server.login(smtp_user, password)
-    except smtplib.SMTPAuthenticationError:
-        current_app.logger.error('SMTP authentication failed')
-        server.quit()
-        return
-    server.sendmail(from_addr, [task.tester.email], msg.as_string())
-    server.quit()
-
-def notification_chain_init():
+def notification_chain_init(app):
+    global APP
     if send_email not in notification_chain:
         notification_chain.append(send_email)
+    APP = app
 
 def notification_chain_call(task):
     for caller in notification_chain:

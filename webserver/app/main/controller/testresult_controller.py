@@ -103,8 +103,14 @@ class TestResultRoot(Resource):
         all_tasks = Task.objects(id__in=ret, **query).order_by(sort)
         ret = []
         for t in all_tasks[(page - 1) * limit : page * limit]:
+            test_id = None
+            try:
+                test_id = str(t.test.id)
+            except DoesNotExist:
+                pass
             ret.append({
                 'id': str(t.id),
+                'test_id': test_id,
                 'test_suite': t.test_suite,
                 'testcases': t.testcases,
                 'comment': t.comment,

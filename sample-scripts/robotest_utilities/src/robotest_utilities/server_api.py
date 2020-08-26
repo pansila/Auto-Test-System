@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime
 
 import requests
+from .utilities import test_utility
 
 
 def json_serial(obj):
@@ -11,11 +12,11 @@ def json_serial(obj):
         return obj.isoformat()
     raise TypeError ("Type %s not serializable" % type(obj))
 
-class server_api():
+class server_api(test_utility):
     def __init__(self, daemon_config, task_id):
-        self.daemon_config = daemon_config
-        self.task_id = task_id
+        super().__init__(daemon_config, task_id)
         self.result = {}
+        # create an empty record in the database
         self._update_result()
 
     def _update_result(self, new_result=None):

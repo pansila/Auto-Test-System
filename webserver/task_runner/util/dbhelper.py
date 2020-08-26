@@ -141,17 +141,13 @@ def get_package_requires(package, organization, team, type):
 
 # TODO: rollback if failed in one step
 def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, new_package=True):
-    if version is None:
-        version = package.latest_version
-        pkg_file = package.files[0]
-    else:
-        pkg_file = package.get_package_by_version(version)
-        if not pkg_file:
-            current_app.logger.error(f'package file not found for {package.name} with version {version}')
-            return False
-    pkg_file = pypi_root / package.package_name / pkg_file
+    pkg_file = package.get_package_by_version(version)
+    if not pkg_file:
+        current_app.logger.error(f'package file not found for {package.name} with version {version}')
+        return False
+    pkg_file_path = pypi_root / package.package_name / pkg_file.filename
 
-    requires = get_package_requires(str(pkg_file), organization, team, type='Test Suite')
+    requires = get_package_requires(str(pkg_file_path), organization, team, type='Test Suite')
     if requires:
         for pkg, ver in requires:
             ret = install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, new_package=False)
@@ -161,7 +157,7 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
 
     scripts_root = get_user_scripts_root(organization=organization, team=team)
     libraries_root = get_back_scripts_root(organization=organization, team=team)
-    with zipfile.ZipFile(pkg_file) as zf:
+    with zipfile.ZipFile(pkg_file_path) as zf:
         for f in zf.namelist():
             if f.startswith('EGG-INFO'):
                 continue
@@ -171,7 +167,7 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
             if os.path.exists(libraries_root / dirname):
                 shutil.rmtree(libraries_root / dirname)
 
-    with zipfile.ZipFile(pkg_file) as zf:
+    with zipfile.ZipFile(pkg_file_path) as zf:
         libraries = (f for f in zf.namelist() if not f.startswith('EGG-INFO') and '/scripts/' not in f)
         for l in libraries:
             zf.extract(l, libraries_root)
@@ -183,7 +179,7 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
                 shutil.move(str(scripts_root / pkg_name / 'scripts' / f), scripts_root / pkg_name)
                 db_update_test(scripts_root, os.path.join(pkg_name, f), user, organization, team, package, version)
             shutil.rmtree(scripts_root / pkg_name / 'scripts')
-    package.modify(inc__download_times=1)
+    pkg_file.modify(inc__download_times=1)
     return True
 
 def db_update_test(scripts_dir, script, user, organization, team, package=None, version=None):
@@ -298,7 +294,7 @@ def find_dependencies(script, organization, team, package_type):
     return ret
 
 def find_pkg_dependencies(pypi_root, package, version, organization, team, package_type):
-    pkg_file = pypi_root / package.package_name / package.get_package_by_version(version)
+    pkg_file = pypi_root / package.package_name / package.get_package_by_version(version).filename
     requires = get_package_requires(str(pkg_file), organization, team, type='Test Suite')
     deps = [(package, version)]
     if requires:
@@ -333,16 +329,16 @@ def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
     unpack_root = os.path.join(dest_root, 'unpack')
     # os.mkdir(unpack_root)
     package_file = package.get_package_by_version(pkg_version)
-    pkg_file = pypi_root / package.package_name / package_file
+    pkg_file = pypi_root / package.package_name / package_file.filename
     with zipfile.ZipFile(pkg_file) as zf:
         zf.extractall(unpack_root)
     for py_pkg in package.py_packages:
         ret = dir_util.copy_tree(os.path.join(scripts_root, py_pkg), os.path.join(unpack_root, py_pkg))
-    pkg_file = os.path.join(dest_root, package_file)
+    pkg_file = os.path.join(dest_root, package_file.filename)
     leading_path = os.path.abspath(unpack_root)
     cwd_path = os.getcwd()
     leading_path = leading_path[len(cwd_path):]
-    with zipfile.ZipFile(pkg_file, mode='w') as zf:
+    with zipfile.ZipFile(pkg_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(unpack_root):
             for f in files:
                 zf.write(os.path.join(root, f), arcname=os.path.join(root[len(leading_path):], f))
