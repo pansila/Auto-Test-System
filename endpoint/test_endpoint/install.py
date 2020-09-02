@@ -14,6 +14,12 @@ def run():
         return -1
 
     os.chdir(os.path.join(os.path.dirname(root), 'workspace'))
+    executable = subprocess.check_output('py -3-32 -c "import sys; print(sys.executable)"', shell=True, universal_newlines=True)
+    try:
+        ret = subprocess.run('poetry env use ' + executable, shell=True, check=True, universal_newlines=True)
+    except subprocess.CalledProcessError as e:
+        print(e.output)
+        return -1
     try:
         ret = subprocess.run('poetry install', shell=True, check=True, universal_newlines=True)
     except subprocess.CalledProcessError as e:

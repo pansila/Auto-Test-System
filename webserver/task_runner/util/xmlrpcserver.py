@@ -6,6 +6,14 @@ import select
 import signal
 import sys
 import traceback
+import selectors
+
+# poll/select have the advantage of not requiring any extra file descriptor,
+# contrarily to epoll/kqueue (also, they require a single syscall).
+if hasattr(selectors, 'PollSelector'):
+    _ServerSelector = selectors.PollSelector
+else:
+    _ServerSelector = selectors.SelectSelector
 
 from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
 from xmlrpc.client import Fault, dumps, loads
@@ -48,6 +56,9 @@ class StoppableXMLRPCServer(SimpleXMLRPCServer):
                                     bind_and_activate=False)
         self._activated = False
         self._stopper_thread = None
+        # self._threads = []
+        self.__is_shut_down = threading.Event()
+        self.__shutdown_request = False
 
     def activate(self):
         if not self._activated:
@@ -55,6 +66,38 @@ class StoppableXMLRPCServer(SimpleXMLRPCServer):
             self.server_activate()
             self._activated = True
         return self.server_address[1]
+
+    def serve_forever(self, poll_interval=0.5):
+        """Handle one request at a time until shutdown.
+
+        Polls for shutdown every poll_interval seconds. Ignores
+        self.timeout. If you need to do periodic tasks, do them in
+        another thread.
+        """
+        self.__is_shut_down.clear()
+        try:
+            # XXX: Consider using another file descriptor or connecting to the
+            # socket to wake this up instead of polling. Polling reduces our
+            # responsiveness to a shutdown request and wastes cpu at all other
+            # times.
+            with _ServerSelector() as selector:
+                selector.register(self, selectors.EVENT_READ)
+
+                while not self.__shutdown_request:
+                    ready = selector.select(poll_interval)
+                    # bpo-35017: shutdown() called during select(), exit immediately.
+                    if self.__shutdown_request:
+                        break
+                    if ready:
+                        handler_thread = threading.Thread(target=self._handle_request_noblock())
+                        handler_thread.daemon = True
+                        handler_thread.start()
+                        # self._threads.append(handler_thread)
+
+                    self.service_actions()
+        finally:
+            self.__shutdown_request = False
+            self.__is_shut_down.set()
 
     def serve(self):
         self.activate()
@@ -68,6 +111,16 @@ class StoppableXMLRPCServer(SimpleXMLRPCServer):
         if self._stopper_thread:
             self._stopper_thread.join()
             self._stopper_thread = None
+
+    def shutdown(self):
+        """Stops the serve_forever loop.
+
+        Blocks until the loop has finished. This must be called while
+        serve_forever() is running in another thread, or it will
+        deadlock.
+        """
+        self.__shutdown_request = True
+        self.__is_shut_down.wait()
 
     def stop(self):
         self._stopper_thread = threading.Thread(target=self.shutdown)

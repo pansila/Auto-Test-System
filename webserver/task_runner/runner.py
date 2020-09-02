@@ -38,7 +38,7 @@ from task_runner.util.dbhelper import db_update_test
 from task_runner.util.notification import (notification_chain_call,
                                            notification_chain_init)
 from task_runner.util.xmlrpcserver import XMLRPCServer
-from wsrpc import WebsocketRPC
+from wsrpc import WebsocketRPC, RemoteCallError
 from asyncio.exceptions import CancelledError
 from sanic.websocket import ConnectionClosed
 
@@ -371,9 +371,13 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             del ROBOT_PROCESSES[task.id]
 
             if ss != b'':
-                ss = ss.decode(chardet.detect(ss)['encoding'])
                 log_msg_all = StringIO()
-                log_msg_all.write(ss)
+                try:
+                    ss = ss.decode(chardet.detect(ss)['encoding'])
+                except UnicodeDecodeError:
+                    app.logger.warning(f'chardet error: {ss.decode("raw_unicode_escape")}')
+                else:
+                    log_msg_all.write(ss)
                 log_msg_all.write(log_msg.getvalue())
                 app.logger.info('\n' + log_msg_all.getvalue())
                 RPC_SOCKET.emit('test report', {'task_id': task_id, 'message': ss}, room=room_id)
@@ -408,6 +412,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 shutil.rmtree(result_dir_tmp)
 
             notification_chain_call(task)
+            # lately scheduled tasks before and after the count reset will be captured during re-polling queues
             TASK_LOCK.acquire()
             TASK_THREADS[endpoint_id] = 1
             TASK_LOCK.release()
@@ -417,10 +422,11 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             if TASK_THREADS[endpoint_id] != 1:
                 TASK_THREADS[endpoint_id] = 1
                 TASK_LOCK.release()
-                app.logger.info('Run the lately scheduled task')
+                app.logger.info('Run the lately scheduled task during polling queues')
                 continue
             del TASK_THREADS[endpoint_id]
             TASK_LOCK.release()
+            app.logger.info('Task processing exits')
             break
 
 def check_endpoint(app, endpoint_uid, organization, team):
@@ -534,22 +540,42 @@ async def rpc_proxy(request, ws):
         return
     await ws.send('OK')
 
+    def error_check(fut):
+        try:
+            fut.result()
+        except websockets.exceptions.ConnectionClosedError as error:
+            if len(rpc._request_table.keys()) != 0:
+                print(f'Endpoint {url} was aborted, flushing pending tasks...')
+                for k in rpc._request_table:
+                    rpc._request_table[k].set_exception(RemoteCallError(error))
+                rpc._request_table = {}
+        except asyncio.exceptions.CancelledError:
+            pass
+
     rpc = WebsocketRPC(ws, client_mode=True)
+    rpc.client_task.add_done_callback(error_check)
     url = normalize_url(uid + '/' + backing_file)
     if url in RPC_PROXIES:
         await RPC_PROXIES[url].close()
         del RPC_PROXIES[url]
     RPC_PROXIES[url] = rpc
-    print(f'Received an endpoint {uid}{("@"+backing_file) if backing_file else ""} connecting to {join_id}')
+    print(f'Received an endpoint {url} connecting to {join_id}')
 
     try:
         await ws.wait_closed()
     except (CancelledError, ConnectionClosed):
-        print(f'Endpoint {uid} disconnected')
-    # try:
-    #     await RPC_PROXIES[url].close()
-    # except websockets.exceptions.ConnectionClosedError:
-    #     print(f'websocket close error for endpoint {uid}')
+        print(f'Endpoint {url} disconnected')
+
+    if len(rpc._request_table.keys()) != 0:
+        print(f'Endpoint {url} was closed, flushing pending tasks...')
+        for k in rpc._request_table:
+            rpc._request_table[k].set_exception(RemoteCallError(f'Endpoint {url} was closed'))
+        rpc._request_table = {}
+
+    try:
+        await RPC_PROXIES[url].close()
+    except websockets.exceptions.ConnectionClosedError:
+        print(f'websocket close error for endpoint {url}')
     del RPC_PROXIES[url]
 
 def restart_interrupted_tasks(app, organization=None, team=None):

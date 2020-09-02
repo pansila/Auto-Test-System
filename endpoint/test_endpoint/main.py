@@ -4,6 +4,7 @@ import functools
 import importlib
 import inspect
 import json
+import multiprocessing
 import os
 import os.path
 import queue
@@ -26,6 +27,7 @@ from pathlib import Path
 import requests
 import toml
 import websockets
+from websockets.exceptions import ConnectionClosedOK, ConnectionClosedError
 from bson.objectid import ObjectId
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
@@ -91,7 +93,8 @@ class test_library_rpc(Process):
             dirs = list(map(lambda p: os.path.abspath(os.path.join(self.config['resource_dir'], 'package_data', p)), dirs))
             dirs.insert(0, os.path.abspath(os.path.join(self.config['resource_dir'], 'test_data')))
 
-            with activate_workspace('workspace'), install_eggs(self.config['download_dir']), temp_environ_path(dirs):
+            with install_eggs(self.config['download_dir']), temp_environ_path(dirs):
+            # with activate_workspace('.'), install_eggs(self.config['download_dir']), temp_environ_path(dirs):
                 task = asyncio.ensure_future(self.go())
                 task.add_done_callback(self.task_done_check)
                 try:
@@ -109,11 +112,10 @@ class test_library_rpc(Process):
     def task_done_check(self, fut):
         try:
             fut.result()
-        except websockets.exceptions.ConnectionClosedError:
-            print('Oops, please check it')
-            # exc_type, exc_value, exc_tb = sys.exc_info()
-            # print(exc_type, exc_value)
-            # traceback.print_tb(exc_tb)
+        except:
+            exc_type, exc_value, exc_tb = sys.exc_info()
+            print(exc_type, exc_value)
+            traceback.print_tb(exc_tb)
 
     def get_test_library(self, test_module, module_name):
         test_lib = None
@@ -156,39 +158,46 @@ class test_library_rpc(Process):
                                 }))
                     try:
                         ret = await rpc_ws.recv()
-                    except websockets.exceptions.ConnectionClosedOK:
+                    except (ConnectionClosedOK, ConnectionClosedError):
                         print('Main server not ready')
                         await asyncio.sleep(10)
                         continue
                     if ret == 'OK':
-                        # inform the daemon that the test has been started successfully
+                        # inform the daemon that the test has started successfully
                         self.queue.put(1)
                         print('Start the RPC server for ' + ('daemon' if self.rpc_daemon else 'test'))
                         try:
-                            await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), (msg_ws, self.task_id)), method_prefix='').run()
-                        except websockets.exceptions.ConnectionClosedError:
+                            await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), rpc_ws, msg_ws, self.task_id), method_prefix='').run()
+                        except ConnectionClosedError:
                             print('Websocket closed')
                     else:
-                        print('Received message from the server: {}'.format(ret))
+                        print('Received a message from the server: {}'.format(ret))
                         await asyncio.sleep(10)
                         continue
-            except ConnectionRefusedError as err:
-                print(err)
-                # pass
-            except OSError as err:
-                print(err)
-                # pass
-                # print('Network connection is not ready')
+            except (ConnectionRefusedError, ConnectionClosedError):
+                pass
+                # print(f'Connection refused error while try connecting')
             if not self.rpc_daemon:
                 print('Exit RPC server')
                 break
-            # print('Restart due to network connection closed')
             await asyncio.sleep(1)
 
 def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False):
-    queue = Queue()
-    process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon)
-    process.start()
+    if not rpc_daemon:
+        with activate_workspace('workspace') as venv:
+            ctx = multiprocessing.get_context('spawn')
+            if sys.platform == 'win32':
+                executable = os.path.join(venv, 'Scripts', 'python.exe')
+            else:
+                executable = os.path.join(venv, 'bin', 'python')
+            # ctx.set_executable(executable)
+            queue = Queue()
+            process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon)
+            process.start()
+    else:
+        queue = Queue()
+        process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon)
+        process.start()
     return process, queue
 
 def get_websocket_ports(url):

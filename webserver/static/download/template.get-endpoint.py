@@ -401,7 +401,8 @@ class Installer:
             with open(temp, 'wb') as f:
                 f.write(r.read())
             force = '--force' if self._force else ''
-            subprocess.run(f'python {temp} {force}', shell=True, check=True)
+            preview = '--preview' if self._preview else ''
+            subprocess.run(f'python {temp} {force} {preview}', shell=True, check=True)
 
     def get_version(self):
         print(colorize("info", "Retrieving robotest metadata"))

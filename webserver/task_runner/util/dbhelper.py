@@ -327,7 +327,6 @@ def find_local_dependencies(scripts_root, script, organization, team):
 
 def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
     unpack_root = os.path.join(dest_root, 'unpack')
-    # os.mkdir(unpack_root)
     package_file = package.get_package_by_version(pkg_version)
     pkg_file = pypi_root / package.package_name / package_file.filename
     with zipfile.ZipFile(pkg_file) as zf:
@@ -335,13 +334,10 @@ def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
     for py_pkg in package.py_packages:
         ret = dir_util.copy_tree(os.path.join(scripts_root, py_pkg), os.path.join(unpack_root, py_pkg))
     pkg_file = os.path.join(dest_root, package_file.filename)
-    leading_path = os.path.abspath(unpack_root)
-    cwd_path = os.getcwd()
-    leading_path = leading_path[len(cwd_path):]
     with zipfile.ZipFile(pkg_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(unpack_root):
             for f in files:
-                zf.write(os.path.join(root, f), arcname=os.path.join(root[len(leading_path):], f))
+                zf.write(os.path.join(root, f), arcname=os.path.join(root[len(unpack_root):], f))
     return pkg_file
 
 def generate_setup(src_dir, dst_dir, dependencies, project_name, version):

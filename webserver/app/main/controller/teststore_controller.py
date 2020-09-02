@@ -270,7 +270,7 @@ class PackageInfo(Resource):
         package = Package.objects(proprietary=proprietary, package_type=package_type, name=package_name).first()
         if not package:
             return response_message(ENOENT, 'Package not found'), 404
-        package_path = pypi_root / package.package_name / package.get_package_by_version(version)
+        package_path = pypi_root / package.package_name / package.get_package_by_version(version).filename
         _, _, description = get_package_info(package_path)
         return response_message(SUCCESS, description=description)
 
@@ -392,7 +392,7 @@ class PackageInfo(Resource):
         scripts_root = get_user_scripts_root(organization=organization, team=team)
         libraries_root = get_back_scripts_root(organization=organization, team=team)
         pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
-        package_path = pypi_root / package.package_name / package.get_package_by_version(version)
+        package_path = pypi_root / package.package_name / package.get_package_by_version(version).filename
         pkg_names = get_internal_packages(package_path)
         for pkg_name in pkg_names:
             for script in os.listdir(scripts_root / pkg_name):

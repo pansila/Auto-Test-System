@@ -48,18 +48,26 @@ NON_ASCII = re.compile('[\x80-\xff]')
 
 
 class AsyncRemoteLibrary():
-    def __init__(self, library, ws):
+    def __init__(self, library, rpc_ws, msg_ws, task_id):
         self._library = RemoteLibraryFactory(library)
-        self.ws = ws
+        self.rpc_ws = rpc_ws
+        self.msg_ws = msg_ws
+        self.task_id = task_id
 
     def get_keyword_names(self):
-        # return self._library.get_keyword_names() + ['stop_remote_server']
-        return self._library.get_keyword_names()
+        return self._library.get_keyword_names() + ['stop_remote_server']
+        # return self._library.get_keyword_names()
 
     async def run_keyword(self, name, args, kwargs=None):
         # if name == 'stop_remote_server':
         #     return await KeywordRunner(self.stop_remote_server).run_keyword(args, kwargs)
-        return await self._library.run_keyword(name, args, kwargs, self.ws)
+        if name == 'stop_test' or name == 'stop_remote_server':
+            asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.rpc_ws.close()))
+            asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.msg_ws.close()))
+            result = KeywordResult()
+            result.set_status('PASS')
+            return result.data
+        return await self._library.run_keyword(name, args, kwargs, self.msg_ws, self.task_id)
 
     def get_keyword_arguments(self, name):
         if name == 'stop_remote_server':
@@ -146,9 +154,9 @@ class StaticRemoteLibrary(object):
     def get_keyword_names(self):
         return self._names
 
-    async def run_keyword(self, name, args, kwargs=None, ws=None):
+    async def run_keyword(self, name, args, kwargs=None, ws=None, task_id=None):
         kw = self._get_keyword(name)
-        return await KeywordRunner(kw).run_keyword(args, kwargs, ws=ws)
+        return await KeywordRunner(kw).run_keyword(args, kwargs, ws=ws, task_id=task_id)
 
     def _get_keyword(self, name):
         if name in self._robot_name_index:
@@ -225,9 +233,9 @@ class DynamicRemoteLibrary(HybridRemoteLibrary):
         spec = inspect.getargspec(run_keyword)
         return len(spec.args) > 3    # self, name, args, kwargs=None
 
-    async def run_keyword(self, name, args, kwargs=None, ws=None):
+    async def run_keyword(self, name, args, kwargs=None, ws=None, task_id=None):
         args = [name, args, kwargs] if kwargs else [name, args]
-        return await KeywordRunner(self._run_keyword).run_keyword(args, ws=ws)
+        return await KeywordRunner(self._run_keyword).run_keyword(args, ws=ws, task_id=task_id)
 
     def get_keyword_arguments(self, name):
         if self._get_keyword_arguments:
@@ -252,11 +260,11 @@ class KeywordRunner(object):
     def __init__(self, keyword):
         self._keyword = keyword
 
-    async def run_keyword(self, args, kwargs=None, ws=None):
+    async def run_keyword(self, args, kwargs=None, ws=None, task_id=None):
         args = self._handle_binary(args)
         kwargs = self._handle_binary(kwargs or {})
         result = KeywordResult()
-        with StandardStreamInterceptor(ws, debug=False) as interceptor:
+        with StandardStreamInterceptor(ws, task_id=task_id, debug=False) as interceptor:
             try:
                 return_value = self._keyword(*args, **kwargs)
                 if inspect.isawaitable(return_value):
@@ -286,10 +294,10 @@ class KeywordRunner(object):
         return arg
 
 class MyStringIO(StringIO):
-    def __init__(self, ws):
+    def __init__(self, ws, task_id):
         super().__init__()
-        self.ws = ws[0]
-        self.task_id = ws[1]
+        self.ws = ws
+        self.task_id = task_id
 
     def write(self, s):
         super().write(s)
@@ -302,15 +310,15 @@ class MyStringIO(StringIO):
 
 class StandardStreamInterceptor(object):
 
-    def __init__(self, ws, debug=False):
+    def __init__(self, ws, task_id, debug=False):
         self.output = ''
         self.debug = debug
         if debug:
             return
         self.origout = sys.stdout
         self.origerr = sys.stderr
-        sys.stdout = MyStringIO(ws)
-        sys.stderr = MyStringIO(ws)
+        sys.stdout = MyStringIO(ws, task_id)
+        sys.stderr = MyStringIO(ws, task_id)
 
     def __enter__(self):
         return self

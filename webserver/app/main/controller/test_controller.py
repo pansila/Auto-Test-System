@@ -52,7 +52,7 @@ class ScriptDownload(Resource):
 
         test_path = None if '/' not in test_script else test_script.split('/', 1)[0]
 
-        result_dir = get_test_result_path(task)
+        result_dir = '\\\\?\\' + os.path.abspath(get_test_result_path(task))
         scripts_root = get_back_scripts_root(task)
         pypi_root = get_test_store_root(task=task)
         package = None
@@ -75,13 +75,13 @@ class ScriptDownload(Resource):
                 generate_setup(scripts_root, tempDir, deps, test_script_name, '0.0.1')
                 # silence the packing messages
                 with StringIO() as buf, redirect_stdout(buf):
-                    sandbox.run_setup(os.path.abspath(os.path.join(tempDir, 'setup.py')), ['bdist_egg'])
+                    sandbox.run_setup(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
                 deps = find_dependencies(script_file, task.organization, task.team, 'Test Suite')
                 dist = os.path.join(tempDir, 'dist')
                 for pkg, version in deps:
                     shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
-                return send_from_directory(Path(os.getcwd()) / result_dir, f'{test_script_name}.tar.gz')
+                return send_from_directory(result_dir[4:], f'{test_script_name}.tar.gz')
         else:
             with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
             # tempDir = tempfile.mkdtemp(dir=result_dir)
@@ -95,7 +95,7 @@ class ScriptDownload(Resource):
                     pack_file = repack_package(pypi_root, scripts_root, package, task.test.package_version, tempDir)
                     shutil.copy(pack_file, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
-                return send_from_directory(Path(os.getcwd()) / result_dir, f'{os.path.basename(test_script)}.tar.gz')
+                return send_from_directory(result_dir[4:], f'{os.path.basename(test_script)}.tar.gz')
 
 @api.route('/detail')
 @api.response(404, 'Script not found.')
