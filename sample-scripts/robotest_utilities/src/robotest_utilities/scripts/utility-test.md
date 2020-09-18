@@ -9,6 +9,7 @@
 | Variables | Value |
 |---|---|
 | ${dut1} | STA1 |
+| ${backing file} | robotest_utilities/dut/devices.py |
 
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
@@ -25,6 +26,6 @@
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 | ---------- | ------ | -------- | -------- | -------- | -------- | -------- |
 | hello world |  |  |  |  |  |  |
-|  | [Setup] | Setup DUT | robotest_utilities/dut/devices.py | testlib | ${dut1} |  |
+|  | [Setup] | Setup DUT | ${backing file} | testlib | ${dut1} |  |
 |  | [Teardown] | Teardown DUT |  |  |  |  |
 |  |  | testlib.reboot |  |  |  |  |

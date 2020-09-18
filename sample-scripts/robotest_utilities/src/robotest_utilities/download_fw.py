@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 
 class download_fw_intf():
-    def download(self, deviceName, firmwareName=None, flashAddr=None):
+    def dut_download(self, deviceName, firmwareName=None, flashAddr=None):
         dut = self.configDut[deviceName]
         if 'download' not in dut:
             raise AssertionError('Download method is not configured for {}'.format(deviceName))

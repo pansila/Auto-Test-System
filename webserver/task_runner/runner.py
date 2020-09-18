@@ -518,25 +518,32 @@ async def rpc_proxy(request, ws):
     organization, team = None, None
 
     endpoint = Endpoint.objects(uid=uid).first()
-    if endpoint:
-        if endpoint.status == 'Forbidden' or endpoint.status == 'Unauthorized':
-            await ws.send(endpoint.status)
-            return
+    if endpoint and endpoint.status == 'Forbidden':
+        await ws.send(endpoint.status)
+        return
     organization = Organization.objects(pk=join_id).first()
+    team = Team.objects(pk=join_id).first()
     if not organization:
-        team = Team.objects(pk=join_id).first()
         if not team:
             #await ws.send('Organization not found')
             return
+        organization = team.organization
     if not endpoint:
         try:
             endpoint = Endpoint(uid=uid, organization=team.organization if team else organization, team=team)
-            endpoint.status = 'Unauthorized'
             endpoint.save()
         except ValidationError:
             print('Endpoint uid %s validation error' % uid)
             return
         print('Received a new endpoint with uid %s' % uid)
+        return
+    if endpoint.organization != organization or endpoint.team != team:
+        endpoint.organization = organization
+        endpoint.team = team
+        endpoint.status = 'Unauthorized'
+        endpoint.save()
+    if endpoint.status == 'Unauthorized':
+        await ws.send(endpoint.status)
         return
     await ws.send('OK')
 

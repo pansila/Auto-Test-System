@@ -1,4 +1,5 @@
 import argparse
+import configparser
 import hashlib
 import json
 import os
@@ -17,6 +18,7 @@ from functools import cmp_to_key
 from gzip import GzipFile
 from io import UnsupportedOperation
 from io import open
+from urllib.parse import urlparse
 
 
 try:
@@ -177,6 +179,7 @@ ROBOTEST_BIN = os.path.join(ROBOTEST_HOME, "bin")
 ROBOTEST_ENV = os.path.join(ROBOTEST_HOME, "env")
 ROBOTEST_LIB = os.path.join(ROBOTEST_HOME, "lib")
 ROBOTEST_LIB_BACKUP = os.path.join(ROBOTEST_HOME, "lib-backup")
+ROBOTEST_CONFIG = os.path.join(ROBOTEST_LIB, "robotest", "pyproject.toml")
 
 
 BIN = """#!/usr/bin/env python
@@ -345,6 +348,9 @@ class Installer:
         self._install_poetry = True
         self._accept_all = accept_all
         self._base_url = base_url
+        self._server_ip = None
+        self._server_port = None
+        self._join_id = None
 
     def allows_prereleases(self):
         return self._preview
@@ -483,6 +489,10 @@ class Installer:
             if install_poetry.lower() in {"n", "no"}:
                 self._install_poetry = False
 
+            self._server_ip = input("Please specify the server IP address ({server_url}):") or "{server_url}"
+            self._server_ip = urlparse(self._server_ip).netloc
+            self._join_id = input("Please specify the organization or team's ID to join:") or ''
+
             print("")
 
     def customize_uninstall(self):
@@ -522,6 +532,7 @@ class Installer:
         print("Installing version: " + colorize("info", version))
 
         self.make_lib(version)
+        self.update_config()
         self.make_bin()
         self.make_env()
         self.update_path()
@@ -620,6 +631,17 @@ class Installer:
                     f.extractall(ROBOTEST_LIB)
             finally:
                 gz.close()
+
+    def update_config(self):
+        config = configparser.ConfigParser()
+        config.read(ROBOTEST_CONFIG)
+        ip, port = self._server_ip.split(':')
+        config['tool.robotest.settings']['server_host'] = f'"{ip}"'
+        config['tool.robotest.settings']['server_port'] = f'"{port}"'
+        config['tool.robotest.settings']['join_id'] = f'"{self._join_id}"'
+        config['tool.robotest.settings']['uuid'] = '""'
+        with open(ROBOTEST_CONFIG, 'w') as config_file:
+            config.write(config_file)
 
     def make_bin(self):
         if not os.path.exists(ROBOTEST_BIN):

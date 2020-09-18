@@ -170,6 +170,10 @@ class test_library_rpc(Process):
                             await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), rpc_ws, msg_ws, self.task_id), method_prefix='').run()
                         except ConnectionClosedError:
                             print('Websocket closed')
+                    elif ret == 'Unauthorized':
+                        print('This endpoint is unauthorized, please authorize it on the WEB admin page')
+                        await asyncio.sleep(10)
+                        continue
                     else:
                         print('Received a message from the server: {}'.format(ret))
                         await asyncio.sleep(10)
