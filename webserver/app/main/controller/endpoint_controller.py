@@ -58,11 +58,11 @@ class EndpointController(Resource):
         else:
             query = {'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
         if forbidden:
-            query = {'status': 'Forbidden'}
+            query = {'organization': organization, 'team': team, 'status': 'Forbidden'}
         if unauthorized:
-            query = {'status': 'Unauthorized'}
+            query = {'organization': organization, 'team': team, 'status': 'Unauthorized'}
         if forbidden and unauthorized:
-            query = Q(status='Forbidden') | Q(status='Unauthorized')
+            query = Q(organization=organization, team=team, status='Forbidden') | Q(organization=organization, team=team, status='Unauthorized')
             endpoints = Endpoint.objects(query)
         else:
             endpoints = Endpoint.objects(**query)

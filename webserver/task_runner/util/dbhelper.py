@@ -35,7 +35,7 @@ WHEEL_INFO_RE = re.compile(
     ((-(?P<build>\d.*?))?-(?P<pyver>.+?)-(?P<abi>.+?)-(?P<plat>.+?)
     \.whl|\.dist-info)$""",
     re.VERBOSE).match
-VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|<=|!=)\s*)?(?P<version>\d.+?)?$').match
+VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|<=|!=)\s*)(?P<version>\d.+?)?$').match
 MODULE_IMPORT = re.compile(r'^\s*(import|from)\s+(?P<module>.+?)(#|$|\s+import\s+.+$)').match
 
 def filter_kw(item):

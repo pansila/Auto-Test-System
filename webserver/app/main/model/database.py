@@ -217,7 +217,7 @@ class Endpoint(Document):
     schema_version = StringField(max_length=10, default='1')
     name = StringField(max_length=100)
     tests = ListField(ReferenceField(Test))
-    status = StringField(default='Offline', max_length=20)
+    status = StringField(default='Unauthorized', max_length=20)
     enable = BooleanField(default=True)
     last_run_date = DateTimeField()
     organization = ReferenceField(Organization)

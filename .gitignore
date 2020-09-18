@@ -117,6 +117,7 @@ log.html
 /webserver/static/pypi
 /webserver/static/results
 /webserver/static/users
+/webserver/static/download
 /webserver/upload/
 /webserver/logs/
 /tools/easy-rsa/Windows/keys

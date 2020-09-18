@@ -1,1 +1,1 @@
-from .devices import serial_dut
+from .devices import serial_dut, wifi_dut_base
