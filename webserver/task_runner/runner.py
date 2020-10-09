@@ -26,7 +26,8 @@ import websockets
 from mongoengine import ValidationError
 from app.main.config import get_config
 from app.main.model.database import Endpoint, Task, TaskQueue, EventQueue, Organization, Team, \
-        EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, EVENT_CODE_UPDATE_USER_SCRIPT, QUEUE_PRIORITY
+        EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, EVENT_CODE_UPDATE_USER_SCRIPT, QUEUE_PRIORITY, \
+        EVENT_CODE_GET_ENDPOINT_CONFIG
 from app.main.util import get_room_id
 from app.main.util.get_path import get_test_result_path, get_upload_files_root, get_user_scripts_root
 from app.main.util.tarball import make_tarfile_from_dir
@@ -157,10 +158,16 @@ def event_handler_update_user_script(app, event):
     user = event.message['user']
     db_update_test(script=script, user=user)
 
+def event_handler_get_endpoint_config(app, event):
+    uuid = event.message('uuid')
+    fut = asyncio.run_coroutine_threadsafe(RPC_PROXIES[normalize_url(uuid)].request.run_keyword('get_endpoint_config', None, None), RPC_PROXIES['loop'])
+    fut.result()
+
 EVENT_HANDLERS = {
     EVENT_CODE_START_TASK: event_handler_start_task,
     EVENT_CODE_CANCEL_TASK: event_handler_cancel_task,
     EVENT_CODE_UPDATE_USER_SCRIPT: event_handler_update_user_script,
+    EVENT_CODE_GET_ENDPOINT_CONFIG: event_handler_get_endpoint_config,
 }
 
 def event_loop(app):
@@ -204,8 +211,7 @@ def convert_json_to_robot_variable(args, variables, variable_file):
     p = re.compile(r'\${(.*?)}')
 
     def var_replace(m):
-        nonlocal local_args
-        local_args.extend(m.groups(0))
+        local_args.append(m.group(1).replace(' ', '_'))
         return '{}'
 
     with open(variable_file, 'w') as f:
@@ -329,7 +335,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 for t in task.testcases:
                     args.extend(['-t', t])
 
-            if hasattr(task, 'variables'):
+            if hasattr(task, 'variables') and task.variables:
                 variable_file = Path(result_dir) / 'variablefile.py'
                 convert_json_to_robot_variable(args, task.variables, variable_file)
 
@@ -582,7 +588,8 @@ async def rpc_proxy(request, ws):
     try:
         await RPC_PROXIES[url].close()
     except websockets.exceptions.ConnectionClosedError:
-        print(f'websocket close error for endpoint {url}')
+        pass
+        # print(f'websocket close error for endpoint {url}')
     del RPC_PROXIES[url]
 
 def restart_interrupted_tasks(app, organization=None, team=None):

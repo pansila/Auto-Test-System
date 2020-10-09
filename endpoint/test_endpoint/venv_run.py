@@ -80,7 +80,7 @@ def activate_workspace(workspace):
         with activate_venv(venv):
             yield venv
 
-def start():
+def start(host=None, port=None, debug=False):
     with activate_workspace(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))):
         from .main import run
-        run()
+        run(host, port, debug)

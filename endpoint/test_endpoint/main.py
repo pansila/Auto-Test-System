@@ -72,7 +72,7 @@ def temp_environ_path(paths):
     os.environ['PATH'] = old_path
 
 class test_library_rpc(Process):
-    def __init__(self, backing_file, task_id, config, queue, rpc_daemon=False):
+    def __init__(self, backing_file, task_id, config, queue, rpc_daemon=False, debug=False):
         super().__init__()
         self.backing_file = backing_file
         self.task_id = task_id
@@ -84,6 +84,7 @@ class test_library_rpc(Process):
         self.loop = None
         self.rpc_daemon = rpc_daemon
         self.queue = queue
+        self.debug = debug
 
     def run(self):
         self.loop = asyncio.new_event_loop()
@@ -139,6 +140,9 @@ class test_library_rpc(Process):
             return None
         return test_lib
 
+    def inform_caller_rpc_ready(self):
+        self.queue.put(1)
+
     async def go(self):
         module_name = os.path.splitext(self.backing_file)[0].replace('//', '/').replace('/', '.')
         importlib.invalidate_caches()
@@ -163,11 +167,11 @@ class test_library_rpc(Process):
                         await asyncio.sleep(10)
                         continue
                     if ret == 'OK':
-                        # inform the daemon that the test has started successfully
-                        self.queue.put(1)
+                        self.inform_caller_rpc_ready()
                         print('Start the RPC server for ' + ('daemon' if self.rpc_daemon else 'test'))
                         try:
-                            await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(test_lib(self.config, self.task_id), rpc_ws, msg_ws, self.task_id), method_prefix='').run()
+                            testlib = test_lib(self.config, self.task_id)
+                            await SecureWebsocketRPC(rpc_ws, AsyncRemoteLibrary(testlib, rpc_ws, msg_ws, self.task_id, self.debug), method_prefix='').run()
                         except ConnectionClosedError:
                             print('Websocket closed')
                     elif ret == 'Unauthorized':
@@ -179,14 +183,14 @@ class test_library_rpc(Process):
                         await asyncio.sleep(10)
                         continue
             except (ConnectionRefusedError, ConnectionClosedError):
+                # print('Connection refused error while try connecting')
                 pass
-                # print(f'Connection refused error while try connecting')
             if not self.rpc_daemon:
                 print('Exit RPC server')
                 break
             await asyncio.sleep(1)
 
-def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False):
+def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False, debug=False):
     if not rpc_daemon:
         with activate_workspace('workspace') as venv:
             ctx = multiprocessing.get_context('spawn')
@@ -196,11 +200,11 @@ def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False):
                 executable = os.path.join(venv, 'bin', 'python')
             # ctx.set_executable(executable)
             queue = Queue()
-            process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon)
+            process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon, debug)
             process.start()
     else:
         queue = Queue()
-        process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon)
+        process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon, debug)
         process.start()
     return process, queue
 
@@ -216,27 +220,27 @@ def get_websocket_ports(url):
 
 def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
     toml_config = toml.load(config_file)
-    if 'join_id' not in toml_config['tool']['robotest']['settings'] or not toml_config['tool']['robotest']['settings']['join_id']:
+    if 'join_id' not in toml_config['tool']['collie']['settings'] or not toml_config['tool']['collie']['settings']['join_id']:
         print("'join_id' must be specified in the pyproject.toml, it's either organization's id or team's id you want to join.")
         print("You can find it on the server's global settings sidebar")
         return None
 
     build_uuid = False
-    if 'uuid' not in toml_config['tool']['robotest']['settings'] or not toml_config['tool']['robotest']['settings']['uuid']:
+    if 'uuid' not in toml_config['tool']['collie']['settings'] or not toml_config['tool']['collie']['settings']['uuid']:
         build_uuid = True
     else:
         try:
-            uuid.UUID(toml_config['tool']['robotest']['settings']['uuid'])
+            uuid.UUID(toml_config['tool']['collie']['settings']['uuid'])
         except Exception:
             build_uuid = True
     if build_uuid:
-        toml_config['tool']['robotest']['settings']['uuid'] = str(uuid.uuid1())
+        toml_config['tool']['collie']['settings']['uuid'] = str(uuid.uuid1())
         with open(config_file, 'w') as fp:
             toml.dump(toml_config, fp)
-        print('Generated the endpoint\'s uuid: ' + toml_config['tool']['robotest']['settings']['uuid'] + ', please authorize it on the server\'s endpoint management page')
+        print('Generated the endpoint\'s uuid: ' + toml_config['tool']['collie']['settings']['uuid'] + ', please authorize it on the server\'s endpoint management page')
 
     config = {
-        **toml_config['tool']['robotest']['settings'],
+        **toml_config['tool']['collie']['settings'],
         'download_dir': os.path.abspath(os.path.join('workspace', 'downloads')),
         'resource_dir': os.path.abspath(os.path.join('workspace', 'resources')),
     }
@@ -261,8 +265,8 @@ def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
             config['server_rpc_port'] = 5555
     return config
 
-def start_daemon(config):
-    return start_remote_server('test_endpoint/daemon.py', config, rpc_daemon=True)
+def start_daemon(config, debug=False):
+    return start_remote_server('test_endpoint/daemon.py', config, rpc_daemon=True, debug=debug)
 
 class Config_Handler(FileSystemEventHandler):
     def __init__(self):
@@ -272,7 +276,7 @@ class Config_Handler(FileSystemEventHandler):
         if not event.is_directory and event.src_path.endswith("pyproject.toml"):
             self.restart = True
 
-def watchdog_run(config_watchdog, handler, host, port):
+def watchdog_run(config_watchdog, handler, host, port, debug=False):
     daemon = None
     queue = None
     while config_watchdog.is_alive():
@@ -284,7 +288,7 @@ def watchdog_run(config_watchdog, handler, host, port):
                 config_watchdog.stop()
                 break
             # config = read_config(host=host, port=port)
-            daemon, _ = start_daemon(config)
+            daemon, _ = start_daemon(config, debug=debug)
             handler.restart = False
 
         try:
@@ -300,21 +304,13 @@ def watchdog_run(config_watchdog, handler, host, port):
     else:
         daemon.terminate()
 
-def run():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--host', type=str,
-                        help='the server IP for daemon to connect')
-    parser.add_argument('--port', type=int,
-                        help='the server port for daemon to connect')
-    args = parser.parse_args()
-    host, port = args.host, args.port
-
+def run(host=None, port=None, debug=False):
     handler = Config_Handler()
     ob = Observer()
     watch = ob.schedule(handler, path='.')
     ob.start()
 
-    watchdog_run(ob, handler, host, port)
+    watchdog_run(ob, handler, host, port, debug)
 
     return 0
 

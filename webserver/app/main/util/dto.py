@@ -211,6 +211,9 @@ class EndpointDto:
     queue_update = api.inherit('queue_update', organization_team, {
         'taskqueues': fields.List(fields.Nested(queuing_task)),
     })
+    endpoint_config = api.model('endpoint_config', {
+        'data': fields.Raw(),
+    })
 
 class ScriptDto:
     api = Namespace('script', description='scripts management operations')

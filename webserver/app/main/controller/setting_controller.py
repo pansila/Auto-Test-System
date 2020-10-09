@@ -51,7 +51,7 @@ class download_request(Resource):
         """
         Get package information for the poetry
         """
-        return {'releases': ["0.1.0"]}
+        return {'releases': ["0.2.0"]}
 
 @api.route('/get-poetry/json')
 class download_request(Resource):

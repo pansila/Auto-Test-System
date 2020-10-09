@@ -174,19 +174,30 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
         scripts = [f for f in zf.namelist() if '/scripts/' in f]
         for s in scripts:
             zf.extract(s, scripts_root)
+        new_tests = []
+        all_tests = []
         for pkg_name in set((s.split('/', 1)[0] for s in scripts)):
             for f in os.listdir(scripts_root / pkg_name / 'scripts'):
                 shutil.move(str(scripts_root / pkg_name / 'scripts' / f), scripts_root / pkg_name)
-                db_update_test(scripts_root, os.path.join(pkg_name, f), user, organization, team, package, version)
+                test = db_update_test(scripts_root, os.path.join(pkg_name, f), user, organization, team, package, version)
+                if test:
+                    new_tests.append(test)
             shutil.rmtree(scripts_root / pkg_name / 'scripts')
+            tests = Test.objects(path=pkg_name, organization=organization, team=team)
+            for test in tests:
+                all_tests.append(test)
+        tests = set(all_tests) - set(new_tests)
+        for test in tests:
+            current_app.logger.critical(f'Remove the staled test suite: {test.test_suite}')
+            test.delete()
     pkg_file.modify(inc__download_times=1)
     return True
 
 def db_update_test(scripts_dir, script, user, organization, team, package=None, version=None):
     if scripts_dir is None:
-        return False
+        return None
     if not script.endswith('.md'):
-        return False
+        return None
 
     basename = os.path.basename(script)
     dirname = os.path.dirname(script)
@@ -205,7 +216,7 @@ def db_update_test(scripts_dir, script, user, organization, team, package=None, 
         test.update_date = datetime.datetime.utcnow()
         test.save()
         current_app.logger.critical(f'Update test suite for {script}')
-    return True
+    return test
 
 def update_test_from_md(md_file, test):
     """

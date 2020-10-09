@@ -22,6 +22,7 @@ EVENT_CODE_TASKQUEUE_UPDATE = 204
 EVENT_CODE_TASKQUEUE_DELETE = 205
 EVENT_CODE_EXIT_EVENT_TASK = 206
 EVENT_CODE_DELETE_ENDPOINT = 207
+EVENT_CODE_GET_ENDPOINT_CONFIG = 208
 
 LOCK_TIMEOUT = 50
 
@@ -189,6 +190,9 @@ class Test(Document):
             if self[item] != other[item]:
                 return False
         return True
+
+    def __hash__(self):
+        return hash(self.id)
 
 class Task(Document):
     schema_version = StringField(max_length=10, default='1')

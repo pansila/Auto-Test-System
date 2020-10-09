@@ -7,6 +7,7 @@ import signal
 import sys
 import traceback
 import selectors
+import socketserver
 
 # poll/select have the advantage of not requiring any extra file descriptor,
 # contrarily to epoll/kqueue (also, they require a single syscall).
@@ -15,9 +16,35 @@ if hasattr(selectors, 'PollSelector'):
 else:
     _ServerSelector = selectors.SelectSelector
 
-from xmlrpc.server import SimpleXMLRPCServer, SimpleXMLRPCRequestHandler
+from xmlrpc.server import SimpleXMLRPCDispatcher, SimpleXMLRPCRequestHandler
 from xmlrpc.client import Fault, dumps, loads
 
+class SimpleXMLRPCServer(socketserver.ThreadingTCPServer,
+                         SimpleXMLRPCDispatcher):
+    """Simple XML-RPC server.
+
+    Simple XML-RPC server that allows functions and a single instance
+    to be installed to handle requests. The default implementation
+    attempts to dispatch XML-RPC calls to the functions or instance
+    installed in the server. Override the _dispatch method inherited
+    from SimpleXMLRPCDispatcher to change this behavior.
+    """
+
+    allow_reuse_address = True
+
+    # Warning: this is for debugging purposes only! Never set this to True in
+    # production code, as will be sending out sensitive information (exception
+    # and stack trace details) when exceptions are raised inside
+    # SimpleXMLRPCRequestHandler.do_POST
+    _send_traceback_header = False
+
+    def __init__(self, addr, requestHandler=SimpleXMLRPCRequestHandler,
+                 logRequests=True, allow_none=False, encoding=None,
+                 bind_and_activate=True, use_builtin_types=False):
+        self.logRequests = logRequests
+
+        SimpleXMLRPCDispatcher.__init__(self, allow_none, encoding, use_builtin_types)
+        socketserver.ThreadingTCPServer.__init__(self, addr, requestHandler, bind_and_activate)
 
 def resolve_dotted_attribute(obj, attr, allow_dotted_names=True):
     """resolve_dotted_attribute(a, 'b.c.d') => a.b.c.d
@@ -66,38 +93,6 @@ class StoppableXMLRPCServer(SimpleXMLRPCServer):
             self.server_activate()
             self._activated = True
         return self.server_address[1]
-
-    def serve_forever(self, poll_interval=0.5):
-        """Handle one request at a time until shutdown.
-
-        Polls for shutdown every poll_interval seconds. Ignores
-        self.timeout. If you need to do periodic tasks, do them in
-        another thread.
-        """
-        self.__is_shut_down.clear()
-        try:
-            # XXX: Consider using another file descriptor or connecting to the
-            # socket to wake this up instead of polling. Polling reduces our
-            # responsiveness to a shutdown request and wastes cpu at all other
-            # times.
-            with _ServerSelector() as selector:
-                selector.register(self, selectors.EVENT_READ)
-
-                while not self.__shutdown_request:
-                    ready = selector.select(poll_interval)
-                    # bpo-35017: shutdown() called during select(), exit immediately.
-                    if self.__shutdown_request:
-                        break
-                    if ready:
-                        handler_thread = threading.Thread(target=self._handle_request_noblock())
-                        handler_thread.daemon = True
-                        handler_thread.start()
-                        # self._threads.append(handler_thread)
-
-                    self.service_actions()
-        finally:
-            self.__shutdown_request = False
-            self.__is_shut_down.set()
 
     def serve(self):
         self.activate()

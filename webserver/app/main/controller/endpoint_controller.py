@@ -22,6 +22,7 @@ _endpoint_del = EndpointDto.endpoint_del
 _endpoint = EndpointDto.endpoint
 _queuing_tasks = EndpointDto.queuing_tasks
 _queue_update = EndpointDto.queue_update
+_endpoint_config = EndpointDto.endpoint_config
 
 @api.route('/')
 class EndpointController(Resource):
@@ -168,7 +169,7 @@ class EndpointController(Resource):
         endpoint.tests = endpoint_tests
         endpoint.save()
 
-        return response_message(SUCCESS), 200
+        return response_message(SUCCESS)
 
 @api.route('/queue/')
 class EndpointController(Resource):
@@ -286,9 +287,9 @@ class EndpointChecker(Resource):
 
         ret = check_endpoint(current_app._get_current_object(), endpoint_uid, organization, team)
         if not ret:
-            return response_message(SUCCESS, 'Endpoint offline', status=False), 200
+            return response_message(SUCCESS, 'Endpoint offline', status=False)
         else:
-            return response_message(SUCCESS, 'Endpoint online', status=True), 200
+            return response_message(SUCCESS, 'Endpoint online', status=True)
 
 @api.route('/authorize')
 class EndpointController(Resource):
@@ -349,3 +350,23 @@ class EndpointController(Resource):
             endpoint.update(status='Forbidden')
 
         return response_message(SUCCESS)
+
+@api.route('/config')
+class EndpointChecker(Resource):
+    @token_required
+    @organization_team_required_by_args
+    @api.doc('get the endpoint\'s configuration')
+    @api.param('organization', description='The organization ID')
+    @api.param('team', description='The team ID')
+    @api.param('uuid', description='The endpoint uuid')
+    @api.marshal_list_with(_endpoint_config)
+    def get(self, **kwargs):
+        """Get the endpoint\'s configuration"""
+        organization = kwargs['organization']
+        team = kwargs['team']
+
+        endpoint_uid = request.args.get('uuid', None)
+        if endpoint_uid is None:
+            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+
+        return response_message(SUCCESS, 'Config is not implemented')

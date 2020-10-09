@@ -48,8 +48,8 @@ NON_ASCII = re.compile('[\x80-\xff]')
 
 
 class AsyncRemoteLibrary():
-    def __init__(self, library, rpc_ws, msg_ws, task_id):
-        self._library = RemoteLibraryFactory(library)
+    def __init__(self, library, rpc_ws, msg_ws, task_id, debug=False):
+        self._library = RemoteLibraryFactory(library, debug)
         self.rpc_ws = rpc_ws
         self.msg_ws = msg_ws
         self.task_id = task_id
@@ -61,13 +61,11 @@ class AsyncRemoteLibrary():
     async def run_keyword(self, name, args, kwargs=None):
         # if name == 'stop_remote_server':
         #     return await KeywordRunner(self.stop_remote_server).run_keyword(args, kwargs)
+        ret = await self._library.run_keyword(name, args, kwargs, self.msg_ws, self.task_id)
         if name == 'stop_test' or name == 'stop_remote_server':
             asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.rpc_ws.close()))
             asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.msg_ws.close()))
-            result = KeywordResult()
-            result.set_status('PASS')
-            return result.data
-        return await self._library.run_keyword(name, args, kwargs, self.msg_ws, self.task_id)
+        return ret
 
     def get_keyword_arguments(self, name):
         if name == 'stop_remote_server':
@@ -107,16 +105,16 @@ class SignalHandler(object):
             signal.signal(getattr(signal, name), handler)
 
 
-def RemoteLibraryFactory(library):
+def RemoteLibraryFactory(library, debug=False):
     if inspect.ismodule(library):
-        return StaticRemoteLibrary(library)
+        return StaticRemoteLibrary(library, debug)
     get_keyword_names = dynamic_method(library, 'get_keyword_names')
     if not get_keyword_names:
-        return StaticRemoteLibrary(library)
+        return StaticRemoteLibrary(library, debug)
     run_keyword = dynamic_method(library, 'run_keyword')
     if not run_keyword:
-        return HybridRemoteLibrary(library, get_keyword_names)
-    return DynamicRemoteLibrary(library, get_keyword_names, run_keyword)
+        return HybridRemoteLibrary(library, get_keyword_names, debug)
+    return DynamicRemoteLibrary(library, get_keyword_names, run_keyword, debug)
 
 
 def dynamic_method(library, underscore_name):
@@ -135,8 +133,9 @@ def is_function_or_method(item):
 
 class StaticRemoteLibrary(object):
 
-    def __init__(self, library):
+    def __init__(self, library, debug=False):
         self._library = library
+        self._debug = debug
         self._names, self._robot_name_index = self._get_keyword_names(library)
 
     def _get_keyword_names(self, library):
@@ -156,7 +155,7 @@ class StaticRemoteLibrary(object):
 
     async def run_keyword(self, name, args, kwargs=None, ws=None, task_id=None):
         kw = self._get_keyword(name)
-        return await KeywordRunner(kw).run_keyword(args, kwargs, ws=ws, task_id=task_id)
+        return await KeywordRunner(kw, debug=self._debug).run_keyword(args, kwargs, ws=ws, task_id=task_id)
 
     def _get_keyword(self, name):
         if name in self._robot_name_index:
@@ -211,16 +210,17 @@ class StaticRemoteLibrary(object):
 
 class HybridRemoteLibrary(StaticRemoteLibrary):
 
-    def __init__(self, library, get_keyword_names):
-        StaticRemoteLibrary.__init__(self, library)
+    def __init__(self, library, get_keyword_names, debug=False):
+        StaticRemoteLibrary.__init__(self, library, debug)
         self.get_keyword_names = get_keyword_names
 
 
 class DynamicRemoteLibrary(HybridRemoteLibrary):
 
-    def __init__(self, library, get_keyword_names, run_keyword):
+    def __init__(self, library, get_keyword_names, run_keyword, debug=False):
         HybridRemoteLibrary.__init__(self, library, get_keyword_names)
         self._run_keyword = run_keyword
+        self._debug = debug
         self._supports_kwargs = self._get_kwargs_support(run_keyword)
         self._get_keyword_arguments \
             = dynamic_method(library, 'get_keyword_arguments')
@@ -235,7 +235,7 @@ class DynamicRemoteLibrary(HybridRemoteLibrary):
 
     async def run_keyword(self, name, args, kwargs=None, ws=None, task_id=None):
         args = [name, args, kwargs] if kwargs else [name, args]
-        return await KeywordRunner(self._run_keyword).run_keyword(args, ws=ws, task_id=task_id)
+        return await KeywordRunner(self._run_keyword, debug=self._debug).run_keyword(args, ws=ws, task_id=task_id)
 
     def get_keyword_arguments(self, name):
         if self._get_keyword_arguments:
@@ -257,14 +257,15 @@ class DynamicRemoteLibrary(HybridRemoteLibrary):
 
 class KeywordRunner(object):
 
-    def __init__(self, keyword):
+    def __init__(self, keyword, debug=False):
         self._keyword = keyword
+        self._debug = debug
 
     async def run_keyword(self, args, kwargs=None, ws=None, task_id=None):
         args = self._handle_binary(args)
         kwargs = self._handle_binary(kwargs or {})
         result = KeywordResult()
-        with StandardStreamInterceptor(ws, task_id=task_id, debug=False) as interceptor:
+        with StandardStreamInterceptor(ws, task_id=task_id, debug=self._debug) as interceptor:
             try:
                 return_value = self._keyword(*args, **kwargs)
                 if inspect.isawaitable(return_value):
