@@ -22,7 +22,7 @@ aiohttp = "^3.6.2"
 daemon = "test_endpoint.main:run"
 bundle = "test_endpoint.bundle:run"
 
-[tool.robotest.settings]
+[tool.collie.settings]
 server_host = "127.0.0.1"
 server_port = "5000"
 join_id = ""

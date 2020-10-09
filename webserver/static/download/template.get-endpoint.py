@@ -174,12 +174,12 @@ def expanduser(path):
 
 
 HOME = expanduser("~")
-ROBOTEST_HOME = os.environ.get("ROBOTEST_HOME") or os.path.join(HOME, ".robotest")
-ROBOTEST_BIN = os.path.join(ROBOTEST_HOME, "bin")
-ROBOTEST_ENV = os.path.join(ROBOTEST_HOME, "env")
-ROBOTEST_LIB = os.path.join(ROBOTEST_HOME, "lib")
-ROBOTEST_LIB_BACKUP = os.path.join(ROBOTEST_HOME, "lib-backup")
-ROBOTEST_CONFIG = os.path.join(ROBOTEST_LIB, "robotest", "pyproject.toml")
+COLLIE_HOME = os.environ.get("COLLIE_HOME") or os.path.join(HOME, ".collie")
+COLLIE_BIN = os.path.join(COLLIE_HOME, "bin")
+COLLIE_ENV = os.path.join(COLLIE_HOME, "env")
+COLLIE_LIB = os.path.join(COLLIE_HOME, "lib")
+COLLIE_LIB_BACKUP = os.path.join(COLLIE_HOME, "lib-backup")
+COLLIE_CONFIG = os.path.join(COLLIE_LIB, "collie", "pyproject.toml")
 
 
 BIN = """#!/usr/bin/env python
@@ -188,35 +188,53 @@ import sys
 import os
 import argparse
 
-lib = os.path.normpath(os.path.join(os.path.realpath(__file__), "..", "..", "lib", "robotest"))
+lib = os.path.normpath(os.path.join(os.path.realpath(__file__), "..", "..", "lib", "collie"))
 sys.path.insert(0, lib)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--install', default=False, action='store_true',
-                        help='install the virtual environment of the robotest endpoint')
+                        help='install the virtual environments for the robotest endpoint')
+    parser.add_argument('--update', default=False, nargs='?', const=True, metavar='VERSION',
+                        help='update the collie itself')
+    parser.add_argument('--force', default=False, action='store_true',
+                        help='force to update the collie itself')
+    parser.add_argument('--debug', default=False, action='store_true',
+                        help='force to update the collie itself')
+    parser.add_argument('--host', type=str,
+                        help='the server IP for daemon to connect')
+    parser.add_argument('--port', type=int,
+                        help='the server port for daemon to connect')
+    parser.add_argument('--join_id',
+                        help='the organization ID or team ID to join')
     args = parser.parse_args()
 
     if args.install:
         from test_endpoint.install import run
         run()
+    elif args.update:
+        from test_endpoint.update import SelfUpdate
+        SelfUpdate(args.update, args.force).run()
+    elif args.join_id:
+        from test_endpoint.update import SelfUpdate
+        SelfUpdate(args.update, args.force).update_join_id(args.join_id)
     else:
         from test_endpoint.venv_run import start
-        start()
+        start(args.host, args.port, args.debug)
 """
 
-BAT = u('@echo off\r\npython "{robotest_bin}" %*\r\n')
-SH = u('#!/bin/sh\npython3 "{robotest_bin}" $*\n')
+BAT = u('@echo off\r\npython "{collie_bin}" %*\r\n')
+SH = u('#!/bin/sh\npython3 "{collie_bin}" $*\n')
 
 
-PRE_MESSAGE = """# Welcome to {robotest}!
+PRE_MESSAGE = """# Welcome to {collie}!
 
-This will download and install the latest version of {robotest},
+This will download and install the latest version of {collie},
 a dependency and package manager for Python.
 
-It will add the `robotest` command to {robotest}'s bin directory, located at:
+It will add the `collie` command to {collie}'s bin directory, located at:
 
-{robotest_home_bin}
+{collie_home_bin}
 
 {platform_msg}
 
@@ -226,13 +244,13 @@ and these changes will be reverted.
 
 PRE_UNINSTALL_MESSAGE = """# We are sorry to see you go!
 
-This will uninstall {robotest}.
+This will uninstall {collie}.
 
-It will remove the `robotest` command from {robotest}'s bin directory, located at:
+It will remove the `collie` command from {collie}'s bin directory, located at:
 
-{robotest_home_bin}
+{collie_home_bin}
 
-This will also remove {robotest} from your system's PATH.
+This will also remove {collie} from your system's PATH.
 """
 
 
@@ -251,67 +269,67 @@ modifying the `HKEY_CURRENT_USER/Environment/PATH` registry key."""
 PRE_MESSAGE_NO_MODIFY_PATH = """This path needs to be in your `PATH` environment variable,
 but will not be added automatically."""
 
-POST_MESSAGE_UNIX = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_UNIX = """{collie} ({version}) is installed now. Great!
 
-To get started you need {robotest}'s bin directory ({robotest_home_bin}) in your `PATH`
+To get started you need {collie}'s bin directory ({collie_home_bin}) in your `PATH`
 environment variable. Next time you log in this will be done
 automatically.
 
-To configure your current shell run `source {robotest_home_env}`
+To configure your current shell run `source {collie_home_env}`
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
-POST_MESSAGE_FISH = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_FISH = """{collie} ({version}) is installed now. Great!
 
-{robotest}'s bin directory ({robotest_home_bin}) has been added to your `PATH`
+{collie}'s bin directory ({collie_home_bin}) has been added to your `PATH`
 environment variable by modifying the `fish_user_paths` universal variable.
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
-POST_MESSAGE_WINDOWS = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_WINDOWS = """{collie} ({version}) is installed now. Great!
 
-To get started you need robotest's bin directory ({robotest_home_bin}) in your `PATH`
+To get started you need collie's bin directory ({collie_home_bin}) in your `PATH`
 environment variable. Future applications will automatically have the
 correct environment, but you may need to restart your current shell.
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
-POST_MESSAGE_UNIX_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_UNIX_NO_MODIFY_PATH = """{collie} ({version}) is installed now. Great!
 
-To get started you need {robotest}'s bin directory ({robotest_home_bin}) in your `PATH`
+To get started you need {collie}'s bin directory ({collie_home_bin}) in your `PATH`
 environment variable.
 
-To configure your current shell run `source {robotest_home_env}`
+To configure your current shell run `source {collie_home_env}`
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
-POST_MESSAGE_FISH_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_FISH_NO_MODIFY_PATH = """{collie} ({version}) is installed now. Great!
 
-To get started you need {robotest}'s bin directory ({robotest_home_bin})
+To get started you need {collie}'s bin directory ({collie_home_bin})
 in your `PATH` environment variable, which you can add by running
 the following command:
 
-    set -U fish_user_paths {robotest_home_bin} $fish_user_paths
+    set -U fish_user_paths {collie_home_bin} $fish_user_paths
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
-POST_MESSAGE_WINDOWS_NO_MODIFY_PATH = """{robotest} ({version}) is installed now. Great!
+POST_MESSAGE_WINDOWS_NO_MODIFY_PATH = """{collie} ({version}) is installed now. Great!
 
-To get started you need robotest's bin directory ({robotest_home_bin}) in your `PATH`
+To get started you need collie's bin directory ({collie_home_bin}) in your `PATH`
 environment variable. This has not been done automatically.
 
 Before running the test endpoint, you need to prepare the virtual environments of it,
-to do so please run `{robotest} --install`. Then you can run `{robotest}` to start.
+to do so please run `{collie} --install`. Then you can run `{collie}` to start.
 """
 
 
@@ -411,7 +429,7 @@ class Installer:
             subprocess.run(f'python {temp} {force} {preview}', shell=True, check=True)
 
     def get_version(self):
-        print(colorize("info", "Retrieving robotest metadata"))
+        print(colorize("info", "Retrieving collie metadata"))
 
         metadata = json.loads(self._get(self.METADATA_URL).decode())
 
@@ -451,9 +469,9 @@ class Installer:
                 break
 
         current_version = None
-        if os.path.exists(ROBOTEST_LIB):
+        if os.path.exists(COLLIE_LIB):
             with open(
-                os.path.join(ROBOTEST_LIB, "robotest", "test_endpoint", "__version__.py"), encoding="utf-8"
+                os.path.join(COLLIE_LIB, "collie", "test_endpoint", "__version__.py"), encoding="utf-8"
             ) as f:
                 version_content = f.read()
 
@@ -464,7 +482,7 @@ class Installer:
                 print(
                     colorize(
                         "warning",
-                        "Unable to get the current robotest version. Assuming None",
+                        "Unable to get the current collie version. Assuming None",
                     )
                 )
             else:
@@ -500,7 +518,7 @@ class Installer:
             print()
 
             uninstall = (
-                input("Are you sure you want to uninstall robotest? (y/[n]) ") or "n"
+                input("Are you sure you want to uninstall collie? (y/[n]) ") or "n"
             )
             if uninstall.lower() not in {"y", "yes"}:
                 return False
@@ -511,23 +529,23 @@ class Installer:
 
     def ensure_home(self):
         """
-        Ensures that $ROBOTEST_HOME exists or create it.
+        Ensures that $COLLIE_HOME exists or create it.
         """
-        if not os.path.exists(ROBOTEST_HOME):
-            os.mkdir(ROBOTEST_HOME, 0o755)
+        if not os.path.exists(COLLIE_HOME):
+            os.mkdir(COLLIE_HOME, 0o755)
 
     def remove_home(self):
         """
-        Removes $ROBOTEST_HOME.
+        Removes $COLLIE_HOME.
         """
-        if not os.path.exists(ROBOTEST_HOME):
+        if not os.path.exists(COLLIE_HOME):
             return
 
-        shutil.rmtree(ROBOTEST_HOME)
+        shutil.rmtree(COLLIE_HOME)
 
     def install(self, version, upgrade=False):
         """
-        Installs robotest in $ROBOTEST_HOME.
+        Installs collie in $COLLIE_HOME.
         """
         print("Installing version: " + colorize("info", version))
 
@@ -543,27 +561,27 @@ class Installer:
         """
         Packs everything into a single lib/ directory.
         """
-        if os.path.exists(ROBOTEST_LIB_BACKUP):
-            shutil.rmtree(ROBOTEST_LIB_BACKUP)
+        if os.path.exists(COLLIE_LIB_BACKUP):
+            shutil.rmtree(COLLIE_LIB_BACKUP)
 
         # Backup the current installation
-        if os.path.exists(ROBOTEST_LIB):
-            shutil.copytree(ROBOTEST_LIB, ROBOTEST_LIB_BACKUP)
-            shutil.rmtree(ROBOTEST_LIB)
+        if os.path.exists(COLLIE_LIB):
+            shutil.copytree(COLLIE_LIB, COLLIE_LIB_BACKUP)
+            shutil.rmtree(COLLIE_LIB)
 
         try:
             self._make_lib(version)
         except Exception:
-            if not os.path.exists(ROBOTEST_LIB_BACKUP):
+            if not os.path.exists(COLLIE_LIB_BACKUP):
                 raise
 
-            shutil.copytree(ROBOTEST_LIB_BACKUP, ROBOTEST_LIB)
-            shutil.rmtree(ROBOTEST_LIB_BACKUP)
+            shutil.copytree(COLLIE_LIB_BACKUP, COLLIE_LIB)
+            shutil.rmtree(COLLIE_LIB_BACKUP)
 
             raise
         finally:
-            if os.path.exists(ROBOTEST_LIB_BACKUP):
-                shutil.rmtree(ROBOTEST_LIB_BACKUP)
+            if os.path.exists(COLLIE_LIB_BACKUP):
+                shutil.rmtree(COLLIE_LIB_BACKUP)
 
     def _make_lib(self, version):
         # We get the payload from the remote host
@@ -572,8 +590,8 @@ class Installer:
             platform = "linux"
 
         url = self._base_url.rstrip('/') + '?'
-        name = "robotest-{}-{}.tar.gz".format(version, platform)
-        checksum = "robotest-{}-{}.sha256sum".format(version, platform)
+        name = "collie-{}-{}.tar.gz".format(version, platform)
+        checksum = "collie-{}-{}.sha256sum".format(version, platform)
 
         try:
             r = urlopen(url + "file={}".format(checksum))
@@ -605,7 +623,7 @@ class Installer:
         )
 
         sha = hashlib.sha256()
-        with temporary_directory(prefix="robotest-installer-") as dir_:
+        with temporary_directory(prefix="collie-installer-") as dir_:
             tar = os.path.join(dir_, name)
             with open(tar, "wb") as f:
                 while True:
@@ -628,61 +646,61 @@ class Installer:
             gz = GzipFile(tar, mode="rb")
             try:
                 with tarfile.TarFile(tar, fileobj=gz, format=tarfile.PAX_FORMAT) as f:
-                    f.extractall(ROBOTEST_LIB)
+                    f.extractall(COLLIE_LIB)
             finally:
                 gz.close()
 
     def update_config(self):
         config = configparser.ConfigParser()
-        config.read(ROBOTEST_CONFIG)
+        config.read(COLLIE_CONFIG)
         ip, port = self._server_ip.split(':')
-        config['tool.robotest.settings']['server_host'] = f'"{ip}"'
-        config['tool.robotest.settings']['server_port'] = f'"{port}"'
-        config['tool.robotest.settings']['join_id'] = f'"{self._join_id}"'
-        config['tool.robotest.settings']['uuid'] = '""'
-        with open(ROBOTEST_CONFIG, 'w') as config_file:
+        config['tool.collie.settings']['server_host'] = f'"{ip}"'
+        config['tool.collie.settings']['server_port'] = f'"{port}"'
+        config['tool.collie.settings']['join_id'] = f'"{self._join_id}"'
+        config['tool.collie.settings']['uuid'] = '""'
+        with open(COLLIE_CONFIG, 'w') as config_file:
             config.write(config_file)
 
     def make_bin(self):
-        if not os.path.exists(ROBOTEST_BIN):
-            os.mkdir(ROBOTEST_BIN, 0o755)
+        if not os.path.exists(COLLIE_BIN):
+            os.mkdir(COLLIE_BIN, 0o755)
 
         if WINDOWS:
-            with open(os.path.join(ROBOTEST_BIN, "robotest.bat"), "w") as f:
+            with open(os.path.join(COLLIE_BIN, "collie.bat"), "w") as f:
                 f.write(
                     u(
                         BAT.format(
-                            robotest_bin=os.path.join(ROBOTEST_BIN, "robotest.py").replace(
+                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
                                 os.environ["USERPROFILE"], "%USERPROFILE%"
                             )
                         )
                     )
                 )
         else:
-            with open(os.path.join(ROBOTEST_BIN, "robotest"), "w") as f:
+            with open(os.path.join(COLLIE_BIN, "collie"), "w") as f:
                 f.write(
                     u(
                         SH.format(
-                            robotest_bin=os.path.join(ROBOTEST_BIN, "robotest.py").replace(
+                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
                                 os.getenv("HOME", ""), "$HOME"
                             )
                         )
                     )
                 )
 
-        with open(os.path.join(ROBOTEST_BIN, "robotest.py"), "w", encoding="utf-8") as f:
+        with open(os.path.join(COLLIE_BIN, "collie.py"), "w", encoding="utf-8") as f:
             f.write(u(BIN))
 
         if not WINDOWS:
             # Making the file executable
-            st = os.stat(os.path.join(ROBOTEST_BIN, "robotest"))
-            os.chmod(os.path.join(ROBOTEST_BIN, "robotest"), st.st_mode | stat.S_IEXEC)
+            st = os.stat(os.path.join(COLLIE_BIN, "collie"))
+            os.chmod(os.path.join(COLLIE_BIN, "collie"), st.st_mode | stat.S_IEXEC)
 
     def make_env(self):
         if WINDOWS:
             return
 
-        with open(os.path.join(ROBOTEST_HOME, "env"), "w") as f:
+        with open(os.path.join(COLLIE_HOME, "env"), "w") as f:
             f.write(u(self.get_export_string()))
 
     def update_path(self):
@@ -717,7 +735,7 @@ class Installer:
 
     def add_to_fish_path(self):
         """
-        Ensure ROBOTEST_BIN directory is on Fish shell $PATH
+        Ensure COLLIE_BIN directory is on Fish shell $PATH
         """
         current_path = os.environ.get("PATH", None)
         if current_path is None:
@@ -731,12 +749,12 @@ class Installer:
 
             return
 
-        if ROBOTEST_BIN not in current_path:
+        if COLLIE_BIN not in current_path:
             fish_user_paths = subprocess.check_output(
                 ["fish", "-c", "echo $fish_user_paths"]
             ).decode("utf-8")
-            if ROBOTEST_BIN not in fish_user_paths:
-                cmd = "set -U fish_user_paths {} $fish_user_paths".format(ROBOTEST_BIN)
+            if COLLIE_BIN not in fish_user_paths:
+                cmd = "set -U fish_user_paths {} $fish_user_paths".format(COLLIE_BIN)
                 set_fish_user_path = ["fish", "-c", "{}".format(cmd)]
                 subprocess.check_output(set_fish_user_path)
         else:
@@ -744,7 +762,7 @@ class Installer:
                 colorize(
                     "warning",
                     "\nPATH already contains {} and thus was not modified.".format(
-                        ROBOTEST_BIN
+                        COLLIE_BIN
                     ),
                 )
             )
@@ -766,9 +784,9 @@ class Installer:
 
             return
 
-        new_path = ROBOTEST_BIN
-        if ROBOTEST_BIN in old_path:
-            old_path = old_path.replace(ROBOTEST_BIN + ";", "")
+        new_path = COLLIE_BIN
+        if COLLIE_BIN in old_path:
+            old_path = old_path.replace(COLLIE_BIN + ";", "")
 
         if old_path:
             new_path += ";"
@@ -821,9 +839,9 @@ class Installer:
         fish_user_paths = subprocess.check_output(
             ["fish", "-c", "echo $fish_user_paths"]
         ).decode("utf-8")
-        if ROBOTEST_BIN in fish_user_paths:
+        if COLLIE_BIN in fish_user_paths:
             cmd = "set -U fish_user_paths (string match -v {} $fish_user_paths)".format(
-                ROBOTEST_BIN
+                COLLIE_BIN
             )
             set_fish_user_path = ["fish", "-c", "{}".format(cmd)]
             subprocess.check_output(set_fish_user_path)
@@ -831,12 +849,12 @@ class Installer:
     def remove_from_windows_path(self):
         path = self.get_windows_path_var()
 
-        robotest_path = ROBOTEST_BIN
-        if robotest_path in path:
-            path = path.replace(ROBOTEST_BIN + ";", "")
+        collie_path = COLLIE_BIN
+        if collie_path in path:
+            path = path.replace(COLLIE_BIN + ";", "")
 
-            if robotest_path in path:
-                path = path.replace(ROBOTEST_BIN, "")
+            if collie_path in path:
+                path = path.replace(COLLIE_BIN, "")
 
         self.set_windows_path_var(path)
 
@@ -871,7 +889,7 @@ class Installer:
                 f.writelines(new_content)
 
     def get_export_string(self):
-        path = ROBOTEST_BIN.replace(os.getenv("HOME", ""), "$HOME")
+        path = COLLIE_BIN.replace(os.getenv("HOME", ""), "$HOME")
         export_string = 'export PATH="{}:$PATH"'.format(path)
 
         return export_string
@@ -891,13 +909,13 @@ class Installer:
 
     def display_pre_message(self):
         if WINDOWS:
-            home = ROBOTEST_BIN.replace(os.getenv("USERPROFILE", ""), "%USERPROFILE%")
+            home = COLLIE_BIN.replace(os.getenv("USERPROFILE", ""), "%USERPROFILE%")
         else:
-            home = ROBOTEST_BIN.replace(os.getenv("HOME", ""), "$HOME")
+            home = COLLIE_BIN.replace(os.getenv("HOME", ""), "$HOME")
 
         kwargs = {
-            "robotest": colorize("info", "robotest"),
-            "robotest_home_bin": colorize("comment", home),
+            "collie": colorize("info", "collie"),
+            "collie_home_bin": colorize("comment", home),
         }
 
         if not self._modify_path:
@@ -919,15 +937,15 @@ class Installer:
         print(PRE_MESSAGE.format(**kwargs))
 
     def display_pre_uninstall_message(self):
-        home_bin = ROBOTEST_BIN
+        home_bin = COLLIE_BIN
         if WINDOWS:
             home_bin = home_bin.replace(os.getenv("USERPROFILE", ""), "%USERPROFILE%")
         else:
             home_bin = home_bin.replace(os.getenv("HOME", ""), "$HOME")
 
         kwargs = {
-            "robotest": colorize("info", "robotest"),
-            "robotest_home_bin": colorize("comment", home_bin),
+            "collie": colorize("info", "collie"),
+            "collie_home_bin": colorize("comment", home_bin),
         }
 
         print(PRE_UNINSTALL_MESSAGE.format(**kwargs))
@@ -936,7 +954,7 @@ class Installer:
         print("")
 
         kwargs = {
-            "robotest": colorize("info", "robotest"),
+            "collie": colorize("info", "collie"),
             "version": colorize("comment", version),
         }
 
@@ -945,7 +963,7 @@ class Installer:
             if not self._modify_path:
                 message = POST_MESSAGE_WINDOWS_NO_MODIFY_PATH
 
-            robotest_home_bin = ROBOTEST_BIN.replace(
+            collie_home_bin = COLLIE_BIN.replace(
                 os.getenv("USERPROFILE", ""), "%USERPROFILE%"
             )
         elif "fish" in SHELL:
@@ -953,18 +971,18 @@ class Installer:
             if not self._modify_path:
                 message = POST_MESSAGE_FISH_NO_MODIFY_PATH
 
-            robotest_home_bin = ROBOTEST_BIN.replace(os.getenv("HOME", ""), "$HOME")
+            collie_home_bin = COLLIE_BIN.replace(os.getenv("HOME", ""), "$HOME")
         else:
             message = POST_MESSAGE_UNIX
             if not self._modify_path:
                 message = POST_MESSAGE_UNIX_NO_MODIFY_PATH
 
-            robotest_home_bin = ROBOTEST_BIN.replace(os.getenv("HOME", ""), "$HOME")
-            kwargs["robotest_home_env"] = colorize(
-                "comment", ROBOTEST_ENV.replace(os.getenv("HOME", ""), "$HOME")
+            collie_home_bin = COLLIE_BIN.replace(os.getenv("HOME", ""), "$HOME")
+            kwargs["collie_home_env"] = colorize(
+                "comment", COLLIE_ENV.replace(os.getenv("HOME", ""), "$HOME")
             )
 
-        kwargs["robotest_home_bin"] = colorize("comment", robotest_home_bin)
+        kwargs["collie_home_bin"] = colorize("comment", collie_home_bin)
 
         print(message.format(**kwargs))
 
@@ -980,7 +998,7 @@ class Installer:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Installs the latest (or given) version of robotest"
+        description="Installs the latest (or given) version of collie"
     )
     parser.add_argument(
         "-p", "--preview", dest="preview", action="store_true", default=False
@@ -1002,16 +1020,16 @@ def main():
     urlopen(Installer.REPOSITORY_URL)
 
     installer = Installer(
-        version=args.version or os.getenv("ROBOTEST_VERSION"),
-        preview=args.preview or string_to_bool(os.getenv("ROBOTEST_PREVIEW", "0")),
+        version=args.version or os.getenv("COLLIE_VERSION"),
+        preview=args.preview or string_to_bool(os.getenv("COLLIE_PREVIEW", "0")),
         force=args.force,
         accept_all=args.accept_all
-        or string_to_bool(os.getenv("ROBOTEST_ACCEPT", "0"))
+        or string_to_bool(os.getenv("COLLIE_ACCEPT", "0"))
         or not is_interactive(),
         base_url=base_url,
     )
 
-    if args.uninstall or string_to_bool(os.getenv("ROBOTEST_UNINSTALL", "0")):
+    if args.uninstall or string_to_bool(os.getenv("COLLIE_UNINSTALL", "0")):
         return installer.uninstall()
 
     return installer.run()
