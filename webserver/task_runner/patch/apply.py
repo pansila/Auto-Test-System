@@ -33,7 +33,8 @@ try:
         print('Patching failed')
         raise AssertionError()
 except:
-    print(sys.exc_info())
+    exc_type, exc_value, exc_tb = sys.exc_info()
+    print(f'Exception: {exc_type} {exc_value}')
     print('Debug log:')
     patch.setdebug()
     patchset.apply(root=venv)
