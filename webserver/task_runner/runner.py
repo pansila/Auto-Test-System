@@ -13,6 +13,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import traceback
@@ -20,7 +21,6 @@ import xmlrpc.client
 from io import StringIO
 from pathlib import Path
 
-import eventlet
 import mongoengine
 import websockets
 from mongoengine import ValidationError
@@ -39,6 +39,7 @@ from task_runner.util.dbhelper import db_update_test
 from task_runner.util.notification import (notification_chain_call,
                                            notification_chain_init)
 from task_runner.util.xmlrpcserver import XMLRPCServer
+from task_runner.util.md2robot import robotize
 from wsrpc import WebsocketRPC, RemoteCallError
 from asyncio.exceptions import CancelledError
 from sanic.websocket import ConnectionClosed
@@ -327,22 +328,36 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
 
             result_dir = get_test_result_path(task)
             scripts_dir = get_user_scripts_root(task)
-            args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir), '--extension', 'md',
-                    '--consolecolors', 'on', '--consolemarkers', 'on']
             os.makedirs(result_dir)
+
+            test_suite = os.path.join(scripts_dir, task.test.path, task.test.test_suite)
+            md_file = test_suite + '.md'
+            robot_file = test_suite + '.robot'
+
+            if os.path.exists(robot_file):
+                os.unlink(robot_file)
+
+            robot_data = robotize(md_file)
+            with open(robot_file, 'w') as file:
+                file.write(robot_data)
+
+            args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir),
+                    '--consolecolors', 'on', '--consolemarkers', 'on']
 
             if hasattr(task, 'testcases'):
                 for t in task.testcases:
                     args.extend(['-t', t])
 
             if hasattr(task, 'variables') and task.variables:
-                variable_file = Path(result_dir) / 'variablefile.py'
-                convert_json_to_robot_variable(args, task.variables, variable_file)
+                # variable_file = Path(result_dir) / 'variablefile.py'
+                # convert_json_to_robot_variable(args, task.variables, variable_file)
+                for k, v in task.variables.items():
+                    args.extend(['-v', f'{k}:{v}'])
 
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
                         '-v', f'task_id:{task_id}', '-v', f'endpoint_uid:{endpoint_uid}'])
-            args.append(os.path.join(scripts_dir, task.test.path, task.test.test_suite + '.md'))
+            args.append(robot_file)
             app.logger.info('Arguments: ' + str(args))
 
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
@@ -399,6 +414,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 if task.status != 'cancelled':
                     task.status = 'failed'
             task.save()
+
             RPC_SOCKET.emit('task finished', {'task_id': task_id, 'status': task.status}, room=room_id)
             ROOM_MESSAGES[room_id][task_id].close()
             del ROOM_MESSAGES[room_id][task_id]
@@ -416,6 +432,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             result_dir_tmp = result_dir / 'temp'
             if os.path.exists(result_dir_tmp):
                 shutil.rmtree(result_dir_tmp)
+            os.unlink(robot_file)
 
             notification_chain_call(task)
             # lately scheduled tasks before and after the count reset will be captured during re-polling queues

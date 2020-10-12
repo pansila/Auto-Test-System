@@ -2,6 +2,7 @@ import asyncio
 import concurrent.futures
 import functools
 import threading
+import time
 import select
 import signal
 import sys
@@ -274,8 +275,20 @@ class XMLRPCServer(threading.Thread):
             return None
         # if name == 'stop_remote_server':
         #     return KeywordRunner(self.stop_remote_server).run_keyword(args, kwargs)
-        fut = asyncio.run_coroutine_threadsafe(self.rpc_proxy[path].request.run_keyword(name, args, kwargs), self.rpc_loop)
-        return fut.result()
+        for _ in range(10):
+            try:
+                fut = asyncio.run_coroutine_threadsafe(self.rpc_proxy[path].request.run_keyword(name, args, kwargs), self.rpc_loop)
+                ret = fut.result()
+            except:
+                if name == 'start_test':
+                    time.sleep(0.5)
+                    continue
+                exc_type, exc_value, _ = sys.exc_info()
+                return {'status': 'FAIL', 'error': exc_value}
+            else:
+                return ret
+        else:
+            return {'status': 'FAIL', 'error': 'Waiting for the endpoint to connect timed out'}
 
     def get_keyword_arguments(self, path, name):
         if path not in self.rpc_proxy:
