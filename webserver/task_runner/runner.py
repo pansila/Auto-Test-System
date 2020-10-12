@@ -39,7 +39,6 @@ from task_runner.util.dbhelper import db_update_test
 from task_runner.util.notification import (notification_chain_call,
                                            notification_chain_init)
 from task_runner.util.xmlrpcserver import XMLRPCServer
-from task_runner.util.md2robot import robotize
 from wsrpc import WebsocketRPC, RemoteCallError
 from asyncio.exceptions import CancelledError
 from sanic.websocket import ConnectionClosed
@@ -330,17 +329,6 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             scripts_dir = get_user_scripts_root(task)
             os.makedirs(result_dir)
 
-            test_suite = os.path.join(scripts_dir, task.test.path, task.test.test_suite)
-            md_file = test_suite + '.md'
-            robot_file = test_suite + '.robot'
-
-            if os.path.exists(robot_file):
-                os.unlink(robot_file)
-
-            robot_data = robotize(md_file)
-            with open(robot_file, 'w') as file:
-                file.write(robot_data)
-
             args = ['robot', '--loglevel', 'debug', '--outputdir', str(result_dir),
                     '--consolecolors', 'on', '--consolemarkers', 'on']
 
@@ -357,7 +345,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
                         '-v', f'task_id:{task_id}', '-v', f'endpoint_uid:{endpoint_uid}'])
-            args.append(robot_file)
+            args.append(os.path.join(scripts_dir, task.test.path, task.test.test_suite) + '.md')
             app.logger.info('Arguments: ' + str(args))
 
             p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, bufsize=0,
@@ -432,7 +420,6 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
             result_dir_tmp = result_dir / 'temp'
             if os.path.exists(result_dir_tmp):
                 shutil.rmtree(result_dir_tmp)
-            os.unlink(robot_file)
 
             notification_chain_call(task)
             # lately scheduled tasks before and after the count reset will be captured during re-polling queues

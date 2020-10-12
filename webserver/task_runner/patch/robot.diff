@@ -1,5 +1,54 @@
---- a/site-packages/robot/running/importer.py	2019-02-12 15:08:40.891912900 +0800
-+++ b/site-packages/robot/running/importer.py	2019-01-11 11:11:58.151000000 +0800
+--- site-packages/robot/running/builder/builders.py	2020-10-12 15:31:42.233161800 +0800
++++ site-packages/robot/running/builder/builders.py	2020-10-12 15:16:35.298435500 +0800
+@@ -19,7 +19,7 @@
+ from robot.output import LOGGER
+ from robot.parsing import SuiteStructureBuilder, SuiteStructureVisitor
+ 
+-from .parsers import RobotParser, NoInitFileDirectoryParser, RestParser
++from .parsers import RobotParser, NoInitFileDirectoryParser, RestParser, MarkdownParser
+ from .testsettings import TestDefaults
+ 
+ 
+@@ -113,11 +113,13 @@
+     def _get_parsers(self, extensions, process_curdir):
+         robot_parser = RobotParser(process_curdir)
+         rest_parser = RestParser(process_curdir)
++        md_parser = MarkdownParser(process_curdir)
+         parsers = {
+             None: NoInitFileDirectoryParser(),
+             'robot': robot_parser,
+             'rst': rest_parser,
+-            'rest': rest_parser
++            'rest': rest_parser,
++            'md': md_parser
+         }
+         for ext in extensions:
+             if ext not in parsers:
+--- site-packages/robot/running/builder/parsers.py	2020-10-12 15:31:42.234161300 +0800
++++ site-packages/robot/running/builder/parsers.py	2020-10-12 15:11:46.197426400 +0800
+@@ -19,7 +19,7 @@
+ from robot.errors import DataError
+ from robot.output import LOGGER
+ from robot.parsing import get_model, get_resource_model, get_init_model, Token
+-from robot.utils import FileReader, read_rest_data
++from robot.utils import FileReader, read_rest_data, read_markdown_data
+ 
+ from .testsettings import TestDefaults
+ from .transformers import SuiteBuilder, SettingsBuilder, ResourceBuilder
+@@ -100,6 +100,11 @@
+         with FileReader(source) as reader:
+             return read_rest_data(reader)
+ 
++class MarkdownParser(RobotParser):
++
++    def _get_source(self, source):
++        with FileReader(source) as reader:
++            return read_markdown_data(reader)
+ 
+ class NoInitFileDirectoryParser(BaseParser):
+ 
+--- site-packages/robot/running/importer.py	2020-10-12 15:31:42.208162200 +0800
++++ site-packages/robot/running/importer.py	2020-10-10 15:57:56.020305400 +0800
 @@ -71,10 +71,10 @@
      def _import_library(self, name, positional, named, lib):
          args = positional + ['%s=%s' % arg for arg in named]
@@ -15,8 +64,8 @@
          lib.create_handlers()
          self._library_cache[key] = lib
          self._log_imported_library(name, args, lib)
---- a/site-packages/robot/running/namespace.py	2019-03-05 17:06:41.129001700 +0800
-+++ b/site-packages/robot/running/namespace.py	2019-03-05 17:08:11.133001700 +0800
+--- site-packages/robot/running/namespace.py	2020-10-12 15:31:42.211162000 +0800
++++ site-packages/robot/running/namespace.py	2020-10-10 15:57:56.021308600 +0800
 @@ -126,10 +126,10 @@
          name = self._resolve_name(import_setting)
          lib = IMPORTER.import_library(name, import_setting.args,
@@ -32,3 +81,57 @@
          if notify:
              LOGGER.imported("Library", lib.name,
                              args=list(import_setting.args),
+--- site-packages/robot/utils/__init__.py	2020-10-12 15:31:42.244164400 +0800
++++ site-packages/robot/utils/__init__.py	2020-10-12 15:06:00.231151900 +0800
+@@ -75,7 +75,7 @@
+                    get_console_length, getdoc, getshortdoc, pad_console_length,
+                    rstrip, split_tags_from_doc, split_args_from_name_or_path)
+ from .unic import prepr, unic
+-
++from .mdreader import read_markdown_data
+ 
+ def read_rest_data(rstfile):
+     from .restreader import read_rest_data
+--- site-packages/robot/utils/mdreader.py	1970-01-01 08:00:00.000000000 +0800
++++ site-packages/robot/utils/mdreader.py	2020-10-12 15:12:14.162812800 +0800
+@@ -0,0 +1,40 @@
++from io import BytesIO
++from io import StringIO
++
++import mistune
++
++KEYWORDS = ["setting", "settings", "variable", "variables", "test case", "test cases", "keyword", "keywords"]
++
++def read_markdown_data(md_file):
++    robot_data = StringIO()
++    robot_lines = []
++    #print('\n========== INPUT :\n', md_file,':')
++    # uncomment next two lines if want to see raw input in console
++    # print('\n', md_file.read())
++    # md_file.seek(0)
++
++    parser = mistune.BlockLexer()
++    text = md_file.read()
++    parser.parse(mistune.preprocessing(text))
++    for t in parser.tokens:
++        if t["type"] == "table":
++            #print(t)
++            if t["header"][0].lower() in KEYWORDS:
++                data = "| *" + "* | *".join(t["header"]) + "* |\n"
++                for l in t["cells"]:
++                    data += "| " + " | ".join(l) + " |\n"
++                #print(data)
++                robot_data.write(data)
++
++    with StringIO(text) as f:
++    #print('\n========== TEMP :\n', f)
++        include_line = False
++        for line in f.readlines():
++            if not include_line:
++                include_line = line.strip().lower() == "```robotframework"
++            elif line.strip() == "```":
++                include_line = False
++            else:
++                robot_lines.append(line)
++        robot_data.write(''.join(robot_lines))
++        return robot_data.getvalue()
