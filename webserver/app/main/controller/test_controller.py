@@ -90,10 +90,11 @@ class ScriptDownload(Resource):
                 os.mkdir(dist)
                 deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
                 for pkg, version in deps:
-                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
-                if package.modified:
-                    pack_file = repack_package(pypi_root, scripts_root, package, task.test.package_version, tempDir)
-                    shutil.copy(pack_file, dist)
+                    if pkg.modified:
+                        pack_file = repack_package(pypi_root, scripts_root, pkg, version, tempDir)
+                        shutil.copy(pack_file, dist)
+                    else:
+                        shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
                 make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
                 return send_from_directory(result_dir[4:], f'{os.path.basename(test_script)}.tar.gz')
 
