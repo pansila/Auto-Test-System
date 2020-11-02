@@ -337,10 +337,10 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                     args.extend(['-t', t])
 
             if hasattr(task, 'variables') and task.variables:
-                # variable_file = Path(result_dir) / 'variablefile.py'
-                # convert_json_to_robot_variable(args, task.variables, variable_file)
-                for k, v in task.variables.items():
-                    args.extend(['-v', f'{k}:{v}'])
+                variable_file = Path(result_dir) / 'variablefile.py'
+                convert_json_to_robot_variable(args, task.variables, variable_file)
+                # for k, v in task.variables.items():
+                #     args.extend(['-v', f'{k}:{v}'])
 
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
@@ -562,9 +562,9 @@ async def rpc_proxy(request, ws):
             fut.result()
         except websockets.exceptions.ConnectionClosedError as error:
             if len(rpc._request_table.keys()) != 0:
-                print(f'Endpoint {url} was aborted, flushing pending tasks...')
+                print(f'Endpoint {endpoint.name}@{url} was aborted, flushing pending tasks...')
                 for k in rpc._request_table:
-                    rpc._request_table[k].set_exception(RemoteCallError(error))
+                    rpc._request_table[k].set_result({'status': 'FAIL', 'error': str(error)})
                 rpc._request_table = {}
         except asyncio.exceptions.CancelledError:
             pass
@@ -576,17 +576,17 @@ async def rpc_proxy(request, ws):
         await RPC_PROXIES[url].close()
         del RPC_PROXIES[url]
     RPC_PROXIES[url] = rpc
-    print(f'Received an endpoint {url} connecting to {join_id}')
+    print(f'Received an endpoint {endpoint.name}@{url} connecting to {organization.name }@{team and team.name or ""}')
 
     try:
         await ws.wait_closed()
     except (CancelledError, ConnectionClosed):
-        print(f'Endpoint {url} disconnected')
+        print(f'Endpoint {endpoint.name}@{url} disconnected')
 
     if len(rpc._request_table.keys()) != 0:
-        print(f'Endpoint {url} was closed, flushing pending tasks...')
+        print(f'Endpoint {endpoint.name}@{url} was closed, flushing pending tasks...')
         for k in rpc._request_table:
-            rpc._request_table[k].set_exception(RemoteCallError(f'Endpoint {url} was closed'))
+            rpc._request_table[k].set_result({'status': 'FAIL', 'error': f'Connection of {url} was lost, possibly due to long time blocking operations'})
         rpc._request_table = {}
 
     try:
