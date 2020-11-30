@@ -166,7 +166,7 @@ class StaticRemoteLibrary(object):
         if __name__ == '__init__':
             return []
         kw = self._get_keyword(name)
-        args, varargs, kwargs, defaults = inspect.getargspec(kw)
+        args, varargs, kwargs, defaults, _, _, _ = inspect.getfullargspec(kw)
         if inspect.ismethod(kw):
             args = args[1:]  # drop 'self'
         if defaults:
@@ -230,7 +230,7 @@ class DynamicRemoteLibrary(HybridRemoteLibrary):
             = dynamic_method(library, 'get_keyword_tags')
 
     def _get_kwargs_support(self, run_keyword):
-        spec = inspect.getargspec(run_keyword)
+        spec = inspect.getfullargspec(run_keyword)
         return len(spec.args) > 3    # self, name, args, kwargs=None
 
     async def run_keyword(self, name, args, kwargs=None, ws=None, task_id=None):
@@ -416,7 +416,9 @@ class KeywordResult(object):
         # With IronPython Binary cannot be sent if it contains "real" bytes.
         if sys.platform == 'cli':
             result = str(result)
-        return Binary(result)
+        ## binary data will be taken care of by msgpack, no need to Binary it anymore
+        # return Binary(result)
+        return result
 
     def _contains_binary(self, result):
         if PY3:

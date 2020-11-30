@@ -429,15 +429,14 @@ python-versions = "*"
 
 [[package]]
 name = "mongoengine"
-version = "0.17.0"
+version = "0.20.0"
 description = "MongoEngine is a Python Object-Document Mapper for working with MongoDB."
 category = "main"
 optional = false
-python-versions = "*"
+python-versions = ">=3.5"
 
 [package.dependencies]
-pymongo = ">=2.7.1"
-six = "*"
+pymongo = ">=3.4,<4.0"
 
 [[package]]
 name = "monotonic"
@@ -807,7 +806,7 @@ testing = ["pytest (>=3.5,<3.7.3 || >3.7.3)", "pytest-checkdocs (>=1.2.3)", "pyt
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.7"
-content-hash = "28e622f7a104dd7d40538ea5a9b63ce65075a59007b60dd2b7fef884a7c45057"
+content-hash = "b52ac5b5fc353ed06de36f01c09ff14d512ab12c49e81494bf338490b0ec63c7"
 
 [metadata.files]
 aiofiles = [
@@ -1123,8 +1122,8 @@ mistune = [
     {file = "mistune-0.8.4.tar.gz", hash = "sha256:59a3429db53c50b5c6bcc8a07f8848cb00d7dc8bdb431a4ab41920d201d4756e"},
 ]
 mongoengine = [
-    {file = "mongoengine-0.17.0-py2-none-any.whl", hash = "sha256:cab88831a0ee587765f87a5cb83f5d3a478ea47cc90cfaff8b8c620f52ab5d09"},
-    {file = "mongoengine-0.17.0.tar.gz", hash = "sha256:8c2494dac7d727e67cd3c75ba086c02744bcdc9fe4d47b9aeff1fbe8c7c48724"},
+    {file = "mongoengine-0.20.0-py3-none-any.whl", hash = "sha256:6e127f45f71c2bc5e72461ec297a0c20f04c3ee0bf6dd869e336226e325db6ef"},
+    {file = "mongoengine-0.20.0.tar.gz", hash = "sha256:db9e5d587e5d74e52851e0e4a53fd744725bfa9918ae6070139f5ba9c62c6edf"},
 ]
 monotonic = [
     {file = "monotonic-1.5-py2.py3-none-any.whl", hash = "sha256:552a91f381532e33cbd07c6a2655a21908088962bb8fa7239ecbcc6ad1140cc7"},

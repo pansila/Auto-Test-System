@@ -1,3 +1,4 @@
+import sys
 import smtplib
 import socket
 from email import encoders
@@ -55,12 +56,15 @@ def send_email(task):
     except timeout:
         APP.logger.error('SMTP server connecting socket timeout')
         return
-    except ConnectionRefusedError:
+    except (ConnectionRefusedError, ConnectionAbortedError):
         APP.logger.error('SMTP server connecting refused')
         return
     except socket.gaierror:
         APP.logger.error('Network is not available')
         return
+    except:
+        exc_type, exc_value, exc_tb = sys.exc_info()
+        APP.logger.error(f'Un-catched error happened: {exc_type}, {exc_value}')
 
 def notification_chain_init(app):
     global APP

@@ -98,7 +98,7 @@ class ScriptManagement(Resource):
         else:
             return response_message(EINVAL, 'Unsupported script type ' + script_type), 400
 
-        dirname = os.path.dirname(script)
+        dirname = os.path.dirname(script).split('/')[0]
         basename = os.path.basename(script)
 
         if script_type == 'test_scripts' and basename.endswith('.md'):

@@ -1,9 +1,11 @@
+import asyncio
 import json
 import os
 import re
 import subprocess
 import sys
 import serial
+import aioserial
 import time
 import chardet
 import os.path
@@ -34,7 +36,7 @@ class serial_dut(server_api):
             raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
 
         dut = self.configDut[deviceName]
-        dut['serialport'] = serial.Serial(dut['com'], dut['baudrate'], timeout=0.5)
+        dut['serialport'] = aioserial.AioSerial(port=dut['com'], baudrate=dut['baudrate'])
         print('Serial port {} opened successfully'.format(dut['com']))
 
     def disconnect_dut(self, deviceName):
@@ -45,11 +47,16 @@ class serial_dut(server_api):
         else:
             print('Serial port is not open')
 
-    def _serial_read(self, deviceName, timeout, term=None):
+    async def serial_write(self, deviceName, outbytes):
+        dut = self.configDut[deviceName]
+        return await dut['serialport'].write_async(outbytes)
+
+    async def serial_read(self, deviceName, timeout, term=None):
         '''
         Read the output of serial port.
         
         Arguments:
+            deviceName (str): the DUT's name to perform the serial read operation
             timeout (int): the time to wait for before the read ends or term is found.
             term (str): a regexp to specify strings of interest to search in the output and early return if found (default None).
 
@@ -58,32 +65,41 @@ class serial_dut(server_api):
             elapsedTime (int): the time used by the read operation. TIMEOUT_ERR if timeout expires.
             groups (str): the captured groups by the regexp term
         '''
-        dut = self.configDut[deviceName]
-        serialport = dut['serialport']
+        ret = None
+        encoding = None
 
-        match = None
-        if term is not None:
-            matcher = re.compile(term)
-        tic = time.time()
-        buff = serialport.readline()
-        ret = buff
-        encoding = chardet.detect(buff)['encoding'] or 'utf-8'
+        async def _read_loop(deviceName, term=None):
+            nonlocal ret, encoding
+            dut = self.configDut[deviceName]
+            serialport = dut['serialport']
 
-        while (time.time() - tic) < timeout:
-            if term:
-                match = matcher.search(buff.decode(encoding=encoding))
-                if match:
-                    break
-            buff = serialport.readline()
-            encoding = chardet.detect(buff)['encoding'] or encoding
-            ret += buff
-        else:
-            return (ret.decode(encoding=encoding), self.TIMEOUT_ERR, None)
+            match = None
+            if term is not None:
+                matcher = re.compile(term)
+            tic = time.time()
+            buff = await serialport.readline_async()
+            ret = buff
+            encoding = chardet.detect(buff)['encoding'] or 'utf-8'
 
-        return (ret.decode(encoding=encoding), time.time() - tic, match.groups() if match else None)
+            while True:
+                if term:
+                    match = matcher.search(buff.decode(encoding=encoding))
+                    if match:
+                        break
+                buff = await serialport.readline_async()
+                encoding = chardet.detect(buff)['encoding'] or encoding
+                ret += buff
+
+            return (ret.decode(encoding=encoding), time.time() - tic, match.groups() if match else None)
+
+        try:
+            return await asyncio.wait_for(_read_loop(deviceName, term), timeout)
+        except asyncio.TimeoutError:
+            return (ret.decode(encoding=encoding) if ret else None, self.TIMEOUT_ERR, None)
 
     def _flush_serial_output(self, deviceName):
         self.configDut[deviceName]['serialport'].reset_output_buffer()
+        self.configDut[deviceName]['serialport'].reset_input_buffer()
 
 class wifi_dut_base(serial_dut, download_fw_intf):
     __metaclass__ = ABCMeta
