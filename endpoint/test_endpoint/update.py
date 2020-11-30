@@ -28,36 +28,10 @@ import argparse
 lib = os.path.normpath(os.path.join(os.path.realpath(__file__), "..", "..", "lib", "collie"))
 sys.path.insert(0, lib)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--install', default=False, action='store_true',
-                        help='install the virtual environments for the robotest endpoint')
-    parser.add_argument('--update', default=False, nargs='?', const=True, metavar='VERSION',
-                        help='update the collie itself')
-    parser.add_argument('--force', default=False, action='store_true',
-                        help='force to update the collie itself')
-    parser.add_argument('--debug', default=False, action='store_true',
-                        help='enable the runtime log messages of tests')
-    parser.add_argument('--host', type=str,
-                        help='the server IP for the test endpoint daemon to connect')
-    parser.add_argument('--port', type=int,
-                        help='the server port for the test endpoint daemon to connect')
-    parser.add_argument('--join_id',
-                        help='the organization ID or team ID to join')
-    args = parser.parse_args()
+from test_endpoint.app import main
 
-    if args.install:
-        from test_endpoint.install import run
-        run()
-    elif args.update:
-        from test_endpoint.update import SelfUpdate
-        SelfUpdate(args.update, args.force).run()
-    elif args.join_id:
-        from test_endpoint.update import SelfUpdate
-        SelfUpdate(args.update, args.force).update_join_id(args.join_id)
-    else:
-        from test_endpoint.venv_run import start
-        start(args.host, args.port, args.debug)
+if __name__ == "__main__":
+    sys.exit(main())
 """
 
 BAT = '@echo off\r\n{python_executable} "{collie_bin}" %*\r\n'

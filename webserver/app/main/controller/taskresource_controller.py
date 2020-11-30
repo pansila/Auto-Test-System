@@ -47,6 +47,8 @@ class TaskResourceController(Resource):
 
         upload_root = get_upload_files_root(task)
         result_root = get_test_result_path(task)
+        if not os.path.exists(result_root / TARBALL_TEMP):
+            os.mkdir(result_root / TARBALL_TEMP)
 
         upload_file = request.args.get('file', None)
         if upload_file:

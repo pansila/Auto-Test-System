@@ -17,6 +17,9 @@ pyvirtualdisplay = "^0.2.5"
 chardet = "^3.0.4"
 cffi = "^1.14.2"
 wheel = "^0.35.1"
+aioserial = "^1.3.0"
+pyocd = "^0.28.3"
+WMI = "^1.5.1"
 
 [build-system]
 requires = ["poetry>=0.12"]

@@ -206,56 +206,95 @@ def event_loop_parent(app):
     thread.start()
     thread.join()
 
-def convert_json_to_robot_variable(args, variables, variable_file):
-    local_args = None
+def convert_json_to_robot_variable(variables, default_variables, variable_file):
+    sub_type = 0
+    sub_vars = []
     p = re.compile(r'\${(.*?)}')
 
+    def is_number(s):
+        try:
+            float(s)
+            return True
+        except ValueError:
+            pass
+        try:
+            int(s, 16)
+            return True
+        except ValueError:
+            pass
+        try:
+            int(s, 8)
+            return True
+        except ValueError:
+            pass
+        try:
+            int(s, 2)
+            return True
+        except ValueError:
+            pass
+        return False
+
     def var_replace(m):
-        local_args.append(m.group(1).replace(' ', '_'))
-        return '{}'
+        nonlocal sub_type
+        val = m.group(1)
+        sub_type = 1
+        if val.upper() == 'TRUE':
+            return 'True'
+        elif val.upper() == 'FALSE':
+            return 'False'
+        elif val.upper() == 'NULL':
+            return 'None'
+        elif val.upper() == 'EMPTY':
+            return '\'\''
+        elif val.upper() == 'SPACE':
+            return '\' \''
+        elif is_number(val):
+            return val
+        else:
+            sub_type = 2
+            sub_vars.append(val.replace(' ', '_'))
+            return '{' + val.replace(' ', '_') + '}'
+
+    def sub_variable(v, key=None):
+        nonlocal sub_type
+        sub_type = 0
+        subVal = p.sub(var_replace, v)
+        if sub_type == 2:
+            if key:
+                return f'\'{key}\': f\'{subVal}\''
+            else:
+                return f'f\'{subVal}\''
+        elif sub_type == 1:
+            if key:
+                return f'\'{key}\': {subVal}'
+            else:
+                return f'{subVal}'
+        else:
+            if key:
+                return f'\'{key}\': \'{subVal}\''
+            else:
+                return f'\'{subVal}\''
 
     with open(variable_file, 'w') as f:
+        t = StringIO()
         for k, v in variables.items():
             if isinstance(v, str):
-                f.write(k + ' = ')
-                local_args = []
-                a = p.sub(var_replace, v)
-                if len(local_args) > 0:
-                    f.write('\'' + a + '\'.format(')
-                    for arg in local_args:
-                        f.write(arg + ', ')
-                    f.write(')')
-                else:
-                    f.write('\'{}\''.format(v))
-                f.write('\n')
+                t.write(k + ' = ')
+                t.write(sub_variable(v))
+                t.write('\n')
             elif isinstance(v, list):
-                f.write(k + ' = [')
-                for vv in v:
-                    local_args = []
-                    a = p.sub(var_replace, vv)
-                    if len(local_args) > 0:
-                        f.write('\'' + a + '\'.format(')
-                        for arg in local_args:
-                            f.write(arg + ', ')
-                        f.write('), ')
-                    else:
-                        f.write('\'{}\', '.format(vv))
-                f.write(']\n')
+                t.write(k + ' = [')
+                t.write(', '.join(sub_variable(vv) for vv in v if isinstance(vv, str)))
+                t.write(']\n')
             elif isinstance(v, dict):
-                f.write(k + ' = {')
-                for kk in v:
-                    local_args = []
-                    a = p.sub(var_replace, v[kk])
-                    if len(local_args) > 0:
-                        f.write('\'' + kk + '\': \'' + a + '\'.format(')
-                        for arg in local_args:
-                            f.write(arg + ', ')
-                        f.write('), ')
-                    else:
-                        f.write('\'{}\': \'{}\', '.format(kk, v[kk]))
-                f.write('}\n')
+                t.write(k + ' = {')
+                t.write(', '.join(sub_variable(v[kk], kk) for kk in v if isinstance(v[kk], str)))
+                t.write('}\n')
+        ref_vars = [(k, default_variables[k]) for k in default_variables if k in sub_vars]
+        for k, v in ref_vars:
+            f.write(f'{k} = \'{v}\'\n')
+        f.write(t.getvalue())
 
-    args.extend(['--variablefile', str(variable_file)])
 
 def process_task_per_endpoint(app, endpoint, organization=None, team=None):
     global ROBOT_PROCESSES, TASKS_CACHED
@@ -337,10 +376,9 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                     args.extend(['-t', t])
 
             if hasattr(task, 'variables') and task.variables:
-                variable_file = Path(result_dir) / 'variablefile.py'
-                convert_json_to_robot_variable(args, task.variables, variable_file)
-                # for k, v in task.variables.items():
-                #     args.extend(['-v', f'{k}:{v}'])
+                variable_file = result_dir / 'variablefile.py'
+                convert_json_to_robot_variable(task.variables, task.test.variables, variable_file)
+                args.extend(['--variablefile', str(variable_file)])
 
             addr, port = '127.0.0.1', 8270
             args.extend(['-v', f'address_daemon:{addr}', '-v', f'port_daemon:{port}',
@@ -370,7 +408,7 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
                 if not c:
                     break
                 try:
-                    c = c.decode(encoding=sys.getdefaultencoding())
+                    c = c.decode()
                 except UnicodeDecodeError:
                     ss += c
                 else:
@@ -381,13 +419,16 @@ def process_task_per_endpoint(app, endpoint, organization=None, team=None):
 
             if ss != b'':
                 log_msg_all = StringIO()
+                log_msg_all.write(log_msg.getvalue())
                 try:
                     ss = ss.decode(chardet.detect(ss)['encoding'])
                 except UnicodeDecodeError:
-                    app.logger.warning(f'chardet error: {ss.decode("raw_unicode_escape")}')
+                    try:
+                        app.logger.warning(f'chardet error: {ss.decode("unicode_escape").encode("latin-1")}')
+                    except UnicodeEncodeError:
+                        pass
                 else:
                     log_msg_all.write(ss)
-                log_msg_all.write(log_msg.getvalue())
                 app.logger.info('\n' + log_msg_all.getvalue())
                 RPC_SOCKET.emit('test report', {'task_id': task_id, 'message': ss}, room=room_id)
             else:

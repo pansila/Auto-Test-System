@@ -193,11 +193,11 @@ class test_library_rpc(Process):
 def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False, debug=False):
     if not rpc_daemon:
         with activate_workspace('workspace') as venv:
-            ctx = multiprocessing.get_context('spawn')
             if sys.platform == 'win32':
                 executable = os.path.join(venv, 'Scripts', 'python.exe')
             else:
                 executable = os.path.join(venv, 'bin', 'python')
+            ctx = multiprocessing.get_context('spawn')
             # ctx.set_executable(executable)
             queue = Queue()
             process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon, debug)

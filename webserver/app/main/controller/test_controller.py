@@ -61,7 +61,7 @@ class ScriptDownload(Resource):
         if not os.path.exists(script_file):
             return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
-        if task.test.package and test_path in task.test.package.py_packages:
+        if task.test.package: # and test_path in task.test.package.py_packages:
             package = task.test.package
         elif test_path:
             package = query_package(test_path, task.organization, task.team, 'Test Suite')

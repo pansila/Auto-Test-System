@@ -6,11 +6,14 @@ iperf3: d:\bin\iperf3
 # Device under test
 DUT:
 - name: STA1
-  com: COM19
+  com: COM1
   baudrate: 115200
     # multiple download methods can be configured here, they will be tried one by one if previous one failed
   download:
       # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
+  - tool: DAPLink
+    datafile: firmware.bin      # relative to <resource_dir> if it's not an absolute path
+    target: STM32F103C8
   - tool: JLink
     path: C:\Program Files (x86)\SEGGER\JLink_V640b\JLink.exe
     interface: SWD
@@ -20,10 +23,23 @@ DUT:
     flash_addr: 0x08000000
   - tool: MDK
     path: C:\Keil_v5\UV4\UV4.exe
-    workdir: D:\demo-project\
-    project: demo.uvproj
-    target: demo-target
+    workdir: D:\demo-project\   # please point it to your work project
+    project: demo.uvproj        # MDK project file
+    target: demo-target         # target name
   - tool: ISP
+- name: SOFTAP
+  com: COM4
+  baudrate: 115200
+  # multiple download methods can be configured here, they will be tried one by one if previous one failed
+  download:
+    # MDK related configurations, details please see http://www.keil.com/support/man/docs/uv4/uv4_commandline.htm.
+    - tool: MDK
+      path: C:\\Keil_v5\\UV4\\UV4.exe
+      workdir: D:\demo-project\
+      project: demo.uvproj
+      target: demo-target
+    - tool: ISP
+  softap_ip: 192.168.237.1
 
 # AP under test
 AP:
@@ -46,3 +62,5 @@ AP:
   mode: auto
   ssh: 192.168.1.100
   com:
+
+ATE_interface: 'WLAN'
