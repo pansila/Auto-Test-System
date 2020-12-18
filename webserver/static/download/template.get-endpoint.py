@@ -182,6 +182,48 @@ COLLIE_LIB_BACKUP = os.path.join(COLLIE_HOME, "lib-backup")
 COLLIE_CONFIG = os.path.join(COLLIE_LIB, "collie", "pyproject.toml")
 
 
+BOOTSTRAP = """\
+import os, sys
+import re
+import subprocess
+
+def _which_python():
+    allowed_executables = ["python3", "python"]
+    if sys.platform == 'win32':
+        # in favor of 32 bit python to be compatible with the 32bit dlls of test libraries
+        allowed_executables[:0] = ["py.exe -3-32", "py.exe -2-32", "py.exe -3-64", "py.exe -2-64"]
+
+    # \d in regex ensures we can convert to int later
+    version_matcher = re.compile(r"^Python (?P<major>\d+)\.(?P<minor>\d+)\..+$")
+    fallback = None
+    for executable in allowed_executables:
+        try:
+            raw_version = subprocess.check_output(
+                executable + " --version", stderr=subprocess.STDOUT, shell=True
+            ).decode("utf-8")
+        except subprocess.CalledProcessError:
+            continue
+
+        match = version_matcher.match(raw_version.strip())
+        if match and tuple(map(int, match.groups())) >= (3, 0):
+            # favor the first py3 executable we can find.
+            return executable
+
+        if fallback is None:
+            # keep this one as the fallback; it was the first valid executable we found.
+            fallback = executable
+
+    if fallback is None:
+        # Avoid breaking existing scripts
+        fallback = "python"
+
+    return fallback
+
+if __name__ == '__main__':
+    py_executable = _which_python()
+    subprocess.run(py_executable + r' {collie_bin} ' + ' '.join(sys.argv[1:]), shell=True)
+"""
+
 BIN = """#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
@@ -191,40 +233,14 @@ import argparse
 lib = os.path.normpath(os.path.join(os.path.realpath(__file__), "..", "..", "lib", "collie"))
 sys.path.insert(0, lib)
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--install', default=False, action='store_true',
-                        help='install the virtual environments for the robotest endpoint')
-    parser.add_argument('--update', default=False, nargs='?', const=True, metavar='VERSION',
-                        help='update the collie itself')
-    parser.add_argument('--force', default=False, action='store_true',
-                        help='force to update the collie itself')
-    parser.add_argument('--debug', default=False, action='store_true',
-                        help='force to update the collie itself')
-    parser.add_argument('--host', type=str,
-                        help='the server IP for daemon to connect')
-    parser.add_argument('--port', type=int,
-                        help='the server port for daemon to connect')
-    parser.add_argument('--join_id',
-                        help='the organization ID or team ID to join')
-    args = parser.parse_args()
+from test_endpoint.app import main
 
-    if args.install:
-        from test_endpoint.install import run
-        run()
-    elif args.update:
-        from test_endpoint.update import SelfUpdate
-        SelfUpdate(args.update, args.force).run()
-    elif args.join_id:
-        from test_endpoint.update import SelfUpdate
-        SelfUpdate(args.update, args.force).update_join_id(args.join_id)
-    else:
-        from test_endpoint.venv_run import start
-        start(args.host, args.port, args.debug)
+if __name__ == "__main__":
+    sys.exit(main())
 """
 
-BAT = u('@echo off\r\npython "{collie_bin}" %*\r\n')
-SH = u('#!/bin/sh\npython3 "{collie_bin}" $*\n')
+BAT = u('@echo off\r\npython "{collie_bootstrap}" %*\r\n')
+SH = u('#!/bin/sh\npython3 "{collie_bootstrap}" $*\n')
 
 
 PRE_MESSAGE = """# Welcome to {collie}!
@@ -339,7 +355,7 @@ class Installer:
     CURRENT_PYTHON_VERSION = sys.version_info[:2]
     REPOSITORY_URL = "{server_url}"
     METADATA_URL = REPOSITORY_URL + "/setting/get-endpoint/json"
-    BASE_URL = REPOSITORY_URL + "/setting/download/"
+    BASE_URL = REPOSITORY_URL + "/static/download/"
     VERSION_REGEX = re.compile(
         r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?"
         "("
@@ -665,12 +681,23 @@ class Installer:
         if not os.path.exists(COLLIE_BIN):
             os.mkdir(COLLIE_BIN, 0o755)
 
+        with open(os.path.join(COLLIE_BIN, "bootstrap.py"), "w") as f:
+            f.write(
+                u(
+                    BOOTSTRAP.format(
+                        collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
+                            os.environ["USERPROFILE"], "%USERPROFILE%"
+                        )
+                    )
+                )
+            )
+
         if WINDOWS:
             with open(os.path.join(COLLIE_BIN, "collie.bat"), "w") as f:
                 f.write(
                     u(
                         BAT.format(
-                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
+                            collie_bootstrap=os.path.join(COLLIE_BIN, "bootstrap.py").replace(
                                 os.environ["USERPROFILE"], "%USERPROFILE%"
                             )
                         )
@@ -681,7 +708,7 @@ class Installer:
                 f.write(
                     u(
                         SH.format(
-                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
+                            collie_bootstrap=os.path.join(COLLIE_BIN, "bootstrap.py").replace(
                                 os.getenv("HOME", ""), "$HOME"
                             )
                         )

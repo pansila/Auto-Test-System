@@ -19,6 +19,48 @@ from urllib.request import urlopen
 
 WINDOWS = sys.platform == "win32"
 
+BOOTSTRAP = """\
+import os, sys
+import re
+import subprocess
+
+def _which_python():
+    allowed_executables = ["python3", "python"]
+    if sys.platform == 'win32':
+        # in favor of 32 bit python to be compatible with the 32bit dlls of test libraries
+        allowed_executables[:0] = ["py.exe -3-32", "py.exe -2-32", "py.exe -3-64", "py.exe -2-64"]
+
+    # \d in regex ensures we can convert to int later
+    version_matcher = re.compile(r"^Python (?P<major>\d+)\.(?P<minor>\d+)\..+$")
+    fallback = None
+    for executable in allowed_executables:
+        try:
+            raw_version = subprocess.check_output(
+                executable + " --version", stderr=subprocess.STDOUT, shell=True
+            ).decode("utf-8")
+        except subprocess.CalledProcessError:
+            continue
+
+        match = version_matcher.match(raw_version.strip())
+        if match and tuple(map(int, match.groups())) >= (3, 0):
+            # favor the first py3 executable we can find.
+            return executable
+
+        if fallback is None:
+            # keep this one as the fallback; it was the first valid executable we found.
+            fallback = executable
+
+    if fallback is None:
+        # Avoid breaking existing scripts
+        fallback = "python"
+
+    return fallback
+
+if __name__ == '__main__':
+    py_executable = _which_python()
+    subprocess.run(py_executable + r' {collie_bin} ' + ' '.join(sys.argv[1:]), shell=True)
+"""
+
 BIN = """#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys
@@ -34,7 +76,8 @@ if __name__ == "__main__":
     sys.exit(main())
 """
 
-BAT = '@echo off\r\n{python_executable} "{collie_bin}" %*\r\n'
+BAT = '@echo off\r\n{python_executable} "{collie_bootstrap}" %*\r\n'
+SH = '#!/bin/sh\npython3 "{collie_bootstrap}" $*\n'
 
 def expanduser(path):
     """
@@ -278,13 +321,25 @@ class SelfUpdate:
 
         python_executable = self._which_python()
 
+        with self.bin.joinpath("bootstrap.py").open("w", newline="") as f:
+            f.write(BOOTSTRAP.format(collie_bin=str(self.bin / "collie.py")))
+
         if WINDOWS:
             with self.bin.joinpath("collie.bat").open("w", newline="") as f:
                 f.write(
                     BAT.format(
                         python_executable=python_executable,
-                        collie_bin=str(self.bin / "collie.py").replace(
+                        collie_bootstrap=str(self.bin / "bootstrap.py").replace(
                             os.environ["USERPROFILE"], "%USERPROFILE%"
+                        ),
+                    )
+                )
+        else:
+            with self.bin.joinpath("collie").open("w", newline="") as f:
+                f.write(
+                    SH.format(
+                        collie_bootstrap=str(self.bin / "bootstrap.py").replace(
+                            os.getenv("HOME", ""), "$HOME"
                         ),
                     )
                 )

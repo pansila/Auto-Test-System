@@ -10,6 +10,7 @@ from copy import copy
 def empty_folder(folder):
     if not os.path.exists(folder):
         os.mkdir(folder)
+        return
     for root, dirs, files in os.walk(folder):
         for f in files:
             os.unlink(os.path.join(root, f))

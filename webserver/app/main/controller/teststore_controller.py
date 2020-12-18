@@ -11,7 +11,7 @@ from pkg_resources import parse_version
 from flask import send_from_directory, request, current_app
 from flask_restx import Resource
 
-from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form, token_required_if_proprietary
+from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, organization_team_required_by_form, token_required_if_proprietary_by_args, token_required_if_proprietary_by_json
 from ..util.get_path import get_test_store_root, is_path_secure, get_user_scripts_root, get_back_scripts_root
 from task_runner.util.dbhelper import get_package_info, get_package_requires, install_test_suite, get_internal_packages
 from ..config import get_config
@@ -30,7 +30,7 @@ SCRIPT_FILES_FIND = re.compile(r'^.*?/scripts/.*$').match
 
 @api.route('/')
 class PackageManagement(Resource):
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_args
     @api.doc('return the package list')
     @api.marshal_list_with(_packages)
     def get(self, **kwargs):
@@ -248,7 +248,7 @@ class PackageManagement(Resource):
 
 @api.route('/package')
 class PackageInfo(Resource):
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_args
     @api.doc('return the package description of a specified version')
     def get(self, **kwargs):
         data = request.args
@@ -274,7 +274,7 @@ class PackageInfo(Resource):
         _, _, description = get_package_info(package_path)
         return response_message(SUCCESS, description=description)
 
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_json
     @api.doc('update the package')
     @api.expect(_upload_package)
     def patch(self, **kwargs):

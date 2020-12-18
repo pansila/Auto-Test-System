@@ -11,9 +11,14 @@ TEST_RESULTS_ROOT = 'test_results'
 USER_SCRIPT_ROOT = 'user_scripts'
 BACK_SCRIPT_ROOT = 'back_scripts'
 TEST_PACKAGE_ROOT = 'pypi'
+USER_DOCUMENT_ROOT = 'document'
+USER_PICTURE_ROOT = 'pictures'
 USERS_ROOT = Path(get_config().USERS_ROOT)
 UPLOAD_ROOT = Path(get_config().UPLOAD_ROOT)
 STORE_ROOT = Path(get_config().STORE_ROOT)
+DOCUMENT_ROOT = Path(get_config().DOCUMENT_ROOT)
+PICTURE_ROOT = Path(get_config().PICTURE_ROOT)
+
 try:
     os.makedirs(UPLOAD_ROOT)
 except FileExistsError:
@@ -26,6 +31,15 @@ try:
     os.makedirs(STORE_ROOT)
 except FileExistsError:
     pass
+try:
+    os.makedirs(DOCUMENT_ROOT)
+except FileExistsError:
+    pass
+try:
+    os.makedirs(PICTURE_ROOT)
+except FileExistsError:
+    pass
+
 
 def get_test_result_path(task):
     return get_test_results_root(task) / str(task.id)
@@ -94,6 +108,30 @@ def is_path_secure(path):
     drive, _ = os.path.splitdrive(path)
     if drive:
         return False
-    if os.path.pardir in path or path.startswith('/'):
+    if os.path.pardir in path or path.startswith('\\') or path.startswith('/'):
         return False
     return True
+
+def get_document_root(language='en', organization=None, team=None):
+    if not organization:
+        if team:
+            organization = team.organization
+        else:
+            return DOCUMENT_ROOT / language
+    doc_dir = USERS_ROOT / organization.path
+    if team:
+        doc_dir = doc_dir / team.path
+    doc_dir = doc_dir / USER_DOCUMENT_ROOT / language
+    return doc_dir
+
+def get_pictures_root(language='en', organization=None, team=None):
+    if not organization:
+        if team:
+            organization = team.organization
+        else:
+            return PICTURE_ROOT / language
+    doc_dir = USERS_ROOT / organization.path
+    if team:
+        doc_dir = doc_dir / team.path
+    doc_dir = doc_dir / USER_PICTURE_ROOT / language
+    return doc_dir
