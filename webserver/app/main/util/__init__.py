@@ -39,6 +39,11 @@ def js2python_bool(value):
         return True
     return False
 
+def js2python_variable(value):
+    if not value or value == 'undefined' or value == 'null':
+        return None
+    return value
+
 class temp_sys_path():
     def __init__(self, path):
         self.path = path

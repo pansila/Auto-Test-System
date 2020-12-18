@@ -8,7 +8,7 @@ from ..model.database import Package
 from ..util.dto import PypiDto
 from ..util.tarball import path_to_dict
 from ..util.response import response_message, ENOENT, EINVAL
-from ..util.decorator import token_required_if_proprietary
+from ..util.decorator import token_required_if_proprietary_by_args
 from ..util.get_path import get_test_store_root
 from ..util import js2python_bool
 
@@ -17,7 +17,7 @@ api = PypiDto.api
 @api.route('/')
 class ScriptManagement(Resource):
     @api.doc('return package list')
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_args
     def get(self, **kwargs):
         organization = kwargs.get('organization', None)
         team = kwargs.get('team', None)
@@ -34,7 +34,7 @@ class ScriptManagement(Resource):
 @api.route('/<package_name>')
 class ScriptManagement(Resource):
     @api.doc('return package files')
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_args
     def get(self, package_name, **kwargs):
         organization = kwargs.get('organization', None)
         team = kwargs.get('team', None)
@@ -53,7 +53,7 @@ class ScriptManagement(Resource):
 @api.route('/<path:package>')
 class ScriptManagement(Resource):
     @api.doc('return package')
-    @token_required_if_proprietary
+    @token_required_if_proprietary_by_args
     def get(self, package, **kwargs):
         organization = kwargs.get('organization', None)
         team = kwargs.get('team', None)

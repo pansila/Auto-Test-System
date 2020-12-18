@@ -339,3 +339,11 @@ class StoreDto:
 
 class PypiDto:
     api = Namespace('pypi', description='local python package index repository')
+
+class DocDto:
+    api = Namespace('doc', description='documentation for designing tests and any others')
+
+    path = api.model('path', {
+        'value': fields.Integer(description='The item index'),
+        'label': fields.String(description='The path\'s value'),
+    })

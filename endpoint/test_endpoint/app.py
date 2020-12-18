@@ -15,6 +15,8 @@ def main():
                         help='uninstall a python package by using poetry')
     parser.add_argument('--install', default=False, action='store_true',
                         help='install the virtual environments for the robotest endpoint')
+    parser.add_argument('--uninstall', default=False, action='store_true',
+                        help='uninstall the virtual environments for the robotest endpoint')
     parser.add_argument('--update', default=False, nargs='?', const=True, metavar='VERSION',
                         help='update the collie itself')
     parser.add_argument('--force', default=False, action='store_true',
@@ -30,8 +32,11 @@ def main():
     args = parser.parse_args()
 
     if args.install:
-        from test_endpoint.install import run
-        run()
+        from test_endpoint.install import run_install
+        run_install()
+    elif args.uninstall:
+        from test_endpoint.install import run_uninstall
+        run_uninstall()
     elif args.update:
         from test_endpoint.update import SelfUpdate
         SelfUpdate(args.update, args.force).run()

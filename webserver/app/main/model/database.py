@@ -50,6 +50,7 @@ class Organization(Document):
     website = URLField()
     owner = ReferenceField('User')
     members = ListField(ReferenceField('User'))
+    editors = ListField(ReferenceField('User'))
     region = StringField()
     avatar = StringField(max_length=100)
     path = StringField()
@@ -64,6 +65,7 @@ class Team(Document):
     registered_on = DateTimeField(default=datetime.datetime.utcnow)
     owner = ReferenceField('User')
     members = ListField(ReferenceField('User'))
+    editors = ListField(ReferenceField('User'))
     introduction = StringField(max_length=500)
     avatar = StringField(max_length=100)
     organization = ReferenceField(Organization)
@@ -136,6 +138,12 @@ class User(Document):
             return 'Signature expired. Please log in again.'
         except jwt.InvalidTokenError:
             return 'Invalid token. Please log in again.'
+
+    def is_collaborator(self):
+        return 'collaborator' in self.roles
+
+    def is_admin(self):
+        return 'admin' in self.roles
 
     def __repr__(self):
         return "<User '{}'>".format(self.name)
@@ -416,3 +424,20 @@ class Package(Document):
 
     def __hash__(self):
         return str(self.id)
+
+class Documentation(Document):
+    schema_version = StringField(max_length=10, default='1')
+    filename = StringField(required=True)
+    path = StringField(required=True)
+    uploader = ReferenceField(User)
+    upload_date = DateTimeField(default=datetime.datetime.utcnow)
+    last_modifier = ReferenceField(User)
+    last_modified = DateTimeField(default=datetime.datetime.utcnow)
+    organization = ReferenceField(Organization)
+    team = ReferenceField(Team)
+    view_times = IntField(default=0)
+    proprietary = BooleanField(default=False)
+    locked = BooleanField(default=False)
+    language = StringField(default='en')
+
+    meta = {'collection': 'documents'}
