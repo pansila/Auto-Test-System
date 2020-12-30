@@ -1,3 +1,4 @@
+import aiofiles
 import argparse
 import copy
 import datetime
@@ -6,24 +7,26 @@ import os
 import posixpath
 import re
 import sys
-import shutil
 import zipfile
 import zipimport
+import pkg_resources
+
+from async_files.utils import async_wraps
 from io import StringIO
 from os import path
 from pathlib import Path
-import pkg_resources
 from pkg_resources import Distribution, EggMetadata, parse_version
 from wheel import wheelfile
 from wheel import pkginfo
 from distutils import dir_util
 
 import mistune
-from mongoengine import connect
-from flask import current_app
+from sanic.log import logger
 
 from app.main.model.database import Test, User
 from app.main.config import get_config
+from app.main.util import async_rmtree, async_move, async_copytree, async_copy, async_exists, async_isdir, async_walk, async_listdir
+from app.main.util.zipfile import ZipFile, is_zipfile
 from app.main.util.get_path import get_back_scripts_root, get_user_scripts_root
 from app.main.model.database import Package
 from app.main.util.semver import parse_constraint, parse_single_constraint
@@ -44,11 +47,12 @@ def filter_kw(item):
     if item.startswith('${') or item.startswith('@{') or item.startswith('&{'):
         item = item[2:]
         if not item.endswith('}'):
-            current_app.logger.error('{ } mismatch for ' + item)
+            logger.error('{ } mismatch for ' + item)
         else:
             item = item[0:-1]
     return item
 
+@async_wraps
 def get_package_info(package):
     package = str(package)
     name, description, long_description = '', '', ''
@@ -85,19 +89,19 @@ def meet_version(versions, version_range):
 
     return None
 
-def query_package(package_name, organization, team, type):
-    package = Package.objects(py_packages=package_name, organization=organization, team=team, package_type=type).first()
+async def query_package(package_name, organization, team, type):
+    package = await Package.find_one({'py_packages': package_name, 'organization': organization.pk, 'team': team.pk if team else None, 'package_type': type})
     if not package:
-        package = Package.objects(py_packages=package_name, organization=organization, team=None, package_type=type).first()
+        package = await Package.find_one({'py_packages': package_name, 'organization': organization.pk, 'team': None, 'package_type': type})
         if not package:
-            package = Package.objects(py_packages=package_name, organization=None, team=None, package_type=type).first()
+            package = await Package.find_one({'py_packages': package_name, 'organization': None, 'team': None, 'package_type': type})
             if not package:
                 return None
     return package
 
-def get_package_requires(package, organization, team, type, cached=None):
-    if not package.endswith('.egg') or not zipfile.is_zipfile(package):
-        current_app.logger.error(f'{package} is not an .egg file')
+async def get_package_requires(package, organization, team, type, cached=None):
+    if not package.endswith('.egg') or not await is_zipfile(package):
+        logger.error(f'{package} is not an .egg file')
         return None
     packages = []
     dist = Distribution.from_filename(package, metadata=EggMetadata(zipimport.zipimporter(package)))
@@ -105,16 +109,16 @@ def get_package_requires(package, organization, team, type, cached=None):
         name, constraint = VERSION_CHECK(str(r)).group('name', 'constraint')
         version_range = parse_constraint(constraint)
 
-        package = Package.objects(py_packages=name, organization=organization, team=team, package_type=type).first()
-        ver = meet_version(package.versions, version_range) if package else None
+        package = await Package.find_one({'py_packages': name, 'organization': organization.pk, 'team': team.pk if team else None, 'package_type': type})
+        ver = meet_version(await package.versions, version_range) if package else None
         if not package or not ver:
-            package = Package.objects(py_packages=name, organization=organization, team=None, package_type=type).first()
-            ver = meet_version(package.versions, version_range) if package else None
+            package = await Package.find_one({'py_packages': name, 'organization': organization.pk, 'team': None, 'package_type': type})
+            ver = meet_version(await package.versions, version_range) if package else None
             if not package or not ver:
-                package = Package.objects(py_packages=name, organization=None, team=None, package_type=type).first()
-                ver = meet_version(package.versions, version_range) if package else None
+                package = await Package.find_one({'py_packages': name, 'organization': None, 'team': None, 'package_type': type})
+                ver = meet_version(await package.versions, version_range) if package else None
                 if not package or not ver:
-                    current_app.logger.error(f'package {name} not found or version requirement not meet: {r}')
+                    logger.error(f'package {name} not found or version requirement not meet: {version_range}')
                     return None
         packages.append((package, ver))
         if package in cached:
@@ -124,24 +128,24 @@ def get_package_requires(package, organization, team, type, cached=None):
     return packages
 
 # TODO: rollback if failed in one step
-def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, installed=None, recursive=False):
+async def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, installed=None, recursive=False):
     first_package = len(installed) == 0
 
-    pkg_file = package.get_package_by_version(version)
+    pkg_file = await package.get_package_by_version(version)
     if not pkg_file:
-        current_app.logger.error(f'package file not found for {package.name} with version {version}')
+        logger.error(f'package file not found for {package.name} with version {version}')
         return False
     pkg_file_path = pypi_root / package.package_name / pkg_file.filename
 
     if package in installed:
         return True
 
-    requires = get_package_requires(str(pkg_file_path), organization, team, 'Test Suite', installed)
+    requires = await get_package_requires(str(pkg_file_path), organization, team, 'Test Suite', installed)
     if requires:
         for pkg, ver in requires:
-            ret = install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, installed=installed)
+            ret = await install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, installed=installed)
             if not ret:
-                current_app.logger.error(f'Failed to install dependent package {package.name}')
+                logger.error(f'Failed to install dependent package {package.name}')
                 return False
 
     # always install the first package if not recursively install
@@ -149,45 +153,44 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
         pkg_file.modify(inc__download_times=1)
         return True
 
-    scripts_root = get_user_scripts_root(organization=organization, team=team)
-    libraries_root = get_back_scripts_root(organization=organization, team=team)
-    with zipfile.ZipFile(pkg_file_path) as zf:
+    scripts_root = await get_user_scripts_root(organization=organization, team=team)
+    libraries_root = await get_back_scripts_root(organization=organization, team=team)
+    async with ZipFile(pkg_file_path) as zf:
         for f in zf.namelist():
             if f.startswith('EGG-INFO'):
                 continue
             dirname = os.path.dirname(f)
-            if os.path.exists(scripts_root / dirname):
-                shutil.rmtree(scripts_root / dirname)
-            if os.path.exists(libraries_root / dirname):
-                shutil.rmtree(libraries_root / dirname)
+            if await async_exists(scripts_root / dirname):
+                await async_rmtree(scripts_root / dirname)
+            if await async_exists(libraries_root / dirname):
+                await async_rmtree(libraries_root / dirname)
 
-    with zipfile.ZipFile(pkg_file_path) as zf:
+    async with ZipFile(pkg_file_path) as zf:
         libraries = (f for f in zf.namelist() if not f.startswith('EGG-INFO') and '/scripts/' not in f)
         for l in libraries:
-            zf.extract(l, libraries_root)
+            await zf.extract(l, libraries_root)
         scripts = [f for f in zf.namelist() if '/scripts/' in f]
         for s in scripts:
-            zf.extract(s, scripts_root)
+            await zf.extract(s, scripts_root)
         new_tests = []
         all_tests = []
         for pkg_name in set((s.split('/', 1)[0] for s in scripts)):
-            for f in os.listdir(scripts_root / pkg_name / 'scripts'):
-                shutil.move(str(scripts_root / pkg_name / 'scripts' / f), scripts_root / pkg_name)
-                test = db_update_test(scripts_root, os.path.join(pkg_name, f), user, organization, team, package, version)
+            for f in await async_listdir(scripts_root / pkg_name / 'scripts'):
+                await async_move(str(scripts_root / pkg_name / 'scripts' / f), scripts_root / pkg_name)
+                test = await db_update_test(scripts_root, os.path.join(pkg_name, f), user, organization, team, package, version)
                 if test:
                     new_tests.append(test)
-            shutil.rmtree(scripts_root / pkg_name / 'scripts')
-            tests = Test.objects(path=pkg_name, organization=organization, team=team)
-            for test in tests:
+            await async_rmtree(scripts_root / pkg_name / 'scripts')
+            async for test in Test.find({'path': pkg_name, 'organization': organization.pk, 'team': team.pk if team else None}):
                 all_tests.append(test)
         tests = set(all_tests) - set(new_tests)
         for test in tests:
-            current_app.logger.critical(f'Remove the staled test suite: {test.test_suite}')
-            test.delete()
-    pkg_file.modify(inc__download_times=1)
+            logger.critical(f'Remove the staled test suite: {test.test_suite}')
+            await test.delete()
+    await package.collection.find_one_and_update({'_id': package.pk}, {'$inc': {'download_times': 1}})
     return True
 
-def db_update_test(scripts_dir, script, user, organization, team, package=None, version=None):
+async def db_update_test(scripts_dir, script, user, organization, team, package=None, version=None):
     if scripts_dir is None:
         return None
     if not script.endswith('.md'):
@@ -196,25 +199,33 @@ def db_update_test(scripts_dir, script, user, organization, team, package=None, 
     basename = os.path.basename(script)
     dirname = os.path.dirname(script)
     test_suite = os.path.splitext(basename)[0]
-    test = Test.objects(test_suite=test_suite, path=dirname, organization=organization, team=team).first()
+    test = await Test.find_one({'test_suite': test_suite, 'path': dirname, 'organization': organization.pk, 'team': team.pk if team else None})
     if not test:
-        test = Test(path=dirname, author=user, organization=organization, team=team,
+        test = Test(path=dirname, author=user, organization=organization,
                     test_suite=test_suite, package=package, package_version=version)
+        if team:
+            test.team = team
         test.create_date = datetime.datetime.utcnow()
-        test.save()
+        await test.commit()
     else:
         if package and version:
-            test.modify(package=package, package_version=version)
-        elif test.package:
-            test.package.modify(modified=True)
-        test.modify(update_date=datetime.datetime.utcnow())
+            test.package = package
+            test.package_version = version
+        else:
+            package = await test.package.fetch()
+            if package:
+                package.modified = True
+                await package.commit()
+        test.update_date = datetime.datetime.utcnow()
+        await test.commit()
 
-    ret = update_test_from_md(os.path.join(scripts_dir, script), test)
+    ret = await update_test_from_md(os.path.join(scripts_dir, script), test)
     if ret:
-        test.save()
-        current_app.logger.critical(f'Update test suite for {script}')
+        await test.commit()
+        logger.critical(f'Update test suite for {script}')
     return test
 
+@async_wraps
 def update_test_from_md(md_file, test):
     """
     update test cases and variables for the test
@@ -266,7 +277,7 @@ def update_test_from_md(md_file, test):
                                 k, v = i.split('=')
                                 variables[dict_var][k] = v
                         else:
-                            current_app.logger.error('Unknown tag: ' + c[0])
+                            logger.error('Unknown tag: ' + c[0])
     if test.test_cases != test_cases:
         test.test_cases = test_cases
         ret = True
@@ -275,10 +286,10 @@ def update_test_from_md(md_file, test):
         ret = True
     return ret
 
-def find_modules(script):
+async def find_modules(script):
     modules = []
-    with open(script) as f:
-        for line in f:
+    async with aiofiles.open(script) as f:
+        async for line in f:
             if line.startswith('#'):
                 continue
             m = MODULE_IMPORT(line)
@@ -291,88 +302,87 @@ def find_modules(script):
     return modules
 
 #TODO find deep dependencies
-def find_dependencies(script, organization, team, package_type):
+async def find_dependencies(script, organization, team, package_type):
     ret = []
-    modules = find_modules(script)
+    modules = await find_modules(script)
     for module in modules:
-        tests = Test.objects(organization=organization, team=team)
-        for test in tests:
+        async for test in Test.find({'organization': organization.pk, 'team': team.pk if team else None}):
             if test.package and module in test.package.py_packages:
                 ret.append((test.package, test.package_version))
                 break
     return ret
 
-def find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached):
-    pkg_file = pypi_root / package.package_name / package.get_package_by_version(version).filename
-    requires = get_package_requires(str(pkg_file), organization, team, package_type, cached)
+async def find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached):
+    pkg_file = pypi_root / package.package_name / (await package.get_package_by_version(version)).filename
+    requires = await get_package_requires(str(pkg_file), organization, team, package_type, cached)
     if requires:
         for pkg, version in requires:
-            find_pkg_dependencies_nested(pypi_root, pkg, version, organization, team, package_type, cached)
+            await find_pkg_dependencies_nested(pypi_root, pkg, version, organization, team, package_type, cached)
 
-def find_pkg_dependencies(pypi_root, package, version, organization, team, package_type):
+async def find_pkg_dependencies(pypi_root, package, version, organization, team, package_type):
     cached = {package: parse_single_constraint(version)}
     packages = []
-    find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached)
+    await find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached)
     for pkg, version in cached.items():
-        for ver in pkg.versions:
+        for ver in await pkg.versions:
             if not parse_single_constraint(ver).intersect(version).is_empty():
                 packages.append((pkg, ver))
+                break
     return packages
 
-def get_internal_packages(package_path):
-    with zipfile.ZipFile(package_path) as zf:
+async def get_internal_packages(package_path):
+    async with ZipFile(package_path) as zf:
         packages = (f.split('/', 1)[0] for f in zf.namelist() if not f.startswith('EGG-INFO'))
         packages = set(packages)
         return list(packages)
     return []
 
-def find_local_dependencies(scripts_root, script, organization, team):
-    modules = find_modules(os.path.join(scripts_root, script))
+async def find_local_dependencies(scripts_root, script, organization, team):
+    modules = await find_modules(os.path.join(scripts_root, script))
     modules_dep = modules[:]
     ret = [os.path.splitext(script)[0].split('/', 1)[0]]
     for module in modules:
-        tests = Test.objects(organization=organization, team=team)
-        for test in tests:
+        async for test in await Test.find({'organization': organization.pk, 'team': team.pk if team else None}):
             if test.package and module in test.package.py_packages:
                 modules_dep.remove(module)
-    for f in os.listdir(scripts_root):
+    for f in await async_listdir(scripts_root):
         for module in modules_dep:
             f = os.path.splitext(f)[0]
             if f == module:
                 ret.append(f)
     return ret
 
-def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
+async def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
     unpack_root = os.path.join(dest_root, 'unpack')
     if os.path.exists(unpack_root):
-        shutil.rmtree(unpack_root)
-    package_file = package.get_package_by_version(pkg_version)
+        await async_rmtree(unpack_root)
+    package_file = await package.get_package_by_version(pkg_version)
     pkg_file = pypi_root / package.package_name / package_file.filename
-    with zipfile.ZipFile(pkg_file) as zf:
-        zf.extractall(unpack_root)
+    async with ZipFile(pkg_file) as zf:
+        await zf.extractall(unpack_root)
     for py_pkg in package.py_packages:
-        ret = dir_util.copy_tree(os.path.join(scripts_root, py_pkg), os.path.join(unpack_root, py_pkg))
+        ret = await async_wraps(dir_util.copy_tree)(os.path.join(scripts_root, py_pkg), os.path.join(unpack_root, py_pkg))
     pkg_file = os.path.join(dest_root, package_file.filename)
-    with zipfile.ZipFile(pkg_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
-        for root, dirs, files in os.walk(unpack_root):
+    async with ZipFile(pkg_file, mode='w', compression=zipfile.ZIP_DEFLATED) as zf:
+        for root, dirs, files in await async_walk(unpack_root):
             for f in files:
-                zf.write(os.path.join(root, f), arcname=os.path.join(root[len(unpack_root):], f))
+                await zf.write(os.path.join(root, f), arcname=os.path.join(root[len(unpack_root):], f))
     return pkg_file
 
-def generate_setup(src_dir, dst_dir, dependencies, project_name, version):
+async def generate_setup(src_dir, dst_dir, dependencies, project_name, version):
     packages = []
     py_modules = []
 
     for f in dependencies:
         src = os.path.join(src_dir, f)
-        if os.path.isdir(src):
+        if await async_isdir(src):
             packages.append(f)
-            shutil.copytree(src, os.path.join(dst_dir, f))
+            await async_copytree(src, os.path.join(dst_dir, f))
         else:
             py_modules.append(f)
-            shutil.copy(src + '.py', dst_dir)
-    with open(os.path.join(dst_dir, 'setup.py'), 'w') as file:
-        file.write(
+            await async_copy(src + '.py', dst_dir)
+    async with aiofiles.open(os.path.join(dst_dir, 'setup.py'), 'w') as file:
+        await file.write(
             "from setuptools import setup\n"
             "setup(name=%r, version=%r, packages=%r, py_modules=%r)\n"
             % (project_name, version, packages, py_modules)

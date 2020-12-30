@@ -1,431 +1,442 @@
+import aiofiles
+import base64
 import os
-import shutil
 from pathlib import Path
-from flask import request, send_from_directory
-from flask_restx import Resource
 from bson import ObjectId
+from sanic_openapi import doc
+from sanic.response import json, file
+from sanic import Blueprint
+from sanic.views import HTTPMethodView
+from async_files.utils import async_wraps
 
+from ..util import async_rmtree
 from ..util.decorator import token_required
 from ..model.database import Organization, Team, User, Test, Task, TaskQueue, TestResult
 
 from ..service.auth_helper import Auth
-from ..util.dto import OrganizationDto
-from ..util.response import *
+from ..util.dto import OrganizationDto, json_response, organization_team
+from ..util.response import response_message, SUCCESS, USER_NOT_EXIST, EPERM, ENOENT, EINVAL, EEXIST
 from ..config import get_config
-from ..util.identicon import *
+from ..util.identicon import render_identicon
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
 
-api = OrganizationDto.api
-_user = OrganizationDto.user
-_organization = OrganizationDto.organization
+_user_list = OrganizationDto.user_list
+_organization_list = OrganizationDto.organization_list
 _new_organization = OrganizationDto.new_organization
 _organization_id = OrganizationDto.organization_id
-_organization_team_resp = OrganizationDto.organization_team_resp
+_organization_team_list = OrganizationDto.organization_team_list
 _transfer_ownership = OrganizationDto.transfer_ownership
+_organization_avatar = OrganizationDto.organization_avatar
 
 
-@api.route('/')
-class OrganizationList(Resource):
+bp = Blueprint('organization', url_prefix='/organization')
+
+class OrganizationView(HTTPMethodView):
+    @doc.summary('List all organizations joined by the logged in user')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.produces(_organization_list)
     @token_required
-    @api.doc('list all organizations')
-    @api.marshal_list_with(_organization)
-    def get(self, **kwargs):
-        """List all organizations joined by the logged in user"""
+    async def get(self, request):
         ret = []
         check = []
-        user_id = kwargs['user']['user_id']
-        user = User.objects(pk=user_id).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
+        user = request.ctx.user
 
-        organizations = Organization.objects(owner=user)
-        for organization in organizations:
+        async for organization in Organization.find({'owner': user.pk}):
+            owner = await organization.owner.fetch()
             ret.append({
                 'label': organization.name,
-                'owner': organization.owner.name,
-                'owner_email': organization.owner.email,
+                'owner': owner.name,
+                'owner_email': owner.email,
                 'personal': organization.personal,
-                'value': str(organization.id)
+                'value': str(organization.pk)
             })
             check.append(organization)
 
         for organization in user.organizations:
             if organization in check:
                 continue
+            owner = await organization.owner.fetch()
             ret.append({
                 'label': organization.name,
-                'owner': organization.owner.name,
-                'owner_email': organization.owner.email,
+                'owner': owner.name,
+                'owner_email': owner.email,
                 'personal': organization.personal,
-                'value': str(organization.id)
+                'value': str(organization.pk)
             })
 
         ret.sort(key=lambda x: not x['personal'])
-        return ret
 
+        return json(response_message(SUCCESS, organizations=ret))
+
+    @doc.summary('create a new organization')
+    @doc.description('The logged in user performing the operation will become the owner of the organization')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(doc.String(name='name', description="new organization\'s name"), location='body')
+    @doc.produces(json_response)
     @token_required
-    @api.doc('create a new organization')
-    @api.expect(_new_organization)
-    def post(self, **kwargs):
-        """
-        Create a new organization
-
-        Note: The logged in user performing the operation will become the owner of the organization
-        """
+    async def post(self, request):
         data = request.json
         name = data.get('name', None)
         if not name:
-            return response_message(EINVAL, 'Field name is required'), 400
+            return json(response_message(EINVAL, 'Field name is required'))
         
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
+        user = request.ctx.user
 
         org = Organization(name=name)
         org.owner = user
         org.members.append(user)
-        org.save()
+        await org.commit()
         user.organizations.append(org)
-        user.save()
+        await user.commit()
 
-        org.path = name + '#' + str(org.id)
+        org.path = name + '#' + str(org.pk)
         org_root = USERS_ROOT / org.path
         try:
-            os.mkdir(org_root)
+            await aiofiles.os.mkdir(org_root)
         except FileExistsError as e:
-            return response_message(EEXIST), 401
+            return json(response_message(EEXIST))
 
-        img= render_identicon(hash(name), 27)
-        img.save(org_root / ('%s.png' % org.id))
-        org.avatar = '%s.png' % org.id
-        org.save()
+        img = await render_identicon(hash(name), 27)
+        await async_wraps(img.save)(org_root / ('%s.png' % org.pk))
+        org.avatar = f'{org.pk}.png' 
+        await org.commit()
 
+        return json(response_message(SUCCESS))
+
+    @doc.summary('delete an organization')
+    @doc.description('Only the owner of the organization could perform this operation')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_organization_id, location='body')
+    @doc.produces(json_response)
     @token_required
-    @api.doc('delete an organization')
-    @api.expect(_organization_id)
-    def delete(self, **kwargs):
-        """
-        Delete an organization
-
-        Note: Only the owner of the organization could perform this operation
-        """
+    async def delete(self, request):
         organization_id = request.json.get('organization_id', None)
         if not organization_id:
-            return response_message(EINVAL, "Field organization_id is required"), 400
+            return json(response_message(EINVAL, "Field organization_id is required"))
 
-        organization = Organization.objects(pk=organization_id).first()
+        organization = await Organization.find_one({'_id': ObjectId(organization_id)})
         if not organization:
-            return response_message(ENOENT, "Team not found"), 404
+            return json(response_message(ENOENT, "Team not found"))
 
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, "User not found"), 404
-
-        if organization.owner != user:
-            return response_message(EINVAL, 'You are not the organization owner'), 403
+        user = request.ctx.user
+        if await organization.owner.fetch() != user:
+            return json(response_message(EINVAL, 'You are not the organization owner'))
 
         try:
-            shutil.rmtree(USERS_ROOT / organization.path)
+            await async_rmtree(USERS_ROOT / organization.path)
         except FileNotFoundError:
             pass
 
-        User.objects.update(pull__organizations=organization)
+        user.organizations.remove(organization)
+        await user.commit()
 
         # Tests belong to teams of the organization will be deleted as well by this query
-        tests = Test.objects(organization=organization)
-        for test in tests:
-            tasks = Task.objects(test=test)
-            for task in tasks:
-                TestResult.objects(task=task).delete()
-            tasks.delete()
-        tests.delete()
-        TaskQueue.objects(organization=organization).update(to_delete=True, organization=None, team=None)
+        async for test in Test.find({'organization': organization.pk}):
+            async for task in Task.find({'test': test.pk}):
+                async for tr in TestResult.find({'task': task.pk}):
+                    await tr.delete()
+                await task.delete()
+            await test.delete()
+        async for queue in TaskQueue.find({'organization': organization.pk}):
+            queue.to_delete = True
+            queue.organization = None
+            queue.team = None
+            await queue.commit()
         
-        teams = Team.objects(organization=organization)
-        for team in teams:
-            User.objects.update(pull__teams=team)
-            team.delete()
+        async for team in Team.find({'organization': organization.pk}):
+            async for user in User.find():
+                user.teams.remove(team)
+                await User.commit()
+            await team.delete()
 
-        organization.delete()
+        await organization.delete()
 
-@api.route('/avatar/<org_id>')
-class OrganizationAvatar(Resource):
-    @api.doc('get the avatar of an organization')
-    def get(self, org_id):
-        """Get the avatar of an organization"""
-        auth_token = request.cookies.get('Admin-Token')
-        if auth_token:
-            payload = User.decode_auth_token(auth_token)
-            if not isinstance(payload, str):
-                user = User.objects(pk=payload['sub']).first()
-                if user:
-                    org = Organization.objects(pk=org_id).first()
-                    if org:
-                        if org.avatar:
-                            return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.avatar)
-                        else:
-                            return send_from_directory(Path(os.getcwd()) / USERS_ROOT / org.path, org.owner.avatar)
-                    return response_message(USER_NOT_EXIST, 'Organization not found'), 404
-                return response_message(USER_NOT_EXIST), 404
-            return response_message(TOKEN_ILLEGAL, payload), 401
-        return response_message(TOKEN_REQUIRED), 400
+        return json(response_message(SUCCESS))
 
-@api.route('/member')
-class OrganizationMember(Resource):
-    @token_required
-    @api.doc('quit the organization')
-    @api.expect(_organization_id)
-    def delete(self, **kwargs):
-        """
-        Quit the organization
-        
-        The user logged in will quit the organization
-        """
-        organization_id = request.json.get('organization_id', None)
-        if not organization_id:
-            return response_message(EINVAL, "Field organization_id is required"), 400
-
-        org_to_quit = Organization.objects(pk=organization_id).first()
-        if not org_to_quit:
-            return response_message(ENOENT, "Organization not found"), 404
-
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, "User not found"), 404
-
-        for organization in user.organizations:
-            if organization != org_to_quit:
-                continue
-            if organization.owner == user:
-                return response_message(EPERM, "Can't quit the organization as you are the owner"), 403
-            organization.modify(pull__members=user)
-            user.modify(pull__organizations=organization)
-            return response_message(SUCCESS)
+@bp.get('/avatar/<org_id>')
+@doc.summary('get the avatar of an organization')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.produces(_organization_avatar)
+@token_required
+async def handler(request, org_id):
+    user = request.ctx.user
+    org = await Organization.find_one({'_id': ObjectId(org_id)})
+    if org:
+        if user not in org.members:
+            return json(response_message(EPERM), 'You are not a member of the organization')
+        if org.avatar:
+            async with aiofiles.open(USERS_ROOT / org.path / org.avatar, 'rb') as img:
+                _, ext = os.path.splitext(org.avatar)
+                return json(response_message(SUCCESS, type=f'image/{ext[1:]}', data=base64.b64encode(await img.read()).decode('ascii')))
         else:
-            return response_message(EINVAL, "User is not in the organization"), 400
+            owner = await org.owner.fetch()
+            async with aiofiles.open(USERS_ROOT / org.path / owner.avatar, 'rb') as img:
+                _, ext = os.path.splitext(owner.avatar)
+                return json(response_message(SUCCESS, type=f'image/{ext[1:]}', data=base64.b64encode(await img.read()).decode('ascii')))
+    return json(response_message(ENOENT, 'Organization not found'))
 
-@api.route('/all')
-class OrganizationListAll(Resource):
-    @token_required
-    @api.doc('list all organizations registered')
-    @api.marshal_list_with(_organization)
-    def get(self, **kwargs):
-        """List all organizations registered"""
-        ret = []
+@bp.delete('/member')
+@doc.summary('let current logged in user quit the organization')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_organization_id, location='body')
+@doc.produces(json_response)
+@token_required
+async def handler(request):
+    organization_id = request.json.get('organization_id', None)
+    if not organization_id:
+        return json(response_message(EINVAL, "Field organization_id is required"))
 
-        organizations = Organization.objects(name__not__exact='Personal')
-        return [{
-                'label': organization.name,
-                'owner': organization.owner.name,
-                'owner_email': organization.owner.email,
-                'personal': organization.personal,
-                'value': str(organization.id)
-            } for organization in organizations]
+    org_to_quit = await Organization.find_one({'_id': ObjectId(organization_id)})
+    if not org_to_quit:
+        return json(response_message(ENOENT, "Organization not found"))
 
-@api.route('/include_team')
-class OrganizationListAll(Resource):
-    @token_required
-    @api.doc('list all organizations and teams registered')
-    @api.marshal_list_with(_organization_team_resp)
-    def get(self, **kwargs):
-        """List all organizations and teams registered"""
-        ret = []
-        check = []
-        user_id = kwargs['user']['user_id']
-        user = User.objects(pk=user_id).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
+    user = request.ctx.user
 
-        organizations = Organization.objects(owner=user)
-        for organization in organizations:
-            r = {
-                'label': organization.name,
-                'owner': organization.owner.name,
-                'owner_email': organization.owner.email,
-                'personal': organization.personal,
-                'value': str(organization.id)
-            }
-            ret.append(r)
-            check.append(organization)
-            if not 'teams' in organization:
+    for organization in user.organizations:
+        if organization != org_to_quit:
+            continue
+        if await organization.owner.fetch() == user:
+            return json(response_message(EPERM, "Can't quit the organization as you are the owner"))
+        organization.members.remove(user)
+        await organization.commit()
+        user.organizations.remove(organization)
+        await user.commit()
+        return json(response_message(SUCCESS))
+    else:
+        return json(response_message(EINVAL, "User is not in the organization"))
+
+@bp.get('/all')
+@doc.summary('list all organizations registered')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.produces(_organization_list)
+@token_required
+async def handler(request):
+    ret = []
+
+    async for organization in Organization.find():
+        if organization.name == 'Personal':
+            continue
+        owner = await organization.owner.fetch()
+        ret.append({
+            'label': organization.name,
+            'owner': owner.name,
+            'owner_email': owner.email,
+            'personal': organization.personal,
+            'value': str(organization.pk)
+        })
+    return json(response_message(SUCCESS, organizations=ret))
+
+@bp.get('/include_team')
+@doc.summary('list all organizations and teams registered')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.produces(_organization_team_list)
+@token_required
+async def handler(request):
+    ret = []
+    check = []
+    user = request.ctx.user
+
+    async for organization in Organization.find({'owner': user.pk}):
+        owner = await organization.owner.fetch()
+        r = {
+            'label': organization.name,
+            'owner': owner.name,
+            'owner_email': owner.email,
+            'personal': organization.personal,
+            'value': str(organization.pk)
+        }
+        ret.append(r)
+        check.append(organization)
+        try:
+            if not organization.team:
                 continue
-            if len(organization.teams) > 0:
-                r['children'] = []
-            for team in organization.teams:
-                r['children'].append({
-                    'label': team.name,
-                    'owner': team.owner.name,
-                    'owner_email': team.owner.email,
-                    'value': str(team.id)
-                })
-
-        for organization in user.organizations:
-            if organization in check:
-                continue
-            r = {
-                'label': organization.name,
-                'owner': organization.owner.name,
-                'owner_email': organization.owner.email,
-                'personal': organization.personal,
-                'value': str(organization.id)
-            }
-            ret.append(r)
-            if not 'teams' in organization:
-                continue
-            if len(organization.teams) > 0:
-                r['children'] = []
-            for team in organization.teams:
-                r['children'].append({
-                    'label': team.name,
-                    'owner': team.owner.name,
-                    'owner_email': team.owner.email,
-                    'value': str(team.id)
-                })
-
-        return ret
-
-@api.route('/join')
-class OrganizationJoin(Resource):
-    @token_required
-    @api.doc('join an organization')
-    @api.expect(_organization_id)
-    def post(self, **kwargs):
-        """The logged in user joins an organization"""
-        org_id = request.json.get('organization_id', None)
-        if not org_id:
-            return response_message(EINVAL, "Field organization_id is required"), 400
-
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
-
-        organization = Organization.objects(pk=org_id).first()
-        if not organization:
-            return response_message(ENOENT, 'Organization not found'), 404
-
-        if user not in organization.members:
-            organization.modify(push__members=user)
-        if organization not in user.organizations:
-            user.modify(push__organizations=organization)
-
-@api.route('/users')
-class OrganizationUsers(Resource):
-    @token_required
-    @api.doc('list all users')
-    @api.param('organization_id', description='The organization ID')
-    @api.marshal_list_with(_user)
-    def get(self, **kwargs):
-        """
-        List all users of an organization
-
-        Note: Users in a team of the organization will not be counted.
-        """
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
-
-        organization_id = request.args.get('organization_id', None)
-        if not organization_id:
-            return response_message(EINVAL, 'Field organization_id is required'), 401
-
-        organization = Organization.objects(pk=organization_id).first()
-        if not organization:
-            return response_message(ENOENT, 'Organization not found'), 404
-
-        if user not in organization.members:
-            return response_message(EPERM, 'You are not in the organization'), 403
-
-        return [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
-
-@api.route('/all_users')
-class OrganizationUsers(Resource):
-    @token_required
-    @api.doc('list all users')
-    @api.param('organization_id', description='The organization ID')
-    @api.marshal_list_with(_user)
-    def get(self, **kwargs):
-        """
-        List all users of an organization
-
-        Note: Users in a team of the organization will be counted.
-        """
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
-
-        organization_id = request.args.get('organization_id', None)
-        if not organization_id:
-            return response_message(EINVAL, 'Field organization_id is required'), 401
-
-        organization = Organization.objects(pk=organization_id).first()
-        if not organization:
-            return response_message(ENOENT, 'Organization not found'), 404
-
-        if user not in organization.members:
-            return response_message(EPERM, 'You are not in the organization'), 403
-
-        ret = [{'value': str(m.id), 'label': m.name, 'email': m.email} for m in organization.members]
-        check_list = [str(m.id) for m in organization.members]
-
+        except AttributeError:
+            continue
+        if len(organization.teams) > 0:
+            r['children'] = []
         for team in organization.teams:
-            for user in team.members:
-                user_id = str(user.id)
-                if user_id not in check_list:
-                    ret.append({'value': user_id, 'label': user.name, 'email': user.email})
-                    check_list.append(user_id)
+            owner = await team.owner.fetch()
+            r['children'].append({
+                'label': team.name,
+                'owner': owner.name,
+                'owner_email': owner.email,
+                'value': str(team.pk)
+            })
 
-        return ret
-
-@api.route('/transfer')
-class OrganizationTransfer(Resource):
-    @token_required
-    @api.doc('transfer ownership of an organization')
-    @api.expect(_transfer_ownership)
-    def post(self, **kwargs):
-        """
-        Transfer the ownership of an organization to another authorized user.
-
-        Note: The new owner should have joined the organization or a team of the organization
-        """
-        user = User.objects(pk=kwargs['user']['user_id']).first()
-        if not user:
-            return response_message(ENOENT, 'User not found'), 404
-
-        organization_id = request.json.get('organization_id', None)
-        if not organization_id:
-            return response_message(EINVAL, 'Field organization_id is required'), 401
-
-        organization = Organization.objects(pk=organization_id).first()
-        if not organization:
-            return response_message(ENOENT, 'Organization not found'), 404
-
-        if organization.owner != user:
-            return response_message(EPERM, 'You are not the organization owner'), 403
-
-        owner_id = request.json.get('new_owner', None)
-        if not owner_id:
-            return response_message(EINVAL, 'Field new_owner is required'), 401
-
-        owner = User.objects(pk=owner_id).first()
-        if not owner:
-            return response_message(ENOENT, 'New owner not found'), 404
-
-        if owner not in organization.members:
-            for team in organization.teams:
-                if owner in team.members:
-                    break
-            else:
-                return response_message(EPERM, 'New owner should be a member of the organization'), 403
-
-        organization.owner = owner
-        if owner not in organization.members:
-            organization.members.append(owner)
-        organization.save()
-
+    for organization in user.organizations:
+        if organization in check:
+            continue
+        owner = await organization.owner.fetch()
+        r = {
+            'label': organization.name,
+            'owner': owner.name,
+            'owner_email': owner.email,
+            'personal': organization.personal,
+            'value': str(organization.pk)
+        }
+        ret.append(r)
+        if not 'teams' in organization:
+            continue
+        if len(organization.teams) > 0:
+            r['children'] = []
         for team in organization.teams:
-            if team.owner == user:
-                team.owner = owner
-                if owner not in team.members:
-                    team.members.append(owner)
-                team.save()
+            owner = await team.owner.fetch()
+            r['children'].append({
+                'label': team.name,
+                'owner': owner.name,
+                'owner_email': owner.email,
+                'value': str(team.pk)
+            })
+
+    return json(response_message(SUCCESS, organization_team=ret))
+
+@bp.post('/join')
+@doc.summary('join an organization')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_organization_id, location='body')
+@doc.produces(json_response)
+@token_required
+async def handler(request):
+    org_id = request.json.get('organization_id', None)
+    if not org_id:
+        return json(response_message(EINVAL, "Field organization_id is required"))
+
+    user = request.ctx.user
+
+    organization = await Organization.find_one({'_id': ObjectId(org_id)})
+    if not organization:
+        return json(response_message(ENOENT, 'Organization not found'))
+
+    if user not in organization.members:
+        organization.members.append(user)
+        await organization.commit()
+    if organization not in user.organizations:
+        user.organizations.append(organization)
+        await user.commit()
+
+    return json(response_message(SUCCESS))
+
+@bp.get('/users')
+@doc.summary('list all users of an organization')
+@doc.description('Note: Users in a team of the organization will not be counted')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_organization_id)
+@doc.produces(_user_list)
+@token_required
+async def handler(request):
+    user = request.ctx.user
+
+    organization_id = request.args.get('organization_id', None)
+    if not organization_id:
+        return json(response_message(EINVAL, 'Field organization_id is required'))
+
+    organization = await Organization.find_one({'_id': ObjectId(organization_id)})
+    if not organization:
+        return json(response_message(ENOENT, 'Organization not found'))
+
+    if user not in organization.members:
+        return json(response_message(EPERM, 'You are not in the organization'))
+
+    ret = []
+    for member in organization.members:
+        m = await member.fetch()
+        ret.append({
+            'value': str(m.pk),
+            'label': m.name,
+            'email': m.email
+        })
+    return json(response_message(SUCCESS, users=ret))
+
+@bp.get('/all_users')
+@doc.summary('list all users')
+@doc.description('Note: All Users in the organization and the organization\'s teams will be counted')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_organization_id)
+@doc.produces(_user_list)
+@token_required
+async def handler(request):
+    user = request.ctx.user
+
+    organization_id = request.args.get('organization_id', None)
+    if not organization_id:
+        return json(response_message(EINVAL, 'Field organization_id is required'))
+
+    organization = await Organization.find_one({'_id': ObjectId(organization_id)})
+    if not organization:
+        return json(response_message(ENOENT, 'Organization not found'))
+
+    for member in organization.members:
+        m = await member.fetch()
+        if user == m:
+            break
+    else:
+        return json(response_message(EPERM, 'You are not in the organization'))
+
+    ret = []
+    check_list = []
+    for member in organization.members:
+        m = await member.fetch()
+        check_list.append(m)
+        ret.append({'value': str(m.pk), 'label': m.name, 'email': m.email})
+
+    for team in organization.teams:
+        for user in team.members:
+            u = await user.fetch()
+            user_id = str(u.pk)
+            if u not in check_list:
+                ret.append({'value': user_id, 'label': u.name, 'email': u.email})
+                check_list.append(u)
+
+    return json(response_message(SUCCESS, users=ret))
+
+@bp.post('/transfer')
+@doc.summary('transfer ownership of an organization')
+@doc.description('The new owner should have joined the organization or a team of the organization')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_transfer_ownership, location='body')
+@doc.produces(json_response)
+@token_required
+async def handler(request):
+    user = request.ctx.user
+
+    organization_id = request.json.get('organization_id', None)
+    if not organization_id:
+        return json(response_message(EINVAL, 'Field organization_id is required'))
+
+    organization = await Organization.find_one({'_id': ObjectId(organization_id)})
+    if not organization:
+        return json(response_message(ENOENT, 'Organization not found'))
+
+    if await organization.owner.fetch() != user:
+        return json(response_message(EPERM, 'You are not the organization owner'))
+
+    owner_id = request.json.get('new_owner', None)
+    if not owner_id:
+        return json(response_message(EINVAL, 'Field new_owner is required'))
+
+    owner = await User.find_one({'_id': ObjectId(owner_id)})
+    if not owner:
+        return json(response_message(ENOENT, 'New owner not found'))
+
+    if owner not in organization.members:
+        for team in organization.teams:
+            if owner in team.members:
+                break
+        else:
+            return json(response_message(EPERM, 'New owner should be a member of the organization'))
+
+    organization.owner = owner
+    if owner not in organization.members:
+        organization.members.append(owner)
+    await organization.commit()
+
+    for team in organization.teams:
+        if team.owner == user:
+            team.owner = owner
+            if owner not in team.members:
+                team.members.append(owner)
+            await team.commit()
+    return json(response_message(SUCCESS))
+
+bp.add_route(OrganizationView.as_view(), '/')

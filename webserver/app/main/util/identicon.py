@@ -8,6 +8,7 @@ from PIL import Image
 from PIL import ImageColor
 from PIL import ImageDraw
 from PIL import ImagePath
+from async_files.utils import async_wraps
 
 __all__ = ['render_identicon', 'IdenticonRendererBase']
 
@@ -217,6 +218,7 @@ class DonRenderer(IdenticonRendererBase):
                foreColor, ImageColor.getrgb('white')
 
 
+@async_wraps
 def render_identicon(code, size, renderer=None):
     if not renderer:
         renderer = DonRenderer

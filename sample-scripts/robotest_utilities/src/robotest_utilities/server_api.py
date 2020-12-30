@@ -22,7 +22,7 @@ class server_api(test_utility):
     def _update_result(self, new_result=None):
         if new_result:
             self.result = {**self.result, **new_result}
-        ret = requests.post('{}/testresult/{}'.format(self.daemon_config['server_url'],
+        ret = requests.post('{}/api_v1/testresult/{}'.format(self.daemon_config['server_url'],
                             self.task_id),
                             json=json.dumps(self.result, default=json_serial))
         if ret.status_code != 200:

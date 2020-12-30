@@ -1,141 +1,143 @@
+import aiofiles
 import os
-import shutil
 from pathlib import Path
-
 from bson.objectid import ObjectId
-from flask import request, send_from_directory, current_app
-from flask_restx import Resource
-from mongoengine import ValidationError
+
+from async_files.utils import async_wraps
+from sanic import Blueprint
+from sanic.log import logger
+from sanic.views import HTTPMethodView
+from sanic.response import json, file, html
+from sanic_openapi import doc
 
 from app.main.util.decorator import token_required, organization_team_required_by_args, task_required, organization_team_required_by_form
-from app.main.util.get_path import get_test_result_path, get_upload_files_root
+from app.main.util.get_path import get_test_result_path, get_upload_files_root, is_path_secure
 from ..config import get_config
 from ..model.database import Task
-from ..util.dto import TaskResourceDto
-from ..util.tarball import pack_files
-from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO
+from ..util import async_rmtree, async_copy, async_exists
+from ..util.dto import TaskResourceDto, json_response
+from ..util.tarball import pack_files, path_to_dict
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, NO_TASK_RESOURCES
 
-api = TaskResourceDto.api
 _task_resource = TaskResourceDto.task_resource
+_task_resource_response = TaskResourceDto.task_resource_response
+_task_id = TaskResourceDto.task_id
+_task_resource_file_list = TaskResourceDto.task_resource_file_list
 
 TARBALL_TEMP = Path('temp')
 UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
 
 
-@api.route('/<task_id>')
-@api.param('task_id', 'task id to process')
-class TaskResourceController(Resource):
-    # @token_required
-    @api.doc('return the test result files')
-    def get(self, task_id):
-        """
-        Return the test result files
-        
-        If a file name specified, a file in the upload directory will be returned
-        If a file name is not specified, return the bundled file that contains all result files
-        """
-        try:
-            task = Task.objects(pk=task_id).get() 
-        except ValidationError as e:
-            current_app.logger.exception(e)
-            return response_message(EINVAL, 'Task ID incorrect'), 400
-        except Task.DoesNotExist:
-            return response_message(ENOENT, 'Task not found'), 404
-        
-        if not task.upload_dir:
-            return response_message(SUCCESS, 'Upload directory is empty'), 204
+bp = Blueprint('taskresource', url_prefix='/taskresource')
 
-        upload_root = get_upload_files_root(task)
-        result_root = get_test_result_path(task)
-        if not os.path.exists(result_root / TARBALL_TEMP):
-            os.mkdir(result_root / TARBALL_TEMP)
+@bp.get('/<task_id>')
+@doc.summary('return the test result files')
+@doc.description('''\
+    If a file name specified, a file in the upload directory will be returned
+    If a file name is not specified, return the bundled file that contains all result files
+''')
+@doc.consumes('task_id', 'task id to process')
+@doc.produces(201, doc.File())
+@doc.produces(200, json_response)
+# @token_required # TODO
+async def handler(request, task_id):
+    task = await Task.find_one({'_id': ObjectId(task_id)})
+    if not task:
+        return json(response_message(ENOENT, 'Task not found'))
+    
+    if not task.upload_dir:
+        return json(response_message(NO_TASK_RESOURCES), status=204)
 
-        upload_file = request.args.get('file', None)
-        if upload_file:
-            return send_from_directory(Path(os.getcwd()) / upload_root, upload_file)
+    upload_root = get_upload_files_root(task)
+    result_root = await get_test_result_path(task)
+    if not await async_exists(result_root / TARBALL_TEMP):
+        await aiofiles.os.mkdir(result_root / TARBALL_TEMP)
 
-        tarball = pack_files(task_id, upload_root, result_root / TARBALL_TEMP)
-        if not tarball:
-            return response_message(EIO, 'Packing task resource files failed'), 401
+    upload_file = request.args.get('file', None)
+    if upload_file:
+        return await file(upload_root / upload_file)
 
-        tarball = os.path.basename(tarball)
-        return send_from_directory(Path(os.getcwd()) / result_root / TARBALL_TEMP, tarball)
+    tarball = await pack_files(task_id, upload_root, result_root / TARBALL_TEMP)
+    if not tarball:
+        return json(response_message(EIO, 'Packing task resource files failed'))
 
-@api.route('/list')
-@api.param('task_id', 'task id to process')
-class TaskResourceList(Resource):
-    @token_required
-    @organization_team_required_by_args
-    @task_required
-    @api.doc('get the upload file list')
-    @api.param('organization', description='The organization ID')
-    @api.param('team', description='The team ID')
-    @api.param('task_id', description='The task ID')
-    def get(self, **kwargs):
-        """Get the file list in the upload directory"""
-        task = kwargs['task']
-        if not task.upload_dir:
-            return []
+    tarball = os.path.basename(tarball)
+    return await file(result_root / TARBALL_TEMP / tarball)
 
-        upload_root = get_upload_files_root(task)
-        if not os.path.exists(upload_root):
-            return response_message(ENOENT, 'Task upload directory does not exist'), 404
+@bp.get('/list')
+@doc.summary('Get the file list in the upload directory')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_task_id)
+@doc.produces(_task_resource_file_list)
+@token_required
+@organization_team_required_by_args
+@task_required
+async def handler(request):
+    task = request.ctx.task
+    if not task.upload_dir:
+        return []
 
-        return os.listdir(upload_root)
+    upload_root = get_upload_files_root(task)
+    if not await async_exists(upload_root):
+        return json(response_message(ENOENT, 'Task upload directory does not exist'))
 
-@api.route('/')
-class TaskResourceUpload(Resource):
+    return json(response_message(SUCCESS, files=await async_wraps(path_to_dict)(upload_root)))
+
+class TaskResourceView(HTTPMethodView):
+    @doc.summary('upload resource files')
+    @doc.description('If no files uploaded yet, a temporary directory will be created to accommodate the files')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_task_resource, location="formData", content_type="multipart/form-data")
+    @doc.produces(_task_resource_response)
     @token_required
     @organization_team_required_by_form
-    @api.doc('upload resource files')
-    @api.expect(_task_resource)
-    def post(self, **kwargs):
-        """
-        Upload resource files
-        
-        If no files uploaded yet, a temporary directory will be created to accommodate the files
-        """
-        organization = kwargs['organization']
-        team = kwargs['team']
+    async def post(self, request):
+        organization = request.ctx.organization
+        team = request.ctx.team
         found = False
 
         temp_id = request.form.get('resource_id', None)
         if not temp_id:
             temp_id = str(ObjectId())
-            os.mkdir(UPLOAD_DIR / temp_id)
+            await aiofiles.os.mkdir(UPLOAD_DIR / temp_id)
         upload_root = UPLOAD_DIR / temp_id
 
         for name, file in request.files.items():
+            if not is_path_secure(file.name):
+                return json(response_message(EINVAL, 'saving file with an illegal file name'))
             found = True
-            filename = upload_root / file.filename
-            file.save(str(filename))
+            async with aiofiles.open(upload_root / file.name, 'wb') as f:
+                await f.write(file.body)
 
         files = request.form.getlist('file')
         if len(files) > 0:
             retrigger_task_id = request.form.get('retrigger_task', None)
             if not retrigger_task_id:
-                return response_message(EINVAL, 'Field retrigger_task is required'), 400
+                return json(response_message(EINVAL, 'Field retrigger_task is required'))
 
-            retrigger_task = Task.objects(pk=retrigger_task_id).first()
+            retrigger_task = await Task.find_one({'_id': ObjectId(retrigger_task_id)})
             if not retrigger_task:
-                return response_message(ENOENT, 'Re-trigger task not found'), 404
+                return json(response_message(ENOENT, 'Re-trigger task not found'))
 
-            if retrigger_task.test.organization != organization or retrigger_task.test.team != team:
-                return response_message(EINVAL, 'Re-triggering a task not belonging to your organization/team is not allowed'), 403
+            test = await retrigger_task.test.fetch()
+            if test.organization != organization or test.team != team:
+                return json(response_message(EINVAL, 'Re-triggering a task not belonging to your organization/team is not allowed'))
 
             retrigger_task_upload_root = get_upload_files_root(retrigger_task)
-            if not os.path.exists(retrigger_task_upload_root):
-                return response_message(ENOENT, 'Re-trigger task upload directory does not exist'), 404
+            if not await async_exists(retrigger_task_upload_root):
+                return json(response_message(ENOENT, 'Re-trigger task upload directory does not exist'))
 
         for f in files:
             try:
-                shutil.copy(retrigger_task_upload_root / f, upload_root)
+                await async_copy(retrigger_task_upload_root / f, upload_root)
                 found = True
             except FileNotFoundError:
-                shutil.rmtree(upload_root)
-                return response_message(ENOENT, 'File {} used in the re-triggered task not found'.format(f)), 404
+                await async_rmtree(upload_root)
+                return json(response_message(ENOENT, 'File {} used in the re-triggered task not found'.format(f)))
 
         if not found:
-            return response_message(ENOENT, 'No files are found in the request'), 404
+            return json(response_message(ENOENT, 'No files are found in the request'))
 
-        return response_message(SUCCESS, resource_id=temp_id)
+        return json(response_message(SUCCESS, resource_id=temp_id))
+
+bp.add_route(TaskResourceView.as_view(), '/')

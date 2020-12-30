@@ -87,7 +87,7 @@ class test_library_rpc_server(Process):
         self.task_id = task_id
         self.config = config
         self.host = config['server_host']
-        self.rpc_port = config['server_rpc_port']
+        self.port = config['server_port']
         self.name = backing_file
         self.websocket = None
         self.loop = None
@@ -169,7 +169,7 @@ class test_library_rpc_server(Process):
 
         while True:
             try:
-                async with websockets.connect(f'ws://{self.host}:{self.rpc_port}/rpc') as rpc_ws, websockets.connect(f'ws://{self.host}:{self.rpc_port}/msg') as msg_ws:
+                async with websockets.connect(f'ws://{self.host}:{self.port}/api_v1/rpc_proxy/rpc') as rpc_ws, websockets.connect(f'ws://{self.host}:{self.port}/api_v1/rpc_proxy/msg') as msg_ws:
                     await rpc_ws.send(json.dumps({
                                    'join_id': self.config['join_id'],
                                    'uid': self.config['uuid'],
@@ -181,6 +181,9 @@ class test_library_rpc_server(Process):
                         print('Main server not ready')
                         await asyncio.sleep(10)
                         continue
+                    else:
+                        if self.debug:
+                            print('server response message: ', ret)
                     if ret == 'OK':
                         self.inform_caller_rpc_ready()
                         print('Start the RPC server for ' + ('daemon' if self.rpc_daemon else 'test'))
@@ -218,16 +221,6 @@ def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False, de
         process.start()
     return TestLibraryServer(process, queue, backing_file)
 
-def get_websocket_ports(url):
-    ret = requests.get(f'{url}/setting/rpc')
-    if ret.status_code != 200:
-        print('Failed to get the server RPC port')
-        return None
-    ret = ret.json()
-    if 'rpc_port' not in ret:
-        return None
-    return ret['rpc_port']
-
 def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
     toml_config = toml.load(config_file)
     if 'join_id' not in toml_config['tool']['collie']['settings'] or not toml_config['tool']['collie']['settings']['join_id']:
@@ -264,15 +257,6 @@ def read_toml_config(config_file = "pyproject.toml", host=None, port=None):
         config["server_port"] = 5000
 
     config['server_url'] = 'http://{}:{}'.format(config['server_host'], config['server_port'])
-    try:
-        rpc_port = get_websocket_ports(config['server_url'])
-    except requests.exceptions.ConnectionError:
-        config['server_rpc_port'] = 5555
-    else:
-        if rpc_port:
-            config['server_rpc_port'] = rpc_port
-        else:
-            config['server_rpc_port'] = 5555
     return config
 
 def start_daemon(config, debug=False):

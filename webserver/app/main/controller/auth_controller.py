@@ -1,45 +1,39 @@
-from flask import request
-from flask_restx import Resource
+from sanic import Blueprint
+from sanic.response import json
+from sanic_openapi import doc
 
-from ..service.auth_helper import Auth
 from ..model.database import User
-from ..util.dto import AuthDto
+from ..service.auth_helper import Auth
+from ..util.dto import AuthDto, json_response
+from ..util.response import response_message, USER_NOT_EXIST, SUCCESS
 
-api = AuthDto.api
 user_auth = AuthDto.user_auth
 
+bp = Blueprint('auth', url_prefix='/auth')
 
-@api.route('/login')
-class UserLogin(Resource):
-    """
-        User Login Resource
-    """
-    @api.doc('user login')
-    @api.expect(user_auth, validate=True)
-    def post(self):
-        """
-        User login interface
-        """
-        post_data = request.json
-        msg, status = Auth.login_user(data=post_data)
-        if status != 200:
-            return msg, status
 
-        user = User.objects(email=post_data.get('email')).first()
+@bp.post('/login')
+@doc.summary('User login interface')
+@doc.consumes(user_auth, location='body')
+@doc.produces(json_response)
+async def handler(request):
+    post_data = request.json
+    ret = await Auth.login_user(data=post_data)
+    if ret['code'] != SUCCESS[0]:
+        return json(ret)
 
-        return msg, status
+    user = await User.find_one({'email': post_data.get('email')})
+    if not user:
+        return json(response_message(USER_NOT_EXIST))
+
+    return json(ret)
 
 
 
-@api.route('/logout')
-class LogoutAPI(Resource):
-    """
-    Logout Resource
-    """
-    @api.doc('logout a user')
-    def post(self):
-        """
-        User logout interface
-        """
-        auth_header = request.headers.get('X-Token')
-        return Auth.logout_user(data=auth_header)
+@bp.post('/logout')
+@doc.summary('User logout interface')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.produces(json_response)
+async def handler(request):
+    auth_header = request.headers.get('X-Token')
+    return json(await Auth.logout_user(data=auth_header))

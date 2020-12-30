@@ -1,349 +1,438 @@
-from flask_restx import Namespace, fields, Model
+from sanic_openapi import doc
 
-# Don't know why it doesn't work sometimes if put these outside DTO classes
-
-# response = Model('response', {
-#     'code': fields.Integer(),
-#     'message': fields.String(),
-# })
-
-# organization_team = Model('organization_team', {
-#     'organization': fields.String(required=True, description='The organization id'),
-#     'team': fields.String(description='The team id'),
-# })
+class json_response:
+    code = doc.Integer()
+    message = doc.String()
+    data = doc.JsonBody()
 
 class UserDto:
-    api = Namespace('user', description='user related operations')
-    response = api.model('response', {
-        'code': fields.Integer(),
-        'message': fields.String(),
-    })
-    account = api.model('account', {
-        'password': fields.String(),
-        'email': fields.String(),
-        'username': fields.String(),
-        'introduction': fields.String(),
-        'region': fields.String(),
-    })
-    user = api.model('user', {
-        'user_id': fields.String(description='User identifier'),
-        'email': fields.String(),
-        'username': fields.String(),
-        'introduction': fields.String(),
-        'region': fields.String(),
-    })
-    user_info = api.inherit('user_info', user, {
-        'roles': fields.List(fields.String()),
-        'registered_on': fields.DateTime(dt_format='rfc822'),
-    })
-    user_info_resp = api.inherit('user_info_resp', response, {
-        'data': fields.Nested(user_info)
-    })
-    avatar = api.model('avatar', {
-        'type': fields.String()
-    })
-    password = api.model('password', {
-        'password': fields.String()
-    })
-    password_update = api.model('password_update', {
-        'oldPassword': fields.String(),
-        'newPassword': fields.String()
-    })
+    class account:
+        password = doc.String()
+        email = doc.String()
+        username = doc.String()
+        introduction = doc.String()
+        region = doc.String()
+    class user_list(json_response):
+        class _user_list:
+            class _user_info:
+                user_id = doc.String(description='User identifier')
+                email = doc.String()
+                username = doc.String()
+                introduction = doc.String()
+                region = doc.String()
+            user = doc.List(_user_info)
+        data = doc.Object(_user_list)
+    class user_info(user_list._user_list._user_info):
+        roles = doc.List(doc.String())
+        registered_on = doc.Integer(description='The registered date in form of timestamp from the epoch in milliseconds')
+    class avatar:
+        type = doc.String()
+    class password:
+        password = doc.String()
+    class password_update:
+        oldPassword = doc.String(required=True)
+        newPassword = doc.String(required=True)
+    class user_avatar(json_response):
+        class _user_avatar:
+            type = doc.String()
+            data = doc.String(description='the file content being base64 encoded')
+        data = doc.Object(_user_avatar)
 
 class AuthDto:
-    api = Namespace('auth', description='authentication related operations')
-    user_auth = api.model('auth_details', {
-        'email': fields.String(required=True, description='The email address'),
-        'password': fields.String(required=True, description='The user password ')
-    })
+    class user_auth:
+        email = doc.String(required=True, description='The email address')
+        password = doc.String(required=True, description='The user password ')
 
 class CertDto:
-    api = Namespace('cert', description='certificate/key related operations')
-    cert_key = api.model('cert_key', {
-        'test': fields.String(description='test'),
-    })
+    class cert_key:
+        test = doc.String(description='test')
 
 class SettingDto:
-    api = Namespace('setting', description='settings of the server')
+    pass
 
 class TestDto:
-    api = Namespace('test', description='test management operations')
-    test_cases = api.model('test_cases', {
-        'test_cases': fields.List(fields.String()),
-        'test_suite': fields.String(),
-    })
-    test_suite = api.model('test_suite', {
-        'id': fields.String(),
-        'test_suite': fields.String(),
-        'path': fields.String(),
-        'test_cases': fields.List(fields.String()),
-        'variables': fields.Raw(),
-        'author': fields.String()
-    })
+    class test_cases(json_response):
+        class _test_cases:
+            test_cases = doc.List(doc.String())
+            test_suite = doc.String()
+        data = doc.Object(_test_cases)
+    class test_suite_list(json_response):
+        class _test_suite_list:
+            class _test_suite:
+                id = doc.String()
+                test_suite = doc.String()
+                path = doc.String()
+                test_cases = doc.List(doc.String())
+                variables = doc.JsonBody()
+                author = doc.String()
+            test_suites = doc.List(_test_suite)
+        data = doc.Object(_test_suite_list)
+
+class organization_team:
+    organization = doc.String(required=True, description='The organization id')
+    team = doc.String(description='The team id')
 
 class TaskDto:
-    api = Namespace('task', description='task management operations')
-    organization_team = api.model('organization_team', {
-        'organization': fields.String(required=True, description='The organization id'),
-        'team': fields.String(description='The team id'),
-    })
+    class task_query(organization_team):
+        start_date = doc.Integer(description='The start date in form of timestamp from the epoch in milliseconds')
+        end_date = doc.Integer(description='The end date in form of timestamp from the epoch in milliseconds')
+    class task_id(organization_team):
+        task_id = doc.String(required=True, description='The task id')
+    class task_result_files(json_response):
+        class _task_result_files:
+            class _file_list:
+                label = doc.String(description='The file name')
+                type = doc.String(description='The file type: file or directory')
+                children = doc.List(doc.JsonBody())
+            files = doc.List(_file_list, description='The test script file list')
+        data = doc.Object(_task_result_files)
 
-    task_id = api.inherit('task_id', organization_team, {
-        'task_id': fields.String(required=True, description='The task id'),
-    })
-    task_update = api.inherit('task_update', task_id, {
-        'comment': fields.String(required=True, description='The task comment'),
-    })
-    task_cancel = api.inherit('task_cancel', task_id, {
-        'endpoint_uid': fields.String(description='The endpoint uid that is running the test'),
-        'priority': fields.Integer(description='The priority of the task'),
-    })
-    task_stat = api.model('task_stat', {
-        'succeeded': fields.Integer(description='The count of tasks ran successfully in the day'),
-        'failed': fields.Integer(description='The count of tasks failed to run in the day'),
-        'running': fields.Integer(description='The count of tasks running right now'),
-        'waiting': fields.Integer(description='The count of tasks waiting right now'),
-    })
-    task = api.inherit('task', organization_team, {
-        'test_suite': fields.String(required=True, description='The test suite name'),
-        'path': fields.String(required=True, description='The test suite\'s path name'),
-        'endpoint_list': fields.List(fields.String(description='The endpoints to run the test')),
-        'priority': fields.Integer(description='The priority of the task(larger number means higher importance)'),
-        'parallelization': fields.Boolean(default=False),
-        'variables': fields.List(fields.String()),
-        'test_cases': fields.List(fields.String()),
-        'upload_dir': fields.String(description='The directory id of the upload files'),
-    })
+    class run_task(json_response):
+        class _run_task:
+            running = doc.List(doc.String())
+            failed = doc.List(doc.String())
+            succeeded = doc.List(doc.String())
+        data = doc.Object(_run_task)
+    class task_update(task_id):
+        comment = doc.String(required=True, description='The task comment')
+    class task_cancel(task_id):
+        endpoint_uid = doc.String(description='The endpoint uid that is running the test')
+        priority = doc.Integer(description='The priority of the task')
+    class task_stat_list(json_response):
+        class _task_stat_list:
+            class _task_stat_of_a_day:
+                succeeded = doc.Integer(description='The count of tasks ran successfully in the day')
+                failed = doc.Integer(description='The count of tasks failed to run in the day')
+                running = doc.Integer(description='The count of tasks running right now')
+                waiting = doc.Integer(description='The count of tasks waiting right now')
+            stats = doc.List(_task_stat_of_a_day)
+        data = doc.Object(_task_stat_list)
+    class task(organization_team):
+        test_suite = doc.String(required=True, description='The test suite name')
+        path = doc.String(required=True, description='The test suite\'s path name')
+        endpoint_list = doc.List(doc.String(description='The endpoints to run the test'))
+        priority = doc.Integer(description='The priority of the task(larger number means higher importance)')
+        parallelization = doc.Boolean() #default=False)
+        variables = doc.List(doc.String())
+        test_cases = doc.List(doc.String())
+        upload_dir = doc.String(description='The directory id of the upload files')
 
 class TestResultDto:
-    api = Namespace('testresult', description='serve test result files')
-    test_report_summary = api.model('test_report_summary', {
-        'id': fields.String(description='The task id'),
-        'test_id': fields.String(description='The test id of the associated task'),
-        'test_suite': fields.String(description='The test suite name'),
-        'testcases': fields.List(fields.String()),
-        'comment': fields.String(),
-        'priority': fields.Integer(description='The priority of the task'),
-        'run_date': fields.DateTime(dt_format='rfc822'),
-        'tester': fields.String(),
-        'status': fields.String()
-    })
-    test_report = api.model('test_report', {
-        'items': fields.List(fields.Nested(test_report_summary)),
-        'total': fields.Integer(),
-    })
-    task_id = api.model('task_id', {
-        'task_id': fields.String(required=True, description='The task id'),
-    })
-    record_test_result = api.inherit('record_test_result', task_id, {
-        'test_case': fields.String(required=True, description='The test case of a test suite'),
-    })
-    test_result = api.model('test_result', {
-        'test_date': fields.DateTime(),
-        'duration': fields.Integer(),
-        'summary': fields.String(),
-        'status': fields.String(default='FAIL'),
-        'more_result': fields.Raw()
-    })
+    class test_result_query:
+        page = doc.Integer(description='The page number of the whole test report list')
+        limit = doc.Integer(description='The item number of a page')
+        title = doc.String(description='The test suite name')
+        priority = doc.Integer(description='The priority of the task')
+        endpoint = doc.String(description='The endpoint that runs the test')
+        sort = doc.String(description='The sort field') #default='-run_date'
+        start_date = doc.String(description='The start date')
+        end_date = doc.String(description='The end date')
+
+    class test_report(json_response):
+        class _test_report:
+            class _test_report_summary:
+                id = doc.String(description='The task id')
+                test_id = doc.String(description='The test id of the associated task')
+                test_suite = doc.String(description='The test suite name')
+                testcases = doc.List(doc.String())
+                comment = doc.String()
+                priority = doc.Integer(description='The priority of the task')
+                run_date = doc.Integer(description='The date in form of timestamp from the epoch in milliseconds')
+                tester = doc.String()
+                status = doc.String()
+            test_reports = doc.List(_test_report_summary)
+            total = doc.Integer()
+        data = doc.Object(_test_report)
+    class task_id:
+        task_id = doc.String(required=True, description='The task id')
+    class record_test_result(task_id):
+        test_case = doc.String(required=True, description='The test case of a test suite')
+    class test_result:
+        test_date = doc.DateTime()
+        duration = doc.Integer()
+        summary = doc.String()
+        status = doc.String() #default='FAIL')
+        more_result = doc.JsonBody()
 
 class TaskResourceDto:
-    api = Namespace('taskresource', description='task resources')
-    organization_team = api.model('organization_team', {
-        'organization': fields.String(required=True, description='The organization id'),
-        'team': fields.String(description='The team id'),
-    })
+    class task_id(organization_team):
+        task_id = doc.String(required=True, description='The task id')
+    class task_resource(organization_team):
+        resource_id = doc.String(description='The directory id to accommodate uploaded files')
+        retrigger_task = doc.String(description='The task id to retrigger')
+        file = doc.List(doc.String())
+    class task_resource_response(json_response):
+        class _task_resource_resp:
+            resource_id = doc.String()
+        data = doc.Object(_task_resource_resp)
+    class task_resource_file_list(json_response):
+        class _task_resource_file_list:
+            class _file_list:
+                label = doc.String(description='The file name')
+                type = doc.String(description='The file type: file or directory')
+                children = doc.List(doc.JsonBody())
 
-    task_id = api.inherit('task_id', organization_team, {
-        'task_id': fields.String(required=True, description='The task id'),
-    })
-    task_resource = api.inherit('task_resource', organization_team, {
-        'resource_id': fields.String(description='The directory id to accommodate uploaded files'),
-        'retrigger_task': fields.String(description='The task id to retrigger'),
-        'file': fields.List(fields.String())
-    })
+            files = doc.List(doc.Object(_file_list), description='The test script file list')
+        data = doc.Object(_task_resource_file_list)
 
 class EndpointDto:
-    api = Namespace('endpoint', description='test endpoint management operations')
-    organization_team = api.model('organization_team', {
-        'organization': fields.String(required=True, description='The organization id'),
-        'team': fields.String(description='The team id'),
-    })
+    class endpoint_query(organization_team):
+        page = doc.Integer(description='The page number of the whole test report list') #default=1, 
+        limit = doc.Integer(description='The item number of a page') #default=10, 
+        title = doc.String(description='The test suite name')
+        forbidden = doc.String(description='Get endpoints that are forbidden to connect')
+        unauthorized = doc.String(description='Get endpoints that have not authorized to connect')
 
-    endpoint_item = api.model('endpoint_item', {
-        'endpoint_uid': fields.String(),
-        'name': fields.String(),
-        'status': fields.String(),
-        'enable': fields.Boolean(),
-        'last_run': fields.Integer(description="Timestamp in milliseconds, 0 if not run yet"),
-        'tests': fields.List(fields.String()),
-        'test_refs': fields.List(fields.String()),
-        'endpoint_uid': fields.String()
-    })
-    endpoint_list = api.model('endpoint_list', {
-        'items': fields.List(fields.Nested(endpoint_item)),
-        'total': fields.Integer(),
-    })
-    endpoint_del = api.inherit('endpoint_del', organization_team, {
-        'endpoint_uid': fields.String(),
-    })
-    endpoint = api.inherit('endpoint', organization_team, {
-        'endpoint_uid': fields.String(),
-        'tests': fields.List(fields.String(), description='The tests that the endpoint supports'),
-        'endpoint_name': fields.String(),
-        'enable': fields.Boolean(default=False),
-    })
-    queuing_task = api.model('queuing_task', {
-        'endpoint': fields.String(description="The endpoint name"),
-        'endpoint_uid': fields.String(description="The endpoint uid"),
-        'priority': fields.Integer(),
-        'task': fields.String(description="The test name"),
-        'task_id': fields.String(description="The task id"),
-        'status': fields.String(),
-    })
-    queuing_tasks = api.model('queuing_tasks', {
-        'endpoint_uid': fields.String(description="The endpoint uid"),
-        'endpoint': fields.String(description="The endpoint name"),
-        'priority': fields.Integer(),
-        'waiting': fields.Integer(),
-        'status': fields.String(),
-        'tasks': fields.List(fields.Nested(queuing_task))
-    })
-    queue_update = api.inherit('queue_update', organization_team, {
-        'taskqueues': fields.List(fields.Nested(queuing_task)),
-    })
-    endpoint_config = api.model('endpoint_config', {
-        'data': fields.Raw(),
-    })
+    class endpoint_list(json_response):
+        class _endpoint_list:
+            class _endpoint_item:
+                endpoint_uid = doc.String()
+                name = doc.String()
+                status = doc.String()
+                enable = doc.Boolean()
+                last_run = doc.Integer(description="Timestamp in milliseconds, 0 if not run yet")
+                tests = doc.List(doc.String())
+                test_refs = doc.List(doc.String())
+                endpoint_uid = doc.String()
+            endpoints = doc.List(doc.Object(_endpoint_item), description='endpoints of the current queried page')
+            total = doc.Integer(description='total number of the queried the endpoints')
+        data = doc.Object(_endpoint_list)
+    class endpoint_uid(organization_team):
+        endpoint_uid = doc.String()
+    class endpoint(organization_team):
+        endpoint_uid = doc.String(name='uid', description='The endpoint\'s uid')
+        tests = doc.List(doc.String(), description='The tests that the endpoint supports')
+        endpoint_name = doc.String()
+        enable = doc.Boolean() #default=False)
+    class queuing_task_list(json_response):
+        class _queuing_task_list:
+            class _queuing_tasks:
+                class _queuing_task:
+                    endpoint = doc.String(description="The endpoint name")
+                    endpoint_uid = doc.String(description="The endpoint uid")
+                    priority = doc.Integer()
+                    task = doc.String(description="The test name")
+                    task_id = doc.String(description="The task id")
+                    status = doc.String()
+                endpoint_uid = doc.String(description="The endpoint uid")
+                endpoint = doc.String(description="The endpoint name")
+                priority = doc.Integer()
+                waiting = doc.Integer()
+                status = doc.String()
+                tasks = doc.List(doc.Object(_queuing_task))
+            task_queues = doc.List(_queuing_tasks)
+        data = doc.Object(_queuing_task_list)
+    class endpoint_online_check(json_response):
+        class _endpoint_online_check:
+            status = doc.Boolean()
+        data = doc.Object(_endpoint_online_check)
 
 class ScriptDto:
-    api = Namespace('script', description='scripts management operations')
-    organization_team = api.model('organization_team', {
-        'organization': fields.String(required=True, description='The organization id'),
-        'team': fields.String(description='The team id'),
-    })
+    class update_script(organization_team):
+        file = doc.String(description='Path to the queried file')
+        script_type = doc.String(description='File type {test_scripts | test_libraries}')
+        new_name = doc.String(description='New file name if want to rename')
+        content = doc.String(description='The file content')
 
-    update_script = api.inherit('update_script', organization_team, {
-        'file': fields.String(description='Path to the queried file'),
-        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
-        'new_name': fields.String(description='New file name if want to rename'),
-        'content': fields.String(description='The file content'),
-    })
+    class script_query(organization_team):
+        file = doc.String(description='Path to the queried file')
+        script_type = doc.String(description='File type {test_scripts | test_libraries}')
 
-    delete_script = api.inherit('delete_script', organization_team, {
-        'file': fields.String(description='Path to the queried file'),
-        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
-    })
+    class upload_scripts(organization_team):
+        script_type = doc.String(description='File type {test_scripts | test_libraries}')
+        file = doc.File()
 
-    upload_scripts = api.inherit('upload_scripts', organization_team, {
-        'script_type': fields.String(description='File type {test_scripts | test_libraries}'),
-        'example_file': fields.String(description='Content-Type: application/text')
-    })
+    class script_file_list(json_response):
+        class _script_file_list:
+            class _file_list:
+                label = doc.String(description='The file name')
+                type = doc.String(description='The file type: file or directory')
+                children = doc.List(doc.JsonBody())
+
+            test_scripts = doc.List(doc.Object(_file_list), description='The test script file list')
+            test_libraries = doc.List(doc.Object(_file_list), description='The python script file list')
+        data = doc.Object(_script_file_list)
 
 class OrganizationDto:
-    api = Namespace('organization', description='organization management operations')
-    organization = api.model('organization', {
-        'label': fields.String(description='The organization name'),
-        'owner': fields.String(description='The organization owner\'s name'),
-        'owner_email': fields.String(description='The organization owner\'s email'),
-        'personal': fields.Boolean(description='The organization is of person', default=False),
-        'value': fields.String(description='The organization ID'),
-    })
+    class organization_list(json_response):
+        class _organization_list:
+            class _organization:
+                label = doc.String(description='The organization name')
+                owner = doc.String(description='The organization owner\'s name')
+                owner_email = doc.String(description='The organization owner\'s email')
+                personal = doc.Boolean(description='The organization is of person') #, default=False)
+                value = doc.String(description='The organization ID')
+            organizations = doc.List(_organization)
+        data = doc.Object(_organization_list)
 
-    _team = api.model('_team', {
-        'label': fields.String(description='The team name'),
-        'owner': fields.String(description='The team owner\'s name'),
-        'owner_email': fields.String(description='The team owner\'s email'),
-        'value': fields.String(description='The team ID'),
-    })
+    class new_organization:
+        name = doc.String(description='The organization name')
 
-    new_organization = api.model('new_organization', {
-        'name': fields.String(description='The organization name'),
-    })
-
-    organization_id = api.model('organization_id', {
-        'organization_id': fields.String(description='The organization ID'),
-    })
+    class organization_id:
+        organization_id = doc.String(name='organization_id', description='The organization ID')
 
     # we could have inherited the model organization, but swagger UI has a problem to show it correctly, thus we embed organization definition here.
-    organization_team_resp = api.model('organization_team_resp', {
-        'label': fields.String(description='The organization name'),
-        'owner': fields.String(description='The organization owner\'s name'),
-        'owner_email': fields.String(description='The organization owner\'s email'),
-        'value': fields.String(description='The organization ID'),
-        'children': fields.List(fields.Nested(_team)),
-    })
+    class organization_team_list(json_response):
+        class _organization_team_list:
+            class _organization_team:
+                class _team:
+                    label = doc.String(description='The team name')
+                    owner = doc.String(description='The team owner\'s name')
+                    owner_email = doc.String(description='The team owner\'s email')
+                    value = doc.String(description='The team ID')
+                label = doc.String(description='The organization name')
+                owner = doc.String(description='The organization owner\'s name')
+                owner_email = doc.String(description='The organization owner\'s email')
+                value = doc.String(description='The organization ID')
+                children = doc.List(doc.Object(_team))
+            organization_team = doc.List(_organization_team)
+        data = doc.Object(_organization_team_list)
 
-    user = api.model('user', {
-        'label': fields.String(description='The user name'),
-        'email': fields.String(description='The user email'),
-        'value': fields.String(description='The user ID'),
-    })
+    class user_list(json_response):
+        class _user_list:
+            class _user:
+                label = doc.String(description='The user name')
+                email = doc.String(description='The user email')
+                value = doc.String(description='The user ID')
+            users = doc.List(_user)
+        data = doc.Object(_user_list)
 
-    transfer_ownership = api.inherit('transfer_ownership', organization_id, {
-        'new_owner': fields.String(description='The new owner\'s ID'),
-    })
+    class transfer_ownership(organization_id):
+        new_owner = doc.String(description='The new owner\'s ID')
+
+    class organization_avatar(json_response):
+        class _organization_avatar:
+            type = doc.String()
+            data = doc.String(description='the file content being base64 encoded')
+        data = doc.Object(_organization_avatar)
 
 class TeamDto:
-    api = Namespace('team', description='team management operations')
-    team = api.model('team', {
-        'label': fields.String(description='The team name'),
-        'owner': fields.String(description='The team owner\'s name'),
-        'owner_email': fields.String(description='The team owner\'s email'),
-        'organization_id': fields.String(description='The ID of the organization that the team belongs to'),
-        'value': fields.String(description='The team ID'),
-    })
+    class team_list(json_response):
+        class _team_list:
+            class _team:
+                label = doc.String(description='The team name')
+                owner = doc.String(description='The team owner\'s name')
+                owner_email = doc.String(description='The team owner\'s email')
+                organization_id = doc.String(description='The ID of the organization that the team belongs to')
+                value = doc.String(description='The team ID')
+            teams = doc.List(_team)
+        data = doc.Object(_team_list)
 
-    new_team = api.model('new_team', {
-        'name': fields.String(description='The team name'),
-        'organization_id': fields.String(description='The organization ID'),
-    })
+    class new_team:
+        name = doc.String(description='The team name')
+        organization_id = doc.String(description='The organization ID')
 
-    team_id = api.model('team_id', {
-        'team_id': fields.String(description='The team ID'),
-    })
+    class team_id:
+        team_id = doc.String(description='The team ID')
 
-    user = api.model('user', {
-        'label': fields.String(description='The user name'),
-        'email': fields.String(description='The user email'),
-        'value': fields.String(description='The user ID'),
-    })
+    class user:
+        label = doc.String(description='The user name')
+        email = doc.String(description='The user email')
+        value = doc.String(description='The user ID')
+
+    class team_avatar(json_response):
+        class _team_avatar:
+            type = doc.String()
+            data = doc.String(description='the file content being base64 encoded')
+        data = doc.Object(_team_avatar)
+
+    class user_list(json_response):
+        class _user_list:
+            class _user:
+                label = doc.String(description='The user name')
+                email = doc.String(description='The user email')
+                value = doc.String(description='The user ID')
+            users = doc.List(_user)
+        data = doc.Object(_user_list)
+
 
 class StoreDto:
-    api = Namespace('store', description='scripts management operations')
-    organization_team = api.model('organization_team', {
-        'organization': fields.String(description='The organization id'),
-        'team': fields.String(description='The team id'),
-    })
+    class package_query:
+        page = doc.Integer()
+        limit = doc.Integer()
+        title = doc.String()
+        proprietary = doc.String()
+        package_type = doc.String()
 
-    delete_package = api.inherit('delete_package', organization_team, {
-        'file': fields.String(description='Path to the queried file'),
-    })
+    class package_info_query:
+        name = doc.String()
+        proprietary = doc.String()
+        package_type = doc.String()
+        version = doc.String()
 
-    upload_package = api.inherit('upload_package', organization_team, {
-        'example_file': fields.String(description='Content-Type: application/text')
-    })
-    package_summary = api.model('package_summary', {
-        'name': fields.String(),
-        'summary': fields.String(),
-        'description': fields.String(),
-        'stars': fields.Integer(),
-        'download_times': fields.Integer(),
-        'package_type': fields.String(),
-        'versions': fields.List(fields.String()),
-        'upload_date': fields.DateTime(dt_format='rfc822')
-    })
-    packages = api.model('packages', {
-        'items': fields.List(fields.Nested(package_summary)),
-        'total': fields.Integer(),
-    })
+    class package_description(json_response):
+
+        class _package_description:
+            description = doc.String()
+        data = doc.Object(_package_description)
+
+    class package_star(json_response):
+
+        class _package_star:
+            stars = doc.Integer()
+        data = doc.Object(_package_star)
+
+    class delete_package(organization_team):
+        file = doc.String(description='Path to the queried file')
+
+    class upload_package(organization_team):
+        proprietary = doc.String()
+        package_type = doc.String()
+        file = doc.File()
+
+    class package_list(json_response):
+        class _package_list:
+            class _package_summary:
+                name = doc.String()
+                summary = doc.String()
+                description = doc.String()
+                stars = doc.Integer()
+                download_times = doc.Integer()
+                package_type = doc.String()
+                versions = doc.List(doc.String())
+                upload_date = doc.Integer(description='The upload date in form of timestamp from the epoch in milliseconds')
+            packages = doc.List(doc.Object(_package_summary))
+            total = doc.Integer()
+        data = doc.Object(_package_list)
 
 class PypiDto:
-    api = Namespace('pypi', description='local python package index repository')
+    pass
 
 class DocDto:
-    api = Namespace('doc', description='documentation for designing tests and any others')
+    class doc_roots(json_response):
+        class _doc_roots:
+            class __doc_roots:
+                value = doc.Integer(description='the item index')
+                label = doc.String(description='the path\'s value')
+            paths = doc.List(doc.Object(__doc_roots))
+        data = doc.Object(_doc_roots)
 
-    path = api.model('path', {
-        'value': fields.Integer(description='The item index'),
-        'label': fields.String(description='The path\'s value'),
-    })
+    class doc_history(json_response):
+        class _doc_history:
+            class __doc_history:
+                title = doc.String()
+                revision = doc.String()
+                description = doc.String()
+            history = doc.List(doc.Object(__doc_history))
+        data = doc.Object(_doc_history)
+
+    class doc_pictures(json_response):
+        class _doc_pictures:
+            class __doc_pictures:
+                name = doc.String()
+                data = doc.String()
+                type = doc.String()
+                size = doc.Integer()
+            file_list = doc.List(doc.Object(__doc_pictures))
+        data = doc.Object(_doc_pictures)
+
+    class doc_content(json_response):
+        class _doc_content:
+            content = doc.String()
+            locked = doc.Boolean()
+        data = doc.Object(_doc_content)
+
+    class doc_query:
+        proprietary = doc.Boolean()
+        language = doc.String()
+        path = doc.String()

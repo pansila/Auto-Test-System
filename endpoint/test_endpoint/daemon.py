@@ -68,8 +68,13 @@ class daemon(object):
                     print('No files need to download')
                     return
 
-                if response.status != 200:
-                    raise AssertionError('Downloading file failed')
+                if response.status != 201:
+                    if response.status == 200:
+                        print(response)
+                        message = response.message
+                    else:
+                        message = ''
+                    raise AssertionError('Downloading file failed: ', message)
 
                 temp = BytesIO()
                 ret = await response.read()
@@ -86,10 +91,10 @@ class daemon(object):
         empty_folder(self.config["download_dir"])
         empty_folder(self.config["resource_dir"])
 
-        await self._download_file(f'test/script?id={self.task_id}', self.config["download_dir"])
+        await self._download_file(f'api_v1/test/script?id={self.task_id}', self.config["download_dir"])
 
         test_data_path = os.path.join(self.config["resource_dir"], "test_data")
-        await self._download_file(f'taskresource/{self.task_id}', test_data_path)
+        await self._download_file(f'api_v1/taskresource/{self.task_id}', test_data_path)
 
         self._unpack()
 
@@ -101,10 +106,10 @@ class daemon(object):
             # test library files have been downloaded from the package system
             return
 
-        await self._download_file(f'test/script?id={self.task_id}&test={backing_file}', self.config["download_dir"])
+        await self._download_file(f'api_v1/test/script?id={self.task_id}&test={backing_file}', self.config["download_dir"])
 
         test_data_path = os.path.join(self.config["resource_dir"], "test_data")
-        await self._download_file(f'taskresource/{self.task_id}', test_data_path)
+        await self._download_file(f'api_v1/taskresource/{self.task_id}', test_data_path)
 
         self._unpack()
 
@@ -135,7 +140,7 @@ class daemon(object):
             return
         data = {'status': status}
         async with aiohttp.ClientSession() as session:
-            async with session.post(f'{self.config["server_url"]}/testresult/{self.task_id}', json=data) as response:
+            async with session.post(f'{self.config["server_url"]}/api_v1/testresult/{self.task_id}', json=data) as response:
                 if response.status != 200:
                     print('Updating the task result on the server failed')
 
@@ -144,6 +149,6 @@ class daemon(object):
             return
         data = {'task_id': self.task_id, 'test_case': test_case}
         async with aiohttp.ClientSession() as session:
-            async with session.post(f'{self.config["server_url"]}/testresult/', json=data) as response:
+            async with session.post(f'{self.config["server_url"]}/api_v1/testresult/', json=data) as response:
                 if response.status != 200:
                     print('Creating the task result on the server failed')

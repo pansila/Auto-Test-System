@@ -1,63 +1,53 @@
+import aiofiles
 import os
-import shutil
 from urllib.parse import urlparse
 from pathlib import Path
-from ..util.dto import SettingDto
+
+from sanic import Blueprint
+from sanic.log import logger
+from sanic.views import HTTPMethodView
+from sanic.response import json, file
+from sanic_openapi import doc
+
+from ..util import async_exists
+from ..util.dto import SettingDto, json_response
 from ..util.response import *
-from flask import send_from_directory, request, current_app
-from flask_restx import Resource
 
-api = SettingDto.api
 
-@api.route('/rpc')
-class rpc_request(Resource):
-    @api.doc('Get RPC settings')
-    def get(self):
-        """
-        Get RPC settings
-        """
-        return {'rpc_port': 5555}
+bp = Blueprint('setting', url_prefix='/setting')
 
-@api.route('/download')
-class download_request(Resource):
-    @api.param('file', description='The file path')
-    @api.doc('Get installation packages for the endpooint')
-    def get(self, **kwargs):
-        """
-        Get installation packages for the endpooint
-        """
-        file = request.args.get('file', default=None)
-        if not file:
-            return response_message(EINVAL, 'Field file is required'), 400
+@bp.get('/download')
+@doc.summary('Get installation packages for the endpooint')
+@doc.consumes(doc.String(name='file', description='The file path'))
+@doc.produces(201, doc.File())
+@doc.produces(200, json_response)
+async def handler(request):
+    download_file = request.args.get('file', default=None)
+    if not download_file:
+        return json(response_message(EINVAL, 'Field file is required'))
 
-        ret = urlparse(request.url)
-        if file == 'get-endpoint.py' or file == 'get-poetry.py':
-            src = os.path.join('static', 'download', 'template.' + file)
-            new = os.path.join('static', 'download', file)
-            if os.path.exists(new):
-                os.unlink(new)
-            with open(src) as f_src, open(new, 'w') as f_new:
-                for line in f_src:
-                    if '{server_url}' in line:
-                        server_url = ret.scheme + '://' + ret.netloc.replace('localhost', '127.0.0.1')
-                        line = line.format(server_url=server_url)
-                    f_new.write(line)
-        return send_from_directory(Path(os.getcwd()) / 'static' / 'download', file)
+    ret = urlparse(request.url)
+    if download_file == 'get-endpoint.py' or download_file == 'get-poetry.py':
+        src = os.path.join('static', 'download', 'template.' + download_file)
+        new = os.path.join('static', 'download', download_file)
+        if await async_exists(new):
+            await aiofiles.os.remove(new)
+        async with aiofiles.open(src) as f_src, aiofiles.open(new, 'w') as f_new:
+            async for line in f_src:
+                if '{server_url}' in line:
+                    server_url = ret.scheme + '://' + ret.netloc.replace('localhost', '127.0.0.1')
+                    line = line.format(server_url=server_url)
+                await f_new.write(line)
+    return await file(os.path.join('static', 'download', download_file), status=201)
 
-@api.route('/get-endpoint/json')
-class download_request(Resource):
-    @api.doc('Get package information for the poetry')
-    def get(self):
-        """
-        Get package information for the poetry
-        """
-        return {'releases': ["0.2.7"]}
+@bp.get('/get-endpoint/json')
+@doc.summary('Get package information for the poetry')
+@doc.produces(doc.String(name='releases', description='the release versions'))
+def handler(request):
+    return json({'releases': ["0.2.7"]})
 
-@api.route('/get-poetry/json')
-class download_request(Resource):
-    @api.doc('Get package information for the poetry')
-    def get(self):
-        """
-        Get package information for the poetry
-        """
-        return {'releases': ["1.1.4"]}
+@bp.get('/get-poetry/json')
+@doc.summary('Get package information for the poetry')
+@doc.produces(doc.String(name='releases', description='the release versions'))
+def handler(request):
+    return json({'releases': ["1.1.4"]})

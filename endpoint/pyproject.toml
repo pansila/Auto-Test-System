@@ -18,6 +18,9 @@ websocket-rpc = "0.0.6"
 toml = "^0.10.0"
 aiohttp = "^3.6.2"
 
+[tool.poetry.dev-dependencies]
+poetry = "^1.1.4"
+
 [tool.poetry.scripts]
 daemon = "test_endpoint.main:run"
 bundle = "test_endpoint.bundle:run"

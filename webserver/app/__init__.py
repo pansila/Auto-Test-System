@@ -1,54 +1,103 @@
+import asyncio
 import os
-from flask_restx import Api, fields
-from flask import Blueprint
+import unittest
 
-from .main.controller.user_controller import api as user_ns
-from .main.controller.auth_controller import api as auth_ns
-from .main.controller.cert_controller import api as cert_ns
-from .main.controller.test_controller import api as test_ns
-from .main.controller.task_controller import api as task_ns
-from .main.controller.testresult_controller import api as testresult_ns
-from .main.controller.taskresource_controller import api as taskresource_ns
-from .main.controller.endpoint_controller import api as endpoint_ns
-from .main.controller.script_controller import api as script_ns
-from .main.controller.organization_controller import api as organization_ns
-from .main.controller.team_controller import api as team_ns
-from .main.controller.teststore_controller import api as store_ns
-from .main.controller.setting_controller import api as setting_ns
-from .main.controller.pypi_controller import api as pypi_ns
-from .main.controller.document_controller import api as doc_ns
+import motor.motor_asyncio
+import socketio
 
-blueprint = Blueprint('api', __name__)
+from sanic import Blueprint, Sanic
+from sanic.log import logger
+from sanic_openapi import swagger_blueprint
+from sanic_limiter import Limiter, get_remote_address
+from sanic_cors import CORS
+from simple_bcrypt import Bcrypt
 
-authorizations = {
-    'apikey': {
-        'type': 'apiKey',
-        'in': 'header',
-        'name': 'X-Token'
-    }
-}
+from app.main.config import get_config
 
-api = Api(blueprint,
-          title='Test Automation Backend',
-          version='1.0',
-          description='A backend for the Test Automation web service',
-          authorizations = authorizations,
-          security='apikey',
-          doc='/' if os.getenv('BOILERPLATE_ENV') != 'prod' else False
-          )
+development = True if (os.getenv('BOILERPLATE_ENV') or 'dev') == 'dev' else False
 
-api.add_namespace(user_ns)
-api.add_namespace(auth_ns)
-api.add_namespace(cert_ns)
-api.add_namespace(test_ns)
-api.add_namespace(task_ns)
-api.add_namespace(testresult_ns)
-api.add_namespace(taskresource_ns)
-api.add_namespace(endpoint_ns)
-api.add_namespace(script_ns)
-api.add_namespace(organization_ns)
-api.add_namespace(team_ns)
-api.add_namespace(store_ns)
-api.add_namespace(setting_ns)
-api.add_namespace(pypi_ns)
-api.add_namespace(doc_ns)
+app = Sanic('Ember For Test Automation')
+app.blueprint(swagger_blueprint)
+app.config.from_object(get_config())
+bcrypt = Bcrypt(app)
+
+if development:
+    # CORS(app)
+    # app.config['CORS_SUPPORTS_CREDENTIALS'] = True
+    sio = socketio.AsyncServer(async_mode='sanic', cors_allowed_origins='*')
+else:
+    sio = socketio.AsyncServer(async_mode='sanic')
+sio.attach(app)
+
+db = None
+
+limits = ['200 per hour', '2000 per day']
+if development:
+    limits = ['20000 per hour', '200000 per day']
+limiter = Limiter(app, global_limits=limits, key_func=get_remote_address)
+
+@app.listener('before_server_start')
+async def setup_connection(app, loop):
+    global db
+    client = motor.motor_asyncio.AsyncIOMotorClient(f"{app.config['MONGODB_URL']}:{app.config['MONGODB_PORT']}")
+    db = client[app.config['MONGODB_DATABASE']]
+
+    from task_runner.runner import initialize_runner, start_event_thread, start_heartbeat_thread, start_xmlrpc_server
+    asyncio.create_task(start_event_thread(app))
+    asyncio.create_task(start_heartbeat_thread(app))
+    start_xmlrpc_server(app)
+    initialize_runner(app)
+
+    from app.main.controller.auth_controller import bp as auth_bp
+    from app.main.controller.user_controller import bp as user_bp
+    from app.main.controller.organization_controller import bp as organization_bp
+    from app.main.controller.team_controller import bp as team_bp
+    from app.main.controller.endpoint_controller import bp as endpoint_bp
+    from app.main.controller.setting_controller import bp as setting_bp
+    from app.main.controller.script_controller import bp as script_bp
+    from app.main.controller.teststore_controller import bp as teststore_bp
+    from app.main.controller.task_controller import bp as task_bp
+    from app.main.controller.taskresource_controller import bp as taskresource_bp
+    from app.main.controller.test_controller import bp as test_bp
+    from app.main.controller.testresult_controller import bp as testresult_bp
+    from app.main.controller.document_controller import bp as document_bp
+    from app.main.controller.socketio_controller import handle_message, handle_join_room, handle_enter_room, handle_leave_room
+    from task_runner.runner import bp as rpc_bp
+
+    limiter.limit("100 per hour")(user_bp)
+
+    bp_groups = (auth_bp, user_bp, organization_bp, team_bp, endpoint_bp, setting_bp, rpc_bp, script_bp, teststore_bp, task_bp, taskresource_bp, test_bp, testresult_bp, document_bp)
+    api_v1 = Blueprint.group(*bp_groups, url_prefix='/api_v1')
+    app.blueprint(api_v1)
+
+    sio.on('message', handle_message)
+    sio.on('join', handle_join_room)
+    sio.on('enter', handle_enter_room)
+    sio.on('leave', handle_leave_room)
+
+@sio.event
+def connect(sid, environ):
+    logger.info(f'Client connected, sid: {sid}')
+
+@sio.event
+def disconnect(sid):
+    logger.info(f'Client disconnected, sid: {sid}')
+
+
+@app.listener('after_server_stop')
+async def close_connection(app, loop):
+    pass
+
+def run():
+    app.run(host='0.0.0.0', port=5000, debug=True)
+
+def test():
+    """Runs the unit tests."""
+    tests = unittest.TestLoader().discover('app/test', pattern='test*.py')
+    result = unittest.TextTestRunner(verbosity=2).run(tests)
+    if result.wasSuccessful():
+        return 0
+    return 1
+
+if __name__ == '__main__':
+    run()

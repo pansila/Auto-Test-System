@@ -1,148 +1,163 @@
-import os
-import sys
-import shutil
-import tempfile
+import aiofiles
+import os, sys
 import time
+from async_files.utils import async_wraps
+from bson import ObjectId
 from pathlib import Path
 from setuptools import sandbox
 from contextlib import redirect_stdout
 from io import StringIO
 
-from flask import send_from_directory, request, current_app
-from flask_restx import Resource
+from sanic import Blueprint
+from sanic.log import logger
+from sanic.views import HTTPMethodView
+from sanic.response import json, file, html
+from sanic_openapi import doc
 
+from ..util import async_copy, async_exists
+from ..util.tempdir import TemporaryDirectory
 from ..util.decorator import token_required, organization_team_required_by_args
 from ..util.get_path import get_test_result_path, get_back_scripts_root, get_test_store_root
 from task_runner.util.dbhelper import find_dependencies, find_pkg_dependencies, find_local_dependencies, generate_setup, query_package, repack_package
 from ..config import get_config
 from ..model.database import Task, Test, Package
-from ..util.dto import TestDto
-from ..util.tarball import pack_files, make_tarfile, make_tarfile_from_dir
-from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, EMFILE, EAGAIN
+from ..util.dto import TestDto, json_response
+from ..util.tarball import make_tarfile_from_dir
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, EMFILE, EPERM
 
-api = TestDto.api
 _test_cases = TestDto.test_cases
-_test_suite = TestDto.test_suite
+_test_suite_list = TestDto.test_suite_list
 
+bp = Blueprint('test', url_prefix='/test')
 
-@api.route('/script')
-@api.response(404, 'Script not found.')
-@api.response(200, 'Download the script successfully.')
-class ScriptDownload(Resource):
-    # @token_required
-    @api.doc('get_test_script')
-    @api.param('id', description='The task id')
-    @api.param('test', description='The test suite name')
-    def get(self):
-        """
-        Get the test script
+@bp.get('/script')
+@doc.summary('Get the test script')
+@doc.description('Get the bundled file that contains all necessary test scripts that the test needs to run')
+@doc.consumes(doc.String(name='id', description='The task id'))
+@doc.consumes(doc.String(name='test', description='The test suite name'))
+@doc.produces(201, doc.File())
+@doc.produces(200, json_response)
+# @token_required  #TODO
+async def handler(request):
+    task_id = request.args.get('id', None)
+    if not task_id:
+        return json(response_message(EINVAL, 'Field id is required'))
 
-        Get the bundled file that contains all necessary test scripts that the test needs to run
-        """
-        task_id = request.args.get('id', None)
-        if not task_id:
-            return response_message(EINVAL, 'Field id is required'), 400
-        task = Task.objects(pk=task_id).first()
-        if not task:
-            return response_message(ENOENT, 'Task not found'), 404
+    test_script = request.args.get('test', None)
 
-        test_script = request.args.get('test', None)
+    task = await Task.find_one({'_id': ObjectId(task_id)})
+    if not task:
+        return json(response_message(ENOENT, 'Task not found'))
+    organization = await task.organization.fetch()
+    team = None
+    if task.team:
+        team = await task.team.fetch()
 
-        result_dir = os.path.abspath(get_test_result_path(task))
-        scripts_root = get_back_scripts_root(task)
-        pypi_root = get_test_store_root(task=task)
+    result_dir = os.path.abspath(await get_test_result_path(task))
+    scripts_root = await get_back_scripts_root(task)
+    pypi_root = await get_test_store_root(task=task)
+    package = None
 
-        if sys.platform == 'win32':
-            result_dir = '\\\\?\\' + result_dir
+    if sys.platform == 'win32':
+        result_dir = '\\\\?\\' + result_dir
 
-        if test_script:
-            script_file = scripts_root / test_script
-            if not script_file.exists():
-                return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
+    test =  await task.test.fetch()
+    package = await test.package.fetch()
 
-        package = task.test.package
-        if not package:
-            if not test_script:
-                return response_message(SUCCESS), 204
-            with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
-            # tempDir = tempfile.mkdtemp(dir=result_dir)
-            # if tempDir:
-                test_script_name = os.path.splitext(test_script)[0].split('/', 1)[0]
-                deps = find_local_dependencies(scripts_root, test_script, task.organization, task.team)
-                generate_setup(scripts_root, tempDir, deps, test_script_name, '0.0.1')
-                # silence the packing messages
-                with StringIO() as buf, redirect_stdout(buf):
-                    sandbox.run_setup(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
-                deps = find_dependencies(script_file, task.organization, task.team, 'Test Suite')
-                dist = os.path.join(tempDir, 'dist')
-                for pkg, version in deps:
-                    shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
-                make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
-                return send_from_directory(result_dir[4:], f'{test_script_name}.tar.gz')
-        else:
-            with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
-            # tempDir = tempfile.mkdtemp(dir=result_dir)
-            # if tempDir:
-                dist = os.path.join(tempDir, 'dist')
-                os.mkdir(dist)
-                deps = find_pkg_dependencies(pypi_root, package, task.test.package_version, task.organization, task.team, 'Test Suite')
-                for pkg, version in deps:
-                    if pkg.modified:
-                        pack_file = repack_package(pypi_root, scripts_root, pkg, version, tempDir)
-                        shutil.copy(pack_file, dist)
-                    else:
-                        shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
-                make_tarfile_from_dir(os.path.join(result_dir, 'all_in_one.tar.gz'), dist)
-                return send_from_directory(result_dir[4:], 'all_in_one.tar.gz')
+    if not package:
+        if not test_script:
+            return response_message(SUCCESS), 204
+        script_file = scripts_root / test_script
+        if not await async_exists(script_file):
+            return json(response_message(ENOENT, "file {} does not exist".format(script_file)))
 
-@api.route('/detail')
-@api.response(404, 'Script not found.')
-class TestSuiteGet(Resource):
+        async with TemporaryDirectory(dir=result_dir) as tempDir:
+            test_script_name = os.path.splitext(test_script)[0].split('/', 1)[0]
+            deps = await find_local_dependencies(scripts_root, test_script, organization, team)
+            await generate_setup(scripts_root, tempDir, deps, test_script_name, '0.0.1')
+            with StringIO() as buf, redirect_stdout(buf):
+                await async_wraps(sandbox.run_setup)(os.path.join(tempDir, 'setup.py'), ['bdist_egg'])
+            deps = await find_dependencies(script_file, organization, team, 'Test Suite')
+            dist = os.path.join(tempDir, 'dist')
+            for pkg, version in deps:
+                await async_copy(pypi_root / pkg.package_name / (await pkg.get_package_by_version(version).filename), dist)
+            await make_tarfile_from_dir(os.path.join(result_dir, f'{test_script_name}.tar.gz'), dist)
+            return await file(result_dir[4:] / f'{test_script_name}.tar.gz', status=201)
+    else:
+        async with TemporaryDirectory(dir=result_dir) as tempDir:
+            dist = os.path.join(tempDir, 'dist')
+            await aiofiles.os.mkdir(dist)
+            deps = await find_pkg_dependencies(pypi_root, package, test.package_version, organization, team, 'Test Suite')
+            for pkg, version in deps:
+                if pkg.modified:
+                    pack_file = await repack_package(pypi_root, scripts_root, pkg, version, tempDir)
+                    await async_copy(pack_file, dist)
+                else:
+                    await async_copy(pypi_root / pkg.package_name / (await pkg.get_package_by_version(version)).filename, dist)
+            await make_tarfile_from_dir(os.path.join(result_dir, 'all_in_one.tar.gz'), dist)
+            return await file(os.path.join(result_dir[4:], 'all_in_one.tar.gz'), status=201)
+
+@bp.get('/<test_suite>')
+@doc.summary('Get the test cases of a test suite')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(doc.String(name='test_suite', description='The test suite to query'))
+@doc.produces(_test_cases)
+@token_required
+@organization_team_required_by_args
+async def handler(request, test_suite):
+    organization = request.ctx.organization
+    team = request.ctx.team
+
+    test = await Test.find_one({'test_suite': test_suite, 'organization': organization.pk, 'team': team.pk if team else None})
+    if not test:
+        return json(response_message(ENOENT, 'Test {} not found'.format(test_suite)))
+
+    return json(response_message(SUCCESS, test_cases=test.test_cases, test_suite=test.test_suite))
+
+@bp.get('/detail')
+@doc.summary('Get the test cases of a test suite')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(doc.String(name='id', description='The test suite id to query'), required=True)
+@doc.produces(_test_cases)
+@token_required
+@organization_team_required_by_args
+async def handler(request, test_suite):
+    organization = request.ctx.organization
+    team = request.ctx.team
+    test_id = request.args.get('id', None)
+    if not test_id:
+        return json(response_message(EINVAL, 'field id is required'))
+
+    test = await Test.find_one({'_id': ObjectId(test_id), 'organization': organization.pk, 'team': team.pk if team else None})
+    if not test:
+        return json(response_message(ENOENT, 'Test {} not found'.format(test_suite)))
+
+    return json(response_message(SUCCESS, test_cases=test.test_cases, test_suite=test.test_suite))
+
+class TestSuitesView(HTTPMethodView):
+    @doc.summary('Get the test suite list which contains some necessary test details')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.produces(_test_suite_list)
     @token_required
     @organization_team_required_by_args
-    @api.doc('get_the_test_cases')
-    @api.marshal_with(_test_cases)
-    def get(self, **kwargs):
-        """Get the test cases of a test suite"""
-        organization = kwargs['organization']
-        team = kwargs['team']
-        tid = request.args.get('id', None)
-        if not tid:
-            return response_message(EINVAL, 'Test id is required'), 401
-
-        test = Test.objects(pk=tid, organization=organization, team=team).first()
-        if not test:
-            return response_message(ENOENT, 'Test not found'), 404
-
-        return {
-            'test_cases': test.test_cases,
-            'test_suite': test.test_suite
-        }
-
-@api.route('/')
-class TestSuitesList(Resource):
-    @token_required
-    @organization_team_required_by_args
-    @api.doc('get_the_test_suite_list')
-    @api.marshal_list_with(_test_suite)
-    def get(self, **kwargs):
-        """Get the test suite list which contains some necessary test details"""
-        organization = kwargs['organization']
-        team = kwargs['team']
-        
-        tests = Test.objects(organization=organization, team=team)
+    async def get(self, request):
+        organization = request.ctx.organization
+        team = request.ctx.team
 
         ret = []
-        for t in tests:
+        async for t in Test.find({'organization': organization.pk, 'team': team.pk if team else None}):
             if t.staled:
                 continue
+            author = await t.author.fetch()
             ret.append({
-                'id': str(t.id),
+                'id': str(t.pk),
                 'test_suite': t.test_suite,
                 'path': t.path,
                 'test_cases': t.test_cases,
                 'variables': t.variables,
-                'author': t.author.name
+                'author': author.name
             })
         ret.sort(key=lambda x: x['path'])
-        return ret
+        return json(response_message(SUCCESS, test_suites=ret))
+
+bp.add_route(TestSuitesView.as_view(), '/')

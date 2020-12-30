@@ -1,6 +1,7 @@
-import sys
+import asyncio
 import smtplib
 import socket
+from async_files.utils import async_wraps
 from email import encoders
 from email.header import Header
 from email.mime.text import MIMEText
@@ -9,6 +10,7 @@ from socket import timeout
 
 # sys.path.append('.')
 from app.main.config import get_config
+from sanic.log import logger
 
 notification_chain = []
 APP = None
@@ -22,7 +24,7 @@ def _format_addr(s):
     name, addr = parseaddr(s)
     return formataddr((Header(name).encode(), addr))
 
-def send_email(task):
+async def send_email(task):
     from_addr = get_config().FROM_ADDR
     password = get_config().SMTP_PASSWORD
     smtp_user = get_config().SMTP_USER
@@ -30,48 +32,54 @@ def send_email(task):
     smtp_server_port = get_config().SMTP_SERVER_PORT
     smtp_always_cc = get_config().SMTP_ALWAYS_CC
 
-    body_msg = BODY_TEMPLATE.format(task.test.test_suite, task.status, task.id, task.test.organization.id, '&team=%s' % task.test.team.id if task.test.team else '')
+    test = await task.test.fetch()
+    organization = await test.organization.fetch()
+    team = None
+    if test.team:
+        team = await test.team.fetch()
+    tester = await task.tester.fetch()
+
+    body_msg = BODY_TEMPLATE.format(test.test_suite, task.status, task.pk, organization.pk, '&team=%s' % team.pk if team else '')
     msg = MIMEText(body_msg, 'plain', 'utf-8')
     msg['From'] = _format_addr(from_addr)
-    msg['To'] = _format_addr(task.tester.email)
+    msg['To'] = _format_addr(tester.email)
     msg['cc'] = _format_addr(smtp_always_cc)
-    msg['Subject'] = Header(SUBJECT_TEMPLATE.format(task.test.test_suite))
+    msg['Subject'] = Header(SUBJECT_TEMPLATE.format(test.test_suite))
 
     try:
-        with smtplib.SMTP(smtp_server, smtp_server_port, timeout=5) as server:
-            # server.starttls()
-            # server.set_debuglevel(1)
-            try:
-                server.login(smtp_user, password)
-            except smtplib.SMTPAuthenticationError:
-                APP.logger.error('SMTP authentication failed')
-                return
-            try:
-                server.sendmail(from_addr, [task.tester.email], msg.as_string())
-            except smtplib.SMTPServerDisconnected:
-                APP.logger.error('SMTP sending mail failed')
+        server = await async_wraps(smtplib.SMTP)(smtp_server, smtp_server_port, timeout=5)
     except TimeoutError:
-        APP.logger.error('SMTP server connecting timeout')
+        logger.error('SMTP server connecting timeout')
         return
     except timeout:
-        APP.logger.error('SMTP server connecting socket timeout')
+        logger.error('SMTP server connecting socket timeout')
         return
-    except (ConnectionRefusedError, ConnectionAbortedError):
-        APP.logger.error('SMTP server connecting refused')
+    except ConnectionRefusedError:
+        logger.error('SMTP server connecting refused')
         return
     except socket.gaierror:
-        APP.logger.error('Network is not available')
+        logger.error('Network of SMTP is not available')
         return
     except:
         exc_type, exc_value, exc_tb = sys.exc_info()
         APP.logger.error(f'Un-catched error happened: {exc_type}, {exc_value}')
+    else:
+        # await async_wraps(server.starttls)()
+        # await async_wraps(server.set_debuglevel)(1)
+        try:
+            await async_wraps(server.login)(smtp_user, password)
+        except smtplib.SMTPAuthenticationError:
+            logger.error('SMTP authentication failed')
+            await async_wraps(server.quit)()
+            return
+        await async_wraps(server.sendmail)(from_addr, [task.tester.email], msg.as_string())
+        await async_wraps(server.quit)()
 
 def notification_chain_init(app):
-    global APP
-    if send_email not in notification_chain:
-        notification_chain.append(send_email)
-    APP = app
+    notification_chain.append(send_email)
 
-def notification_chain_call(task):
-    for caller in notification_chain:
-        caller(task)
+async def notification_chain_call(task):
+    # notifications = [callee(task) for callee in notification_chain]
+    # await asyncio.gather(*notifications)
+    for notifier in notification_chain:
+        asyncio.create_task(notifier(task))

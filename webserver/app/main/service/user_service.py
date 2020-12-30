@@ -1,50 +1,59 @@
 # import uuid
+import asyncio
+import aiofiles
 import datetime
 import os
+from async_files.utils import async_wraps
+from bson import ObjectId
 from pathlib import Path
 
-from app.main.model.database import User, Organization
-from flask import current_app
+from sanic.log import logger
+from sanic.response import json
 
+from app.main.model.database import User, Organization
 from ..config import get_config
 from ..util.response import *
-from ..util.identicon import *
+from ..util.identicon import render_identicon
 
 USERS_ROOT = Path(get_config().USERS_ROOT)
 
-def save_new_user(data, admin=None):
-    user = User.objects(email=data['email']).first()
+async def save_new_user(data, admin=None):
+    user = await User.find_one({'email': data['email']})
     if not user:
         new_user = User(
             # public_id=str(uuid.uuid4()),
             email=data['email'],
             name=data.get('username', ''),
             registered_on=datetime.datetime.utcnow(),
-            roles=data.get('roles', ['admin']),
             avatar=data.get('avatar', ''),
             introduction=data.get('introduction', '')
         )
+        cnt = await User.count_documents()
+        if cnt == 0:
+            new_user.roles = ['admin']
+        else:
+            new_user.roles = ['viewer']
         new_user.password = data['password']
         try:
-            new_user.save()
+            await new_user.commit()
         except Exception as e:
-            current_app.logger.exception(e)
-            return response_message(EINVAL, 'Field validating for User failed'), 401
+            logger.exception(e)
+            return response_message(EINVAL, 'Field validating for User failed')
 
         user_root = USERS_ROOT / data['email']
         try:
-            os.mkdir(user_root)
+            await aiofiles.os.mkdir(user_root)
         except FileExistsError as e:
-            return response_message(EEXIST), 401
+            return response_message(EEXIST)
         try:
-            os.mkdir(user_root / 'test_results')
+            await aiofiles.os.mkdir(user_root / 'test_results')
         except FileExistsError as e:
-            return response_message(EEXIST), 401
+            return response_message(EEXIST)
 
         if new_user.avatar == '':
-            img = render_identicon(hash(data['email']), 27)
-            img.save(user_root / ('%s.png' % new_user.id))
-            new_user.avatar = '%s.png' % new_user.id
+            img = await render_identicon(hash(data['email']), 27)
+            await async_wraps(img.save)(user_root / ('%s.png' % new_user.pk))
+            new_user.avatar = '%s.png' % new_user.pk
         if new_user.name == '':
             new_user.name = new_user.email.split('@')[0]
         if not admin:
@@ -53,29 +62,29 @@ def save_new_user(data, admin=None):
             organization.path = new_user.email
             organization.members = [new_user]
             organization.personal = True
-            organization.save()
+            await organization.commit()
             new_user.organizations = [organization]
-        new_user.save()
+        await new_user.commit()
 
         return generate_token(new_user)
     else:
-        return response_message(USER_ALREADY_EXIST), 409
+        return response_message(USER_ALREADY_EXIST)
 
 
-def get_all_users():
-    return [user for user in User.objects()]
+async def get_all_users():
+    return await User.find().to_list()
 
 
-def get_a_user(user_id):
-    return User.objects(pk=user_id).first()
+async def get_a_user(user_id):
+    return await User.find_one({'_id': ObjectId(user_id)})
 
 
 def generate_token(user):
     try:
         # generate the auth token
-        auth_token = User.encode_auth_token(str(user.id))
-        return response_message(SUCCESS, token=auth_token.decode()), 201
+        auth_token = User.encode_auth_token(str(user.pk))
+        return response_message(SUCCESS, token=auth_token.decode())
     except Exception as e:
-        current_app.logger.exception(e)
-        return response_message(UNKNOWN_ERROR), 401
+        logger.exception(e)
+        return response_message(UNKNOWN_ERROR)
 

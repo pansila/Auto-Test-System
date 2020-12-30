@@ -1,372 +1,404 @@
+import asyncio
 import random
 import urllib.parse
 import uuid
-from flask import request, current_app
-from flask_restx import Resource
-from mongoengine import ValidationError
-from mongoengine.queryset.visitor import Q
 
-from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json
+from bson import ObjectId
+from sanic import Blueprint
+from sanic.log import logger
+from sanic.views import HTTPMethodView
+from sanic.response import json
+from sanic_openapi import doc
 from task_runner.runner import check_endpoint
 
-from ..model.database import Endpoint, TaskQueue, Test, Task, \
-            EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, \
-            QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX
-from ..util.dto import EndpointDto
-from ..util.response import *
-from ..util import push_event, js2python_bool
+from ..model.database import (EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, QUEUE_PRIORITY,
+                              QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
+                              QUEUE_PRIORITY_MIN, Endpoint, Task, TaskQueue,
+                              Test)
+from ..util import js2python_bool, push_event
+from ..util.decorator import (organization_team_required_by_args,
+                              organization_team_required_by_json,
+                              token_required)
+from ..util.dto import EndpointDto, json_response, organization_team
+from ..util.response import response_message, EACCES, SUCCESS, EINVAL, EPERM, ENOENT
 
-api = EndpointDto.api
+_endpoint_query = EndpointDto.endpoint_query
 _endpoint_list = EndpointDto.endpoint_list
-_endpoint_del = EndpointDto.endpoint_del
+_endpoint_uid = EndpointDto.endpoint_uid
 _endpoint = EndpointDto.endpoint
-_queuing_tasks = EndpointDto.queuing_tasks
-_queue_update = EndpointDto.queue_update
-_endpoint_config = EndpointDto.endpoint_config
+_queuing_task_list = EndpointDto.queuing_task_list
+_queuing_task = EndpointDto.queuing_task_list._queuing_task_list._queuing_tasks._queuing_task
+_endpoint_online_check = EndpointDto.endpoint_online_check
 
-@api.route('/')
-class EndpointController(Resource):
+bp = Blueprint('endpoint', url_prefix='/endpoint')
+
+class EndpointView(HTTPMethodView):
+    @doc.summary('get all test endpoints available')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_endpoint_query)  # TODO: bug, can't show the doc when using it like this
+    @doc.produces(_endpoint_list)
     @token_required
     @organization_team_required_by_args
-    @api.doc('get all test endpoints')
-    @api.param('organization', description='The organization ID')
-    @api.param('team', description='The team ID')
-    @api.param('page', default=1, description='The page number of the whole test report list')
-    @api.param('limit', default=10, description='The item number of a page')
-    @api.param('title', description='The test suite name')
-    @api.marshal_list_with(_endpoint_list)
-    def get(self, **kwargs):
-        """Get all test endpoints available"""
+    async def get(self, request):
         page = request.args.get('page', default=1)
         limit = request.args.get('limit', default=10)
         title = request.args.get('title', default=None)
         forbidden = request.args.get('forbidden', default=False)
         unauthorized = request.args.get('unauthorized', default=False)
 
-        forbidden = True if forbidden == 'true' else False
-        unauthorized = True if unauthorized == 'true' else False
+        forbidden = js2python_bool(forbidden)
+        unauthorized = js2python_bool(unauthorized)
 
-        organization = kwargs['organization']
-        team = kwargs['team']
+        organization = request.ctx.organization
+        team = request.ctx.team
 
         page = int(page)
         limit = int(limit)
         if page <= 0 or limit <= 0:
-            return response_message(EINVAL, 'Field page and limit should be larger than 1'), 400
+            return json(response_message(EINVAL, 'Field page and limit should be larger than 1'))
 
         if title:
-            query = {'name__contains': title, 'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
+            query = {'name': {'$regex': title}, 'organization': organization.pk, 'team': team.pk if team else None, 'status': {'$ne': 'Forbidden'}}
         else:
-            query = {'organization': organization, 'team': team, 'status__not__exact': 'Forbidden'}
-        if forbidden:
-            query = {'organization': organization, 'team': team, 'status': 'Forbidden'}
-        if unauthorized:
-            query = {'organization': organization, 'team': team, 'status': 'Unauthorized'}
+            query = {'organization': organization.pk, 'team': team.pk if team else None, 'status': {'$ne': 'Forbidden'}}
         if forbidden and unauthorized:
-            query = Q(organization=organization, team=team, status='Forbidden') | Q(organization=organization, team=team, status='Unauthorized')
-            endpoints = Endpoint.objects(query)
+            del query['status']
+            query['$or'] = [{'status': 'Forbidden'}, {'status': 'Unauthorized'}]
         else:
-            endpoints = Endpoint.objects(**query)
+            if forbidden:
+                query['status'] = 'Forbidden'
+            if unauthorized:
+                query['status'] = 'Unauthorized'
 
         ret = []
-        for ep in endpoints[(page-1)*limit:page*limit]:
+        async for ep in Endpoint.find(query).skip((page - 1) * limit).limit(limit):
             tests = []
-            for t in ep.tests:
-                if hasattr(t, 'test_suite'):
-                    tests.append(t.test_suite)
-                else:
-                    tests.append(str(t.id))
+            test_refs = []
+            if ep.tests:
+                for t in ep.tests:
+                    test = await t.fetch()
+                    if test.test_suite:
+                        tests.append(test.test_suite)
+                    else:
+                        tests.append(str(test.pk))
+                    test_refs.append(str(test.pk))
             ret.append({
                 'name': ep.name,
                 'status': ep.status,
                 'enable': ep.enable,
                 'last_run': ep.last_run_date.timestamp() * 1000 if ep.last_run_date else 0,
                 'tests': tests,
-                'test_refs': [str(t.id) for t in ep.tests],
-                'endpoint_uid': ep.uid
+                'test_refs': test_refs,
+                'endpoint_uid': str(ep.uid)
             })
-        return {'items': ret, 'total': endpoints.count()}
+        return json(response_message(SUCCESS, endpoints=ret, total=await Endpoint.count_documents(query)))
 
+    @doc.summary('Delete the test endpoint with the specified endpoint uid')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_endpoint_uid, location='body')
+    @doc.produces(json_response)
     @token_required
     @organization_team_required_by_json
-    @api.doc('delete the test endpoint')
-    @api.expect(_endpoint_del)
-    def delete(self, **kwargs):
-        """Delete the test endpoint with the specified endpoint uid"""
+    async def delete(self, request):
         data = request.json
-        organization = kwargs['organization']
-        team = kwargs['team']
+        organization = request.ctx.organization
+        team = request.ctx.team
 
         endpoint_uid = data.get('endpoint_uid', None)
         if endpoint_uid is None:
-            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
-        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+            return json(response_message(EINVAL, 'Field endpoint_uid is required'), 400)
+        endpoint = await Endpoint.find_one({'uid': uuid.UUID(endpoint_uid)})
         if endpoint is None:
-            return response_message(EINVAL, 'Endpoint not found'), 404
+            return json(response_message(EINVAL, 'Endpoint not found'), 404)
 
-        taskqueues = TaskQueue.objects(endpoint=endpoint, organization=organization, team=team)
-        if taskqueues.count() == 0:
-            endpoint.delete()
-            return response_message(SUCCESS)
-        taskqueues.update(to_delete=True)
+        if await TaskQueue.count_documents({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None}) == 0:
+            await endpoint.delete()
+            return json(response_message(SUCCESS))
+        taskqueues = await TaskQueue.find({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None})
+        async for taskqueue in taskqueues:
+            taskqueue.to_delete = True
+            await taskqueue.commit()
 
+        await asyncio.gather(*[q.flush(cancelled=True) for q in taskqueues])
         for q in taskqueues:
-            q.flush(cancelled=True)
             if q.running_task:
+                running_task = await q.running_task.fetch()
                 message = {
                     'endpoint_uid': endpoint_uid,
                     'priority': q.priority,
-                    'task_id': str(q.running_task.id)
+                    'task_id': str(running_task.pk)
                 }
-                ret = push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
+                ret = await push_event(organization=organization, team=team, code=EVENT_CODE_CANCEL_TASK, message=message)
                 if not ret:
-                    return response_message(EPERM, 'Pushing the event to event queue failed'), 403
+                    return json(response_message(EPERM, 'Pushing the event to event queue failed'))
 
-        ret = push_event(organization=organization, team=team, code=EVENT_CODE_START_TASK, message={'endpoint_uid': endpoint_uid, 'to_delete': True})
+        ret = await push_event(organization=organization, team=team, code=EVENT_CODE_START_TASK, message={'endpoint_uid': endpoint_uid, 'to_delete': True})
         if not ret:
-            return response_message(EPERM, 'Pushing the event to event queue failed'), 403
+            return json(response_message(EPERM, 'Pushing the event to event queue failed'))
 
-        return response_message(SUCCESS)
+        return json(response_message(SUCCESS))
 
+    @doc.summary('update the endpoint')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_endpoint, location='body')
+    @doc.produces(json_response)
     @token_required
     @organization_team_required_by_json
-    @api.doc('update the endpoint')
-    @api.expect(_endpoint)
-    def post(self, **kwargs):
-        """Update the endpoint"""
+    async def post(self, request):
         data = request.json
-        organization = kwargs['organization']
-        team = kwargs['team']
-        user = kwargs['user']
+        organization = request.ctx.organization
+        team = request.ctx.team
+        user = request.ctx.user
 
         tests = data.get('tests', [])
         if not isinstance(tests, list):
-            return response_message(EINVAL, 'Tests is not a list'), 400
+            return json(response_message(EINVAL, 'Tests is not a list'))
         uid = data.get('uid', None)
         if not uid:
-            return response_message(EINVAL, 'Endpoint uid is invalid'), 400
+            return json(response_message(EINVAL, 'Endpoint uid is invalid'))
 
         endpoint_tests = []
         for t in tests:
-            tt = Test.objects(test_suite=t, organization=organization, team=team).first()
+            tt = await Test.find_one({'test_suite': t, 'organization': organization.pk, 'team': team.pk if team else None})
             if not tt:
-                return response_message(ENOENT, 'Test suite {} not found'.format(t)), 404
+                return json(response_message(ENOENT, 'Test suite {} not found'.format(t)))
             endpoint_tests.append(tt)
 
-        endpoint = Endpoint.objects(uid=uid).first()
+        endpoint = await Endpoint.find_one({'uid': uuid.UUID(uid)})
         if not endpoint:
-            return response_message(ENOENT, 'Endpoint not found'), 404
-        taskqueues = TaskQueue.objects(endpoint=endpoint, team=team, organization=organization)
-        if taskqueues.count() == 0:
-            for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
+            return json(response_message(ENOENT, 'Endpoint not found'))
+        if await TaskQueue.count_documents({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None}) == 0:
+            for priority in QUEUE_PRIORITY:
                 taskqueue = TaskQueue(endpoint=endpoint, priority=priority, team=team, organization=organization)
-                taskqueue.save()
+                await taskqueue.commit()
         else:
-            taskqueues.update(endpoint=endpoint)
+            async for taskqueue in TaskQueue.find({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None}):
+                taskqueue.endpoint = endpoint
+                await taskqueue.commit()
 
-        endpoint.name = data.get('endpoint_name', 'test site#1')
+        endpoint.name = data.get('endpoint_name', 'test site #1')
         endpoint.enable = js2python_bool(data.get('enable', False))
         endpoint.tests = endpoint_tests
-        endpoint.save()
+        await endpoint.commit()
 
-        return response_message(SUCCESS)
+        return json(response_message(SUCCESS))
 
-@api.route('/queue/')
-class EndpointController(Resource):
+class EndpointQueueView(HTTPMethodView):
+    @doc.summary('get queuing tasks of an endpoint')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(_endpoint_uid)
+    @doc.produces(_queuing_task_list)
     @token_required
     @organization_team_required_by_args
-    @api.doc('get queuing tasks')
-    @api.param('organization', description='The organization ID')
-    @api.param('team', description='The team ID')
-    @api.param('uid', description='The endpoint uid')
-    @api.marshal_list_with(_queuing_tasks)
-    def get(self, **kwargs):
-        """Get the queuing tasks of an endpoint"""
-        organization = kwargs['organization']
-        team = kwargs['team']
+    async def get(self, request):
+        organization = request.ctx.organization
+        team = request.ctx.team
 
-        query = {'organization': organization, 'team': team}
-        endpoint_uid = request.args.get('uid', default=None)
+        query = {'organization': organization.pk, 'team': team.pk if team else None}
+        endpoint_uid = request.args.get('uid', None)
         if endpoint_uid:
-            query['endpoint_uid'] = endpoint_uid
+            endpoint = await Endpoint.find_one({'uid': uuid.UUID(endpoint_uid)})
+            if not endpoint:
+                return json(response_message(EINVAL, 'endpoint not found'))
+            query['endpoint'] = endpoint.pk
 
         ret = []
-        for taskqueue in TaskQueue.objects(**query):
+        async for taskqueue in TaskQueue.find(query):
+            endpoint = await taskqueue.endpoint.fetch()
             taskqueue_stat = ({
-                'endpoint': taskqueue.endpoint.name,
+                'endpoint': endpoint.name,
                 'priority': taskqueue.priority,
-                'waiting': len(taskqueue.tasks),
-                'status': taskqueue.endpoint.status,
-                'endpoint_uid': taskqueue.endpoint.uid,
+                'waiting': len(taskqueue.tasks) if taskqueue.tasks else 0,
+                'status': endpoint.status,
+                'endpoint_uid': str(endpoint.uid),
                 'tasks': []
             })
-            if taskqueue.running_task and taskqueue.running_task.status == 'running':
-                taskqueue_stat['tasks'].append({
-                    'endpoint': taskqueue.endpoint.name,
-                    'priority': taskqueue.priority,
-                    'task': taskqueue.running_task.test_suite,
-                    'task_id': str(taskqueue.running_task.id),
-                    'status': 'Running'
-                })
-            for task in taskqueue.tasks:
-                taskqueue_stat['tasks'].append({
-                    'endpoint': taskqueue.endpoint.name,
-                    'priority': task.priority,
-                    'task': task.test_suite,
-                    'task_id': str(task.id),
-                    'status': 'Waiting'})
+            if taskqueue.running_task:
+                running_task = await taskqueue.running_task.fetch()
+                if running_task:
+                    # assert running_task.status == 'running'
+                    taskqueue_stat['tasks'].append({
+                        'endpoint': endpoint.name,
+                        'priority': taskqueue.priority,
+                        'task': running_task.test_suite,
+                        'task_id': str(running_task.pk),
+                        'status': 'Running'
+                    })
+            if taskqueue.tasks:
+                for t in taskqueue.tasks:
+                    task = await t.fetch()
+                    taskqueue_stat['tasks'].append({
+                        'endpoint': endpoint.name,
+                        'priority': task.priority,
+                        'task': task.test_suite,
+                        'task_id': str(task.pk),
+                        'status': 'Waiting'})
             ret.append(taskqueue_stat)
-        return ret
+        return json(response_message(SUCCESS, task_queues=ret))
 
+    @doc.summary('update task queue of an endpoint')
+    @doc.consumes(doc.String(name='X-Token'), location='header')
+    @doc.consumes(organization_team, location='body')
+    @doc.consumes(doc.List(_queuing_task, name='taskqueues'), location='body')
+    @doc.produces(json_response)
     @token_required
     @organization_team_required_by_json
-    @api.doc('update task queue')
-    @api.expect(_queue_update)
-    def post(self, **kwargs):
-        """Update the task queue of an endpoint"""
-        organization = kwargs['organization']
-        team = kwargs['team']
+    async def post(self, request):
+        organization = request.ctx.organization
+        team = request.ctx.team
         taskqueues = request.json.get('taskqueues', None)
         if not taskqueues:
-            return response_message(EINVAL, 'Field taskqueues is required'), 400
+            return json(response_message(EINVAL, 'Field taskqueues is required'))
         if not isinstance(taskqueues, list):
-            return response_message(EINVAL, 'Field taskqueues should be a list'), 400
+            return json(response_message(EINVAL, 'Field taskqueues should be a list'))
 
         for taskqueue in taskqueues:
             if 'endpoint_uid' not in taskqueue or 'priority' not in taskqueue:
-                return response_message(EINVAL, 'Task queue lacks the field endpoint_uid and field priority'), 400
-            endpoint = Endpoint.objects(uid=taskqueue['endpoint_uid']).first()
+                return json(response_message(EINVAL, 'Task queue lacks the field endpoint_uid and field priority'))
+            endpoint = await Endpoint.find_one({'uid': uuid.UUID(taskqueue['endpoint_uid'])})
             if not endpoint:
-                return response_message(EINVAL, f"endpoint not found for uid {taskqueue['endpoint_uid']}"), 400
-            queue = TaskQueue.objects(endpoint=endpoint, priority=taskqueue['priority'], team=team, organization=organization).first()
+                return json(response_message(EINVAL, f"endpoint not found for uid {taskqueue['endpoint_uid']}"))
+            queue = await TaskQueue.find_one({'endpoint': endpoint.pk, 'priority': taskqueue['priority'], 'team': team.pk if team else None, 'organization': organization.pk})
             if not queue:
-                return response_message(EINVAL, 'Task queue querying failed for {} of priority {}'.format(taskqueue['endpoint_uid'], taskqueue['priority'])), 400
+                return json(response_message(EINVAL, 'Task queue querying failed for {} of priority {}'.format(taskqueue['endpoint_uid'], taskqueue['priority'])))
 
             tasks = []
             for task in taskqueue['tasks']:
                 if 'task_id' not in task:
-                    return response_message(EINVAL, 'Task lacks the field task_id'), 400
+                    return json(response_message(EINVAL, 'Task lacks the field task_id'))
                 if task['priority'] != taskqueue['priority']:
-                    return response_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'), 400
-                t = Task.objects(pk=task['task_id']).first()
+                    return json(response_message(EINVAL, 'task\'s priority is not equal to taskqueue\'s'))
+                t = await Task.find_one({'_id': ObjectId(task['task_id'])})
                 if not t:
-                    return response_message(ENOENT, 'task not found for ' + task['task_id']), 404
+                    return json(response_message(ENOENT, 'task not found for ' + task['task_id']))
                 tasks.append(t)
 
-            if not queue.flush():
-                return response_message(EPERM, 'task queue {} {} flushing failed'.format(queue.endpoint.uid, queue.priority)), 401
+            if not await queue.flush():
+                return json(response_message(EPERM, 'task queue {} {} flushing failed'.format(endpoint.uid, queue.priority)))
 
-            queue.acquire_lock()
+            await queue.acquire_lock()
             set1 = set(tasks)
             set2 = set(queue.tasks)
             task_cancel_set = set2 - set1
             for task in task_cancel_set:
-                task.update(status='cancelled')
-            queue.release_lock()
+                task.status = 'cancelled'
+                await task.commit()
+            await queue.release_lock()
 
             for task in tasks:
                 # no need to lock task as task queue has been just flushed, no runner is supposed to hold it yet
                 if task.status == 'waiting':
-                    if not queue.push(task):
-                        current_app.logger.error('pushing the task {} to task queue timed out'.format(str(task.id)))
+                    if not await queue.push(task):
+                        logger.error('pushing the task {} to task queue timed out'.format(str(task.pk)))
+                        return json(response_message(EACCES, 'failed to push the task to task queue'))
+            return json(response_message(SUCCESS))
 
-@api.route('/check/')
-class EndpointChecker(Resource):
-    @token_required
-    @organization_team_required_by_json
-    @api.doc('check whether endpoint is online')
-    @api.expect(_endpoint_del)
-    def post(self, **kwargs):
-        """Update the task queue of an endpoint"""
-        organization = kwargs['organization']
-        team = kwargs['team']
+@bp.post('/check')
+@doc.summary('check whether endpoint is online')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_endpoint_uid, location='body')
+@doc.produces(_endpoint_online_check)
+@token_required
+@organization_team_required_by_json
+async def handler(request):
+    organization = request.ctx.organization
+    team = request.ctx.team
 
-        endpoint_uid = request.json.get('endpoint_uid', None)
-        if endpoint_uid is None:
-            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+    endpoint_uid = request.json.get('endpoint_uid', None)
+    if endpoint_uid is None:
+        return json(response_message(EINVAL, 'Field endpoint_uid is required'))
 
-        ret = check_endpoint(current_app._get_current_object(), endpoint_uid, organization, team)
-        if not ret:
-            return response_message(SUCCESS, 'Endpoint offline', status=False)
-        else:
-            return response_message(SUCCESS, 'Endpoint online', status=True)
+    ret = await check_endpoint(request.app, uuid.UUID(endpoint_uid), organization, team)
+    if not ret:
+        return json(response_message(SUCCESS, 'Endpoint offline', status=False))
+    else:
+        return json(response_message(SUCCESS, 'Endpoint online', status=True))
 
-@api.route('/authorize')
-class EndpointController(Resource):
-    @token_required
-    @organization_team_required_by_json
-    @api.doc('authorize the test endpoint')
-    @api.expect(_endpoint_del)
-    def post(self, **kwargs):
-        """Authorize the test endpoint with the specified endpoint uid"""
-        data = request.json
-        organization = kwargs['organization']
-        team = kwargs['team']
+@bp.post('/authorize')
+@doc.summary('authorize the test endpoint')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_endpoint_uid, location='body')
+@doc.produces(json_response)
+@token_required
+@organization_team_required_by_json
+async def handler(request):
+    data = request.json
+    organization = request.ctx.organization
+    team = request.ctx.team
 
-        endpoint_uid = data.get('endpoint_uid', None)
-        if endpoint_uid is None:
-            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
-        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+    endpoint_uid = data.get('endpoint_uid', None)
+    if endpoint_uid is None:
+        return json(response_message(EINVAL, 'Field endpoint_uid is required'))
+    endpoint = await Endpoint.find_one({'uid': uuid.UUID(endpoint_uid)})
 
-        if not endpoint:
-            endpoint = Endpoint(name=f'Test Site {random.randint(1, 9999)}', uid=endpoint_uid, organization=organization, team=team, status='Offline')
-            endpoint.save()
-        else:
-            endpoint.modify(name=f'Test Site {random.randint(1, 9999)}', status='Offline')
+    if not endpoint:
+        endpoint = Endpoint(name=f'Test Site {random.randint(1, 9999)}', uid=endpoint_uid, organization=organization, status='Offline')
+        if team:
+            endpoint.team = team
+        await endpoint.commit()
+    else:
+        endpoint.name = f'Test Site {random.randint(1, 9999)}'
+        endpoint.status = 'Offline'
+        await endpoint.commit()
 
-        taskqueues = TaskQueue.objects(endpoint=endpoint, team=team, organization=organization)
-        if taskqueues.count() == 0:
-            for priority in (QUEUE_PRIORITY_MIN, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX):
-                taskqueue = TaskQueue(endpoint=endpoint, priority=priority, team=team, organization=organization)
-                taskqueue.save()
-        else:
-            taskqueues.update(endpoint=endpoint)
+    if await TaskQueue.count_documents({'endpoint': endpoint.pk, 'team': team.pk if team else None, 'organization': organization.pk}) == 0:
+        for priority in QUEUE_PRIORITY:
+            taskqueue = TaskQueue(endpoint=endpoint, priority=priority, organization=organization)
+            if team:
+                taskqueue.team = team
+            await taskqueue.commit()
+    else:
+        async for taskqueue in TaskQueue.find({'endpoint': endpoint.pk, 'team': team.pk if team else None, 'organization': organization.pk}):
+            taskqueue.endpoint = endpoint
+            await taskqueue.commit()
 
-        check_endpoint(current_app._get_current_object(), endpoint_uid, organization, team)
+    # await check_endpoint(request.app, uuid.UUID(endpoint_uid), organization, team)
 
-        return response_message(SUCCESS)
+    return json(response_message(SUCCESS))
 
-@api.route('/forbid')
-class EndpointController(Resource):
-    @token_required
-    @organization_team_required_by_json
-    @api.doc('forbid the test endpoint')
-    @api.expect(_endpoint_del)
-    def post(self, **kwargs):
-        """Forbid the test endpoint with the specified endpoint uid"""
-        data = request.json
-        organization = kwargs['organization']
-        team = kwargs['team']
+@bp.post('/forbid')
+@doc.summary('forbid the test endpoint so that it won\'t show in the endpoint querying results')
+@doc.consumes(doc.String(name='X-Token'), location='header')
+@doc.consumes(_endpoint_uid, location='body')
+@doc.produces(json_response)
+@token_required
+@organization_team_required_by_json
+async def handler(request):
+    data = request.json
+    organization = request.ctx.organization
+    team = request.ctx.team
 
-        endpoint_uid = data.get('endpoint_uid', None)
-        if endpoint_uid is None:
-            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
-        endpoint = Endpoint.objects(uid=endpoint_uid).first()
+    endpoint_uid = data.get('endpoint_uid', None)
+    if endpoint_uid is None:
+        return json(response_message(EINVAL, 'Field endpoint_uid is required'))
 
-        if not endpoint:
-            endpoint = Endpoint(uid=endpoint_uid, organization=organization, team=team, status='Forbidden')
-            endpoint.save()
-        else:
-            endpoint.update(status='Forbidden')
+    endpoint = await Endpoint.find_one({'uid': uuid.UUID(endpoint_uid)})
+    if not endpoint:
+        endpoint = Endpoint(uid=endpoint_uid, organization=organization, status='Forbidden')
+        if team:
+            endpoint.team = team
+        await endpoint.commit()
+    else:
+        endpoint.status = 'Forbidden'
+        await endpoint.commit()
 
-        return response_message(SUCCESS)
+    return json(response_message(SUCCESS))
 
-@api.route('/config')
-class EndpointChecker(Resource):
-    @token_required
-    @organization_team_required_by_args
-    @api.doc('get the endpoint\'s configuration')
-    @api.param('organization', description='The organization ID')
-    @api.param('team', description='The team ID')
-    @api.param('uuid', description='The endpoint uuid')
-    @api.marshal_list_with(_endpoint_config)
-    def get(self, **kwargs):
-        """Get the endpoint\'s configuration"""
-        organization = kwargs['organization']
-        team = kwargs['team']
+@bp.get('/config')
+@doc.summary('get the endpoint\'s configuration')
+@doc.consumes(_endpoint_uid)
+# @doc.produces(_endpoint_config) #TODO
+@token_required
+@organization_team_required_by_args
+def handler(request):
+    organization = request.ctx.organization
+    team = request.ctx.team
 
-        endpoint_uid = request.args.get('uuid', None)
-        if endpoint_uid is None:
-            return response_message(EINVAL, 'Field endpoint_uid is required'), 400
+    endpoint_uid = request.args.get('uuid', None)
+    if endpoint_uid is None:
+        return json(response_message(EINVAL, 'Field endpoint_uid is required'))
 
-        return response_message(SUCCESS, 'Config is not implemented')
+    return json(response_message(SUCCESS, 'Config is not implemented'))
+
+bp.add_route(EndpointView.as_view(), '/')
+bp.add_route(EndpointQueueView.as_view(), '/queue')

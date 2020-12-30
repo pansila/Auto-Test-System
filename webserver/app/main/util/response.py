@@ -1,5 +1,5 @@
-from flask_restx import marshal, fields
-from flask import current_app
+from sanic.log import logger
+from sanic.response import json
 
 SUCCESS = (20000, 'Success')
 
@@ -11,6 +11,8 @@ TOKEN_ILLEGAL = (50008, 'Token is invalid')
 TOKEN_REQUIRED = (50009, 'Token is required')
 TOKEN_EXPIRED = (50014, 'Token is expired')
 OTHER_CLIENT_LOGGED_IN = (50012, 'Other client has logged in')
+NO_TASK_RESOURCES = (50013, 'Upload directory is empty')
+GIT_ERROR = (50100, 'Git runtime error')
 
 UNKNOWN_ERROR = (60000, 'Unknown error happened')
 
@@ -146,21 +148,15 @@ EKEYREJECTED = (129, 'Key was rejected by service')
 EOWNERDEAD = (130, 'Owner died')
 ENOTRECOVERABLE = (131, 'State not recoverable')
 
-response = {
-    'code': fields.Integer(),
-    'message': fields.String(),
-	'data': fields.Raw
-}
-
-def response_message(error, message=None, model=response, **payload):
+def response_message(error, message=None, **payload):
 	errno, msg = error
 	if errno != 20000:
-		current_app.logger.error(message if message else msg)
+		logger.error(message if message else msg)
 	else:
-		current_app.logger.info(message if message else msg)
+		logger.info(message if message else msg)
 	ret = {
 		'code': errno,
 		'message': message if message else msg,
         'data': payload
 	}
-	return marshal(ret, model)
+	return ret

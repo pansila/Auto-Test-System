@@ -1,12 +1,13 @@
 import os
 from pathlib import Path
 
-from flask import send_from_directory, current_app, render_template, make_response, request
-from flask_restx import Resource
+from sanic.response import json, file
+from sanic_openapi import doc
+from sanic import Blueprint
+from sanic.views import HTTPMethodView
 
 from ..model.database import Package
 from ..util.dto import PypiDto
-from ..util.tarball import path_to_dict
 from ..util.response import response_message, ENOENT, EINVAL
 from ..util.decorator import token_required_if_proprietary_by_args
 from ..util.get_path import get_test_store_root
@@ -27,7 +28,7 @@ class ScriptManagement(Resource):
         if proprietary:
             query['organization'] = organization
             query['team'] = team
-        packages = Package.objects(**query)
+        packages = await Package.find(query)
         headers = {'Content-Type': 'text/html'}
         return make_response(render_template("pypi.html", items=[pkg.name for pkg in packages] , path=''), 200, headers)
 
@@ -44,9 +45,9 @@ class ScriptManagement(Resource):
         if proprietary:
             query['organization'] = organization
             query['team'] = team
-        package = Package.objects(**query).first()
+        package = await Package.find_one(query)
         if not package:
-            return response_message(ENOENT, f'Package {package_name} not found'), 404
+            return json(response_message(ENOENT, f'Package {package_name} not found'))
         headers = {'Content-Type': 'text/html'}
         return make_response(render_template("pypi.html", items=package.files, path=package.name), 200, headers)
 
@@ -61,7 +62,7 @@ class ScriptManagement(Resource):
 
         directory, _, file = package.rpartition('/')
         if not directory or not file:
-            return response_message(EINVAL), 400
+            return json(response_message(EINVAL))
         directory = directory.replace('-', '_').replace(' ', '_')
 
         query = { 'proprietary': proprietary, 'files': file }
@@ -69,9 +70,9 @@ class ScriptManagement(Resource):
             query['organization'] = organization
             query['team'] = team
 
-        package = Package.objects(**query).first()
+        package = await Package.find_one(query)
         if not package:
-            return response_message(ENOENT, f'Package {file} not found'), 404
+            return json(response_message(ENOENT, f'Package {file} not found'))
 
-        pypi_root = get_test_store_root(proprietary=proprietary, team=team, organization=organization)
+        pypi_root = await get_test_store_root(proprietary=proprietary, team=team, organization=organization)
         return send_from_directory(Path(os.getcwd()) / pypi_root / directory, file)
