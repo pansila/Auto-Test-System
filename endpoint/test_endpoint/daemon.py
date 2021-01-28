@@ -19,47 +19,52 @@ from .main import start_remote_server
 class daemon(object):
 
     def __init__(self, config, task_id):
-        self.running_test = None
+        self.running_tests = {}
         self.config = config
-        self.task_id = None
+        # only used by test libraries
+        # self.task_id = task_id
 
-    async def start_test(self, test_case, backing_file, task_id=None):
-        # Usually a test is stopped when it ends, need to clean up the remaining server if a test was cancelled or crashed
-        await self.stop_test('', 'ABORT')
+    async def start_test(self, test_case, task_id=None):
+        # used by daemon
+        self.task_id = task_id
+        ObjectId(task_id)  # validate the task id
+        await self._create_test_result(test_case)
+        await self._download_package_files()
+
+    async def load_library(self, backing_file):
+        # Usually a test is stopped when it ends, stop it here in case a test was aborted or crashed
+        await self.stop_test(backing_file, 'FLUSHED')
 
         if not backing_file.endswith(".py"):
             backing_file += '.py'
 
-        self.task_id = task_id
-        await self._download(backing_file, self.task_id)
-        self._unpack()
+        await self._download_standalone_files(backing_file)
 
-        await self._create_test_result(test_case)
-        server, queue = start_remote_server(backing_file, self.config, task_id=self.task_id)
-        self.running_test = server
+        server = start_remote_server(backing_file, self.config, task_id=self.task_id)
+        self.running_tests[backing_file] = server
 
-        # time.sleep(3)
         try:
-            ret = queue.get(timeout=5)
+            ret = server.queue.get(timeout=10)
         except Empty:
             raise AssertionError("RPC server can't be ready")
 
-    async def stop_test(self, test_case, status):
-        if self.running_test:
+    async def stop_test(self, backing_file, status):
+        if backing_file in self.running_tests:
+            print('Stop the RPC server for test')
             await self._update_test_result(status)
-            self.running_test.terminate()
-            self.running_test = None
-            self.task_id = None
+            self.running_tests[backing_file].process.terminate()
+            del self.running_tests[backing_file]
+
+    def get_endpoint_config(self):
+        return self.config
 
     async def _download_file(self, endpoint, dest_dir):
-        empty_folder(dest_dir)
-
         url = "{}/{}".format(self.config["server_url"], endpoint)
         print('Start to download file from {}'.format(url))
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
-                if response.status == 406:
+                if response.status == 204:
                     print('No files need to download')
                     return
 
@@ -77,23 +82,44 @@ class daemon(object):
                 temp.close()
                 print('Extracting test file succeeded')
 
-    async def _download(self, backing_file, task_id):
-        await self._download_file(f'test/script?id={task_id}&test={backing_file}', self.config["download_dir"])
-        if task_id:
-            ObjectId(task_id)  # validate the task id
-            test_data_path = os.path.join(self.config["resource_dir"], "test_data")
-            await self._download_file('taskresource/{}'.format(task_id), test_data_path)
+    async def _download_package_files(self):
+        empty_folder(self.config["download_dir"])
+        empty_folder(self.config["resource_dir"])
+
+        await self._download_file(f'test/script?id={self.task_id}', self.config["download_dir"])
+
+        test_data_path = os.path.join(self.config["resource_dir"], "test_data")
+        await self._download_file(f'taskresource/{self.task_id}', test_data_path)
+
+        self._unpack()
+
+    async def _download_standalone_files(self, backing_file):
+        """
+        Download test files for standalone test libraries that have not been packed into a test package
+        """
+        if os.listdir(self.config["download_dir"]):
+            # test library files have been downloaded from the package system
+            return
+
+        await self._download_file(f'test/script?id={self.task_id}&test={backing_file}', self.config["download_dir"])
+
+        test_data_path = os.path.join(self.config["resource_dir"], "test_data")
+        await self._download_file(f'taskresource/{self.task_id}', test_data_path)
+
+        self._unpack()
 
     def _unpack(self):
         packages_data_path = os.path.join(self.config["resource_dir"], 'package_data')
-        empty_folder(packages_data_path)
         for pkg_file in os.listdir(self.config["download_dir"]):
             if not pkg_file.endswith('.egg'):
-                raise AssertionError("Find an unsupported file: {}".format(f))
+                raise AssertionError(f'Find an unsupported file: {pkg_file}')
             with zipfile.ZipFile(os.path.join(self.config["download_dir"], pkg_file)) as zf:
                 packages = (f.split('/', 1)[0] for f in zf.namelist() if not f.startswith('EGG-INFO'))
                 packages = set(packages)
                 for pkg in packages:
+                    pkg_dir = os.path.join(packages_data_path, pkg)
+                    if os.path.exists(pkg_dir):
+                        continue
                     resources = [f for f in zf.namelist() if f.startswith(pkg + '/data/')]
                     for r in resources:
                         zf.extract(r, packages_data_path)

@@ -62,9 +62,9 @@ class AsyncRemoteLibrary():
         # if name == 'stop_remote_server':
         #     return await KeywordRunner(self.stop_remote_server).run_keyword(args, kwargs)
         ret = await self._library.run_keyword(name, args, kwargs, self.msg_ws, self.task_id)
-        if name == 'stop_test' or name == 'stop_remote_server':
-            asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.rpc_ws.close()))
-            asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.msg_ws.close()))
+        # if name == 'stop_test' or name == 'stop_remote_server':
+        #     asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.rpc_ws.close()))
+        #     asyncio.get_event_loop().call_soon(lambda: asyncio.create_task(self.msg_ws.close()))
         return ret
 
     def get_keyword_arguments(self, name):

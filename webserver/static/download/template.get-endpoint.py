@@ -355,7 +355,7 @@ class Installer:
     CURRENT_PYTHON_VERSION = sys.version_info[:2]
     REPOSITORY_URL = "{server_url}"
     METADATA_URL = REPOSITORY_URL + "/setting/get-endpoint/json"
-    BASE_URL = REPOSITORY_URL + "/static/download/"
+    BASE_URL = REPOSITORY_URL + "/setting/download/"
     VERSION_REGEX = re.compile(
         r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?"
         "("

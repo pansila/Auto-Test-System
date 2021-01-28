@@ -43,7 +43,7 @@ class TaskResourceController(Resource):
             return response_message(ENOENT, 'Task not found'), 404
         
         if not task.upload_dir:
-            return response_message(SUCCESS, 'Upload directory is empty'), 406
+            return response_message(SUCCESS, 'Upload directory is empty'), 204
 
         upload_root = get_upload_files_root(task)
         result_root = get_test_result_path(task)

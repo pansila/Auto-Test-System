@@ -72,6 +72,8 @@ class DevelopmentConfig(Config):
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     STORE_ROOT = 'static/pypi'
+    DOCUMENT_ROOT = 'static/document'
+    PICTURE_ROOT = 'static/pictures'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
     MONGODB_DATABASE = 'auto_test'
@@ -98,6 +100,8 @@ class ProductionConfig(Config):
     USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
     STORE_ROOT = 'static/pypi'
+    DOCUMENT_ROOT = 'static/document'
+    PICTURE_ROOT = 'static/pictures'
     MONGODB_URL = '127.0.0.1'
     MONGODB_PORT = 27017
     MONGODB_DATABASE = 'auto_test'
