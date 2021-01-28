@@ -140,20 +140,29 @@ def get_package_requires(package, organization, team, type):
     return packages
 
 # TODO: rollback if failed in one step
-def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, new_package=True):
+def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, installed=None, recursive=False):
+    first_package = len(installed) == 0
     pkg_file = package.get_package_by_version(version)
     if not pkg_file:
         current_app.logger.error(f'package file not found for {package.name} with version {version}')
         return False
     pkg_file_path = pypi_root / package.package_name / pkg_file.filename
 
+    if pkg_file_path in installed:
+        return True
+    installed[pkg_file_path] = True
+
     requires = get_package_requires(str(pkg_file_path), organization, team, type='Test Suite')
     if requires:
         for pkg, ver in requires:
-            ret = install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, new_package=False)
+            ret = install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, installed=installed)
             if not ret:
                 current_app.logger.error(f'Failed to install dependent package {package.name}')
                 return False
+
+    if not recursive and not first_package:
+        pkg_file.modify(inc__download_times=1)
+        return True
 
     scripts_root = get_user_scripts_root(organization=organization, team=team)
     libraries_root = get_back_scripts_root(organization=organization, team=team)
@@ -209,11 +218,14 @@ def db_update_test(scripts_dir, script, user, organization, team, package=None, 
         test.create_date = datetime.datetime.utcnow()
         test.save()
     else:
-        test.modify(package=package, package_version=version)
+        if package and version:
+            test.modify(package=package, package_version=version)
+        elif test.package:
+            test.package.modify(modified=True)
+        test.modify(update_date=datetime.datetime.utcnow())
 
     ret = update_test_from_md(os.path.join(scripts_dir, script), test)
     if ret:
-        test.update_date = datetime.datetime.utcnow()
         test.save()
         current_app.logger.critical(f'Update test suite for {script}')
     return test
@@ -293,6 +305,7 @@ def find_modules(script):
                     modules.append(m.split('.', 1)[0])
     return modules
 
+#TODO find deep dependencies
 def find_dependencies(script, organization, team, package_type):
     ret = []
     modules = find_modules(script)
@@ -338,6 +351,8 @@ def find_local_dependencies(scripts_root, script, organization, team):
 
 def repack_package(pypi_root, scripts_root, package, pkg_version, dest_root):
     unpack_root = os.path.join(dest_root, 'unpack')
+    if os.path.exists(unpack_root):
+        shutil.rmtree(unpack_root)
     package_file = package.get_package_by_version(pkg_version)
     pkg_file = pypi_root / package.package_name / package_file.filename
     with zipfile.ZipFile(pkg_file) as zf:

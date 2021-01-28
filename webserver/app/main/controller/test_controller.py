@@ -1,4 +1,5 @@
 import os
+import sys
 import shutil
 import tempfile
 import time
@@ -17,7 +18,7 @@ from ..config import get_config
 from ..model.database import Task, Test, Package
 from ..util.dto import TestDto
 from ..util.tarball import pack_files, make_tarfile, make_tarfile_from_dir
-from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, EMFILE
+from ..util.response import response_message, EINVAL, ENOENT, SUCCESS, EIO, EMFILE, EAGAIN
 
 api = TestDto.api
 _test_cases = TestDto.test_cases
@@ -41,32 +42,28 @@ class ScriptDownload(Resource):
         task_id = request.args.get('id', None)
         if not task_id:
             return response_message(EINVAL, 'Field id is required'), 400
-
-        test_script = request.args.get('test', None)
-        if not test_script:
-            return response_message(EINVAL, 'Field test is required'), 400
-
         task = Task.objects(pk=task_id).first()
         if not task:
             return response_message(ENOENT, 'Task not found'), 404
 
-        test_path = None if '/' not in test_script else test_script.split('/', 1)[0]
+        test_script = request.args.get('test', None)
 
-        result_dir = '\\\\?\\' + os.path.abspath(get_test_result_path(task))
+        result_dir = os.path.abspath(get_test_result_path(task))
         scripts_root = get_back_scripts_root(task)
         pypi_root = get_test_store_root(task=task)
-        package = None
 
-        script_file = scripts_root / test_script
-        if not os.path.exists(script_file):
-            return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
+        if sys.platform == 'win32':
+            result_dir = '\\\\?\\' + result_dir
 
-        if task.test.package: # and test_path in task.test.package.py_packages:
-            package = task.test.package
-        elif test_path:
-            package = query_package(test_path, task.organization, task.team, 'Test Suite')
+        if test_script:
+            script_file = scripts_root / test_script
+            if not script_file.exists():
+                return response_message(ENOENT, "file {} does not exist".format(script_file)), 404
 
+        package = task.test.package
         if not package:
+            if not test_script:
+                return response_message(SUCCESS), 204
             with tempfile.TemporaryDirectory(dir=result_dir) as tempDir:
             # tempDir = tempfile.mkdtemp(dir=result_dir)
             # if tempDir:
@@ -95,8 +92,8 @@ class ScriptDownload(Resource):
                         shutil.copy(pack_file, dist)
                     else:
                         shutil.copy(pypi_root / pkg.package_name / pkg.get_package_by_version(version).filename, dist)
-                make_tarfile_from_dir(os.path.join(result_dir, f'{os.path.basename(test_script)}.tar.gz'), dist)
-                return send_from_directory(result_dir[4:], f'{os.path.basename(test_script)}.tar.gz')
+                make_tarfile_from_dir(os.path.join(result_dir, 'all_in_one.tar.gz'), dist)
+                return send_from_directory(result_dir[4:], 'all_in_one.tar.gz')
 
 @api.route('/detail')
 @api.response(404, 'Script not found.')
@@ -115,7 +112,7 @@ class TestSuiteGet(Resource):
 
         test = Test.objects(pk=tid, organization=organization, team=team).first()
         if not test:
-            return response_message(ENOENT, 'Test {} not found'.format(test_suite)), 404
+            return response_message(ENOENT, 'Test not found'), 404
 
         return {
             'test_cases': test.test_cases,

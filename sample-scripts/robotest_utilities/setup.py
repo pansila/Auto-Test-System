@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Robot Test Utilities",
-    version="0.1.4",
+    version="0.1.5",
     author="Robotest Co.,Ltd",
     author_email="author@robotest.com",
     description="A set of utilities to help design tests",

@@ -348,7 +348,7 @@ class PackageInfo(Resource):
             return response_message(ENOENT, 'Package not found'), 404
 
         if package_type == 'Test Suite':
-            ret = install_test_suite(package, user, organization, team, pypi_root, proprietary, version=version)
+            ret = install_test_suite(package, user, organization, team, pypi_root, proprietary, version=version, installed={})
             if not ret:
                 return response_message(EPERM, 'Test package installation failed'), 400
             package.modify(modified=False)

@@ -1,6 +1,7 @@
 import os
 import site
 import subprocess
+import multiprocessing
 import sys
 import shutil
 from contextlib import contextmanager
@@ -82,6 +83,14 @@ def activate_workspace(workspace):
         venv = get_venv()
         with activate_venv(venv):
             yield venv
+
+def setup_multiprocessing_context():
+    if sys.platform == 'win32':
+        executable = os.path.join(venv, 'Scripts', 'python.exe')
+    else:
+        executable = os.path.join(venv, 'bin', 'python')
+    ctx = multiprocessing.get_context('spawn')
+    ctx.set_executable(executable)
 
 def start(host=None, port=None, debug=False):
     with activate_workspace(os.path.dirname(os.path.dirname(os.path.realpath(__file__)))):

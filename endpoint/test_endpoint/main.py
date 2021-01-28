@@ -4,7 +4,6 @@ import functools
 import importlib
 import inspect
 import json
-import multiprocessing
 import os
 import os.path
 import queue
@@ -34,10 +33,20 @@ from watchdog.observers import Observer
 from wsrpc import WebsocketRPC
 
 from .async_remote_library import AsyncRemoteLibrary
-from .venv_run import activate_workspace
+from .venv_run import activate_workspace, setup_multiprocessing_context
 
 # import daemon as Daemon
 # from daemoniker import Daemonizer, SignalHandler1
+
+
+class TestLibraryServer:
+    def __init__(self, process: Process, queue: Queue, url: str):
+        self.process = process
+        self.queue = queue
+        self.url = url
+
+    def __repr__(self):
+        return f'url: {self.url}'
 
 class SecureWebsocketRPC(WebsocketRPC):
     def __init__(
@@ -71,7 +80,7 @@ def temp_environ_path(paths):
     yield
     os.environ['PATH'] = old_path
 
-class test_library_rpc(Process):
+class test_library_rpc_server(Process):
     def __init__(self, backing_file, task_id, config, queue, rpc_daemon=False, debug=False):
         super().__init__()
         self.backing_file = backing_file
@@ -193,20 +202,15 @@ class test_library_rpc(Process):
 def start_remote_server(backing_file, config, task_id=None, rpc_daemon=False, debug=False):
     if not rpc_daemon:
         with activate_workspace('workspace') as venv:
-            if sys.platform == 'win32':
-                executable = os.path.join(venv, 'Scripts', 'python.exe')
-            else:
-                executable = os.path.join(venv, 'bin', 'python')
-            ctx = multiprocessing.get_context('spawn')
-            # ctx.set_executable(executable)
+            #setup_multiprocessing_context()
             queue = Queue()
-            process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon, debug)
+            process = test_library_rpc_server(backing_file, task_id, config, queue, rpc_daemon, debug)
             process.start()
     else:
         queue = Queue()
-        process = test_library_rpc(backing_file, task_id, config, queue, rpc_daemon, debug)
+        process = test_library_rpc_server(backing_file, task_id, config, queue, rpc_daemon, debug)
         process.start()
-    return process, queue
+    return TestLibraryServer(process, queue, backing_file)
 
 def get_websocket_ports(url):
     ret = requests.get(f'{url}/setting/rpc')
@@ -288,7 +292,7 @@ def watchdog_run(config_watchdog, handler, host, port, debug=False):
                 config_watchdog.stop()
                 break
             # config = read_config(host=host, port=port)
-            daemon, _ = start_daemon(config, debug=debug)
+            daemon = start_daemon(config, debug=debug).process
             handler.restart = False
 
         try:
