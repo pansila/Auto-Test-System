@@ -423,7 +423,10 @@ class Package(Document):
         return None
 
     def __hash__(self):
-        return str(self.id)
+        return hash(str(self.id))
+
+    def __repr__(self):
+        return self.package_name
 
 class Documentation(Document):
     schema_version = StringField(max_length=10, default='1')

@@ -22,11 +22,11 @@ import mistune
 from mongoengine import connect
 from flask import current_app
 
-sys.path.append('.')
 from app.main.model.database import Test, User
 from app.main.config import get_config
 from app.main.util.get_path import get_back_scripts_root, get_user_scripts_root
 from app.main.model.database import Package
+from app.main.util.semver import parse_constraint, parse_single_constraint
 
 METADATA = 'METADATA'
 WHEEL_INFO = 'WHEEL'
@@ -35,7 +35,8 @@ WHEEL_INFO_RE = re.compile(
     ((-(?P<build>\d.*?))?-(?P<pyver>.+?)-(?P<abi>.+?)-(?P<plat>.+?)
     \.whl|\.dist-info)$""",
     re.VERBOSE).match
-VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|>|<|<=|!=)\s*)(?P<version>\d.+?)?$').match
+# VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|>|<|<=|!=)\s*)(?P<version>\d.+?)?$').match
+VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<constraint>\s*(\^|~|==|>=?|><|<=?|!=)\s*.*)$').match
 MODULE_IMPORT = re.compile(r'^\s*(import|from)\s+(?P<module>.+?)(#|$|\s+import\s+.+$)').match
 
 def filter_kw(item):
@@ -71,41 +72,17 @@ def get_package_info(package):
                 long_description = '\n'.join((line.strip() for line in StringIO(long_description)))
     return name, description, long_description
 
-def meet_version(versions, compare, version):
+def meet_version(versions, version_range):
     """
     versions must be sorted in ascending order
     """
     assert(len(versions) > 0)
-    if not compare:
-        return version[0]
 
-    ver = parse_version(version)
-    if compare == '==':
-        for v in versions:
-            if parse_version(v) == ver:
-                return v
-    elif compare == '>':
-        for v in versions:
-            if parse_version(v) > ver:
-                return v
-    elif compare == '<':
-        for v in reversed(versions, key=parse_version):
-            if parse_version(v) < ver:
-                return v
-    elif compare == '>=':
-        for v in versions:
-            if parse_version(v) >= ver:
-                return v
-    elif compare == '<=':
-        for v in reversed(versions, key=parse_version):
-            if parse_version(v) <= ver:
-                return v
-    elif compare == '!=':
-        for i, v in enumerate(versions):
-            if v == version:
-                versions.pop(i)
-                break
-        return versions[0] if len(versions) > 0 else None
+    for v in versions:
+        version = parse_single_constraint(v)
+        if not version.intersect(version_range).is_empty():
+            return v
+
     return None
 
 def query_package(package_name, organization, team, type):
@@ -118,42 +95,48 @@ def query_package(package_name, organization, team, type):
                 return None
     return package
 
-def get_package_requires(package, organization, team, type):
+def get_package_requires(package, organization, team, type, cached=None):
     if not package.endswith('.egg') or not zipfile.is_zipfile(package):
         current_app.logger.error(f'{package} is not an .egg file')
         return None
     packages = []
     dist = Distribution.from_filename(package, metadata=EggMetadata(zipimport.zipimporter(package)))
     for r in dist.requires():
-        name, compare, version = VERSION_CHECK(str(r)).group('name', 'compare', 'version')
+        name, constraint = VERSION_CHECK(str(r)).group('name', 'constraint')
+        version_range = parse_constraint(constraint)
+
         package = Package.objects(py_packages=name, organization=organization, team=team, package_type=type).first()
-        ver = meet_version(package.versions, compare, version) if package else None
+        ver = meet_version(package.versions, version_range) if package else None
         if not package or not ver:
             package = Package.objects(py_packages=name, organization=organization, team=None, package_type=type).first()
-            ver = meet_version(package.versions, compare, version) if package else None
+            ver = meet_version(package.versions, version_range) if package else None
             if not package or not ver:
                 package = Package.objects(py_packages=name, organization=None, team=None, package_type=type).first()
-                ver = meet_version(package.versions, compare, version) if package else None
+                ver = meet_version(package.versions, version_range) if package else None
                 if not package or not ver:
-                    current_app.logger.error(f'package {name} not found or version requirement not meet: {compare}{version}')
+                    current_app.logger.error(f'package {name} not found or version requirement not meet: {r}')
                     return None
         packages.append((package, ver))
+        if package in cached:
+            cached[package] = cached[package].intersect(version_range)
+        else:
+            cached[package] = version_range
     return packages
 
 # TODO: rollback if failed in one step
 def install_test_suite(package, user, organization, team, pypi_root, proprietary, version=None, installed=None, recursive=False):
     first_package = len(installed) == 0
+
     pkg_file = package.get_package_by_version(version)
     if not pkg_file:
         current_app.logger.error(f'package file not found for {package.name} with version {version}')
         return False
     pkg_file_path = pypi_root / package.package_name / pkg_file.filename
 
-    if pkg_file_path in installed:
+    if package in installed:
         return True
-    installed[pkg_file_path] = True
 
-    requires = get_package_requires(str(pkg_file_path), organization, team, type='Test Suite')
+    requires = get_package_requires(str(pkg_file_path), organization, team, 'Test Suite', installed)
     if requires:
         for pkg, ver in requires:
             ret = install_test_suite(pkg, user, organization, team, pypi_root, proprietary, version=ver, installed=installed)
@@ -161,6 +144,7 @@ def install_test_suite(package, user, organization, team, pypi_root, proprietary
                 current_app.logger.error(f'Failed to install dependent package {package.name}')
                 return False
 
+    # always install the first package if not recursively install
     if not recursive and not first_package:
         pkg_file.modify(inc__download_times=1)
         return True
@@ -318,14 +302,22 @@ def find_dependencies(script, organization, team, package_type):
                 break
     return ret
 
-def find_pkg_dependencies(pypi_root, package, version, organization, team, package_type):
+def find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached):
     pkg_file = pypi_root / package.package_name / package.get_package_by_version(version).filename
-    requires = get_package_requires(str(pkg_file), organization, team, type='Test Suite')
-    deps = [(package, version)]
+    requires = get_package_requires(str(pkg_file), organization, team, package_type, cached)
     if requires:
         for pkg, version in requires:
-            deps.extend(find_pkg_dependencies(pypi_root, pkg, version, organization, team, package_type))
-    return deps
+            find_pkg_dependencies_nested(pypi_root, pkg, version, organization, team, package_type, cached)
+
+def find_pkg_dependencies(pypi_root, package, version, organization, team, package_type):
+    cached = {package: parse_single_constraint(version)}
+    packages = []
+    find_pkg_dependencies_nested(pypi_root, package, version, organization, team, package_type, cached)
+    for pkg, version in cached.items():
+        for ver in pkg.versions:
+            if not parse_single_constraint(ver).intersect(version).is_empty():
+                packages.append((pkg, ver))
+    return packages
 
 def get_internal_packages(package_path):
     with zipfile.ZipFile(package_path) as zf:
