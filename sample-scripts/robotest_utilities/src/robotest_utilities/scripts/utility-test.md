@@ -13,19 +13,20 @@
 
 | Keywords | Value | Value | Value | Value | Value |
 |---|---|---|---|---|---|
-| Setup DUT |
-| | [Arguments] | ${backing file} | ${testlib} | ${dut} |
-| | Setup Remote | ${backing file} | ${testlib} |
-| | Run Keyword | ${testlib}.Connect Dut | ${dut} |
-| Teardown DUT |
-| | [Arguments] | ${testlib} | ${dut} |
-| | Run Keyword | ${testlib}.Disconnect Dut | ${dut} |
-| | Teardown Remote |
+| Setup Test |
+|  | [Arguments] | ${backing file} | ${testlib} | ${dut} |
+|  | Setup Remote |
+|  | Load And Import Library | ${backing file} | WITH NAME | ${testlib} |
+|  | Run Keyword | ${testlib}.connect | ${dut} |
+| Teardown Test |
+|  | [Arguments] | ${backing file} | ${testlib} | ${dut} |
+|  | Run Keyword | ${testlib}.disconnect | ${dut} |
+|  | Teardown Remote | ${backing file} |
 
 ### Every test case needs to include `Setup` and `Teardown` sections which ensure to import the test and start and stop it properly
 | Test Cases | Action | Argument | Argument | Argument | Argument | Argument |
 | ---------- | ------ | -------- | -------- | -------- | -------- | -------- |
 | hello world |  |  |  |  |  |  |
-|  | [Setup] | Setup DUT | ${backing file} | testlib | ${dut1} |  |
-|  | [Teardown] | Teardown DUT |  |  |  |  |
-|  |  | testlib.reboot |  |  |  |  |
+|  | [Setup] | Setup Test | ${backing file} | testlib | ${dut1} |
+|  | [Teardown] | Teardown Test | ${backing file} | testlib | ${dut1} |
+|  | LOG | hello world |

@@ -10,9 +10,12 @@ ${remote_daemon_address}    http://${address_daemon}:${port_daemon}/${endpoin
 
 *** Keywords ***
 Setup Remote
-    [Arguments]        ${backing file}                   ${testlib}
-    Run Keyword        EndpointDaemon1.start test        ${TEST NAME}                                ${backing file}     ${task_id}
+    [Arguments]
+    Run Keyword        EndpointDaemon1.start test        ${TEST NAME}                                ${task_id}
+Load And Import Library
+    [Arguments]        ${backing file}                   ${_}                                        ${testlib}
+    Run Keyword        EndpointDaemon1.load library      ${backing file}
     Import Library     Remote                            ${remote_daemon_address}/${backing file}    WITH NAME           ${testlib}
 Teardown Remote
-    [Arguments]
-    Run Keyword        EndpointDaemon1.stop test         ${TEST NAME}                                ${TEST STATUS}
+    [Arguments]        ${backing file}
+    Run Keyword        EndpointDaemon1.stop test         ${backing file}                             ${TEST STATUS}

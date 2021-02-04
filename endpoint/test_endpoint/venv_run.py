@@ -40,8 +40,8 @@ def activate_venv(venv):
     if sys.platform == 'win32':
         os.environ['PATH'] = os.path.join(venv, 'Scripts') + os.pathsep + old_os_path
         site_packages = os.path.join(venv, 'Lib', 'site-packages')
-        #if os.path.exists(os.path.join(site_packages, 'pywin32_system32')):
-        #    os.environ['PATH'] = os.path.join(site_packages, 'pywin32_system32') + os.pathsep + os.environ['PATH']
+        if os.path.exists(os.path.join(site_packages, 'pywin32_system32')):
+            os.environ['PATH'] = os.path.join(site_packages, 'pywin32_system32') + os.pathsep + os.environ['PATH']
         executable = os.path.join(venv, 'Scripts', 'python.exe')
     else:
         os.environ['PATH'] = os.path.dirname(os.path.join(venv, 'bin')) + os.pathsep + old_os_path

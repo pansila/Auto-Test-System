@@ -35,7 +35,7 @@ WHEEL_INFO_RE = re.compile(
     ((-(?P<build>\d.*?))?-(?P<pyver>.+?)-(?P<abi>.+?)-(?P<plat>.+?)
     \.whl|\.dist-info)$""",
     re.VERBOSE).match
-VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|<=|!=)\s*)(?P<version>\d.+?)?$').match
+VERSION_CHECK = re.compile(r'(?P<name>.*?)(?P<compare>\s*(==|>=|>|<|<=|!=)\s*)(?P<version>\d.+?)?$').match
 MODULE_IMPORT = re.compile(r'^\s*(import|from)\s+(?P<module>.+?)(#|$|\s+import\s+.+$)').match
 
 def filter_kw(item):
@@ -81,8 +81,9 @@ def meet_version(versions, compare, version):
 
     ver = parse_version(version)
     if compare == '==':
-        if version in versions:
-            return version
+        for v in versions:
+            if parse_version(v) == ver:
+                return v
     elif compare == '>':
         for v in versions:
             if parse_version(v) > ver:
@@ -257,7 +258,7 @@ def update_test_from_md(md_file, test):
                         if c[0].startswith('${'):
                             list_var = None
                             dict_var = None
-                            variables[filter_kw(c[0])] = c[1]
+                            variables[filter_kw(c[0])] = c[1] if len(c) > 1 else ''
                         elif c[0].startswith('@'):
                             dict_var = None
                             list_var = filter_kw(c[0])

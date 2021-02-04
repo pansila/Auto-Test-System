@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="Demo Test",
-    version="0.0.1",
+    version="0.1.0",
     author="Robotest Co.,Ltd",
     author_email="author@robotest.com",
     description="A test package demonstrates how to run a test",
@@ -24,6 +24,6 @@ setuptools.setup(
         '': ['scripts/*.md', 'scripts/*.robot'],   # robotframework test scripts should under scripts
     },
     install_requires=[
-        'robotest_utilities>=0.1',
+        'robotest_utilities>=0.3',
     ],
 )

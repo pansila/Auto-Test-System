@@ -681,18 +681,18 @@ class Installer:
         if not os.path.exists(COLLIE_BIN):
             os.mkdir(COLLIE_BIN, 0o755)
 
-        with open(os.path.join(COLLIE_BIN, "bootstrap.py"), "w") as f:
-            f.write(
-                u(
-                    BOOTSTRAP.format(
-                        collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
-                            os.environ["USERPROFILE"], "%USERPROFILE%"
+        if WINDOWS:
+            with open(os.path.join(COLLIE_BIN, "bootstrap.py"), "w") as f:
+                f.write(
+                    u(
+                        BOOTSTRAP.format(
+                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
+                                os.environ["USERPROFILE"], "%USERPROFILE%"
+                            )
                         )
                     )
                 )
-            )
 
-        if WINDOWS:
             with open(os.path.join(COLLIE_BIN, "collie.bat"), "w") as f:
                 f.write(
                     u(
@@ -704,6 +704,17 @@ class Installer:
                     )
                 )
         else:
+            with open(os.path.join(COLLIE_BIN, "bootstrap.py"), "w") as f:
+                f.write(
+                    u(
+                        BOOTSTRAP.format(
+                            collie_bin=os.path.join(COLLIE_BIN, "collie.py").replace(
+                                os.getenv("HOME", ""), "$HOME"
+                            )
+                        )
+                    )
+                )
+
             with open(os.path.join(COLLIE_BIN, "collie"), "w") as f:
                 f.write(
                     u(

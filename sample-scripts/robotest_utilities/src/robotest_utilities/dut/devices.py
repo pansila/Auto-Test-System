@@ -17,6 +17,7 @@ from ruamel import yaml
 from ..server_api import server_api
 from ..download_fw import download_fw_intf
 
+__TEST_LIB__ = 'serial_dut'
 
 class serial_dut(server_api):
     TIMEOUT_ERR = -1
@@ -24,14 +25,11 @@ class serial_dut(server_api):
 
     def __init__(self, daemon_config, task_id):
         super().__init__(daemon_config, task_id)
-        with open('config.yml', 'r', encoding='utf-8') as f:
-            self.config = yaml.load(f, Loader=yaml.RoundTripLoader)
-
         self.configDut = {}
         for dut in self.config['DUT']:
             self.configDut[dut['name']] = dut
 
-    def connect_dut(self, deviceName):
+    def connect(self, deviceName):
         if deviceName not in self.configDut:
             raise AssertionError('Device {} is not found, please check config file for it'.format(deviceName))
 
@@ -39,7 +37,7 @@ class serial_dut(server_api):
         dut['serialport'] = aioserial.AioSerial(port=dut['com'], baudrate=dut['baudrate'])
         print('Serial port {} opened successfully'.format(dut['com']))
 
-    def disconnect_dut(self, deviceName):
+    def disconnect(self, deviceName):
         dut = self.configDut[deviceName]
         if dut['serialport'] is not None:
             dut['serialport'].close()
@@ -94,7 +92,7 @@ class serial_dut(server_api):
 
         try:
             return await asyncio.wait_for(_read_loop(deviceName, term), timeout)
-        except asyncio.TimeoutError:
+        except (asyncio.TimeoutError, asyncio.CancelledError):
             return (ret.decode(encoding=encoding) if ret else None, self.TIMEOUT_ERR, None)
 
     def _flush_serial_output(self, deviceName):
@@ -121,33 +119,33 @@ class wifi_dut_base(serial_dut, download_fw_intf):
             self.configAP[ap['name']] = ap
 
     @abstractmethod
-    def dut_open_wifi(self, deviceName):
+    def open_wifi(self, deviceName):
         pass
 
     @abstractmethod
-    def dut_close_wifi(self, deviceName):
+    def close_wifi(self, deviceName):
         pass
 
     @abstractmethod
-    def dut_scan_networks(self, deviceName):
+    def scan_networks(self, deviceName):
         pass
 
     @abstractmethod
-    def dut_connect_to_network(self, deviceName, ssid, password):
+    def connect_to_network(self, deviceName, ssid, password):
         pass
 
     @abstractmethod
-    def dut_disconnect_network(self, deviceName):
+    def disconnect_network(self, deviceName):
         pass
 
     @abstractmethod
-    def dut_set_channel(self, deviceName, channel, bandwidth, offset):
+    def set_channel(self, deviceName, channel, bandwidth, offset):
         pass
 
     @abstractmethod
-    def dut_create_softap(self, deviceName, ssid, passwd, channel, hidden):
+    def create_softap(self, deviceName, ssid, passwd, channel, hidden):
         pass
 
     @abstractmethod
-    def dut_reboot(self, deviceName):
+    def reboot(self, deviceName):
         pass

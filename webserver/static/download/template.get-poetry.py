@@ -325,7 +325,7 @@ class Installer:
         r"(?:\+[^\s]+)?"
     )
 
-    BASE_URL = REPOSITORY_URL + "/static/download/"
+    BASE_URL = REPOSITORY_URL + "/setting/download/"
     FALLBACK_BASE_URL = "https://github.com/python-poetry/poetry/releases/download/"
 
     def __init__(

@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import functools
 import importlib
 import inspect
 import json
@@ -76,7 +75,8 @@ def install_eggs(egg_path):
 @contextmanager
 def temp_environ_path(paths):
     old_path = os.environ['PATH']
-    os.environ['PATH'] += os.pathsep + os.pathsep.join(paths)
+    if paths:
+        os.environ['PATH'] += os.pathsep + os.pathsep.join(paths)
     yield
     os.environ['PATH'] = old_path
 
@@ -99,9 +99,15 @@ class test_library_rpc_server(Process):
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         if not self.rpc_daemon:
-            dirs = os.listdir(os.path.join(self.config['resource_dir'], 'package_data'))
-            dirs = list(map(lambda p: os.path.abspath(os.path.join(self.config['resource_dir'], 'package_data', p)), dirs))
-            dirs.insert(0, os.path.abspath(os.path.join(self.config['resource_dir'], 'test_data')))
+            pkg_data_dir = os.path.join(self.config['resource_dir'], 'package_data')
+            test_data_dir = os.path.join(self.config['resource_dir'], 'test_data')
+            if os.path.exists(pkg_data_dir):
+                dirs = os.listdir(pkg_data_dir)
+                dirs = list(map(lambda p: os.path.abspath(os.path.join(self.config['resource_dir'], 'package_data', p)), dirs))
+            else:
+                dirs = []
+            if os.path.exists(test_data_dir):
+                dirs.insert(0, os.path.abspath(test_data_dir))
 
             with install_eggs(self.config['download_dir']), temp_environ_path(dirs):
             # with activate_workspace('.'), install_eggs(self.config['download_dir']), temp_environ_path(dirs):
