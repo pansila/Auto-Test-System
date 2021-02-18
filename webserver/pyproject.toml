@@ -33,7 +33,7 @@ Sanic-Cors = "^0.10.0"
 simple-bcrypt = "^0.1.0"
 umongo = {extras = ["motor"], version = "^2.3.0"}
 websocket-rpc = "^0.0.6"
-wheel = "^0.36.0"
+wheel = "^0.36.2"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.5.1"
@@ -44,7 +44,7 @@ server = "python app/__init__.py"
 patch = "python task_runner/patch/apply.py"
 
 [tool.poetry.scripts]
-app = "ember:run"
+app = "app:run"
 test = "ember:test"
 
 [build-system]
