@@ -15,7 +15,7 @@ from umongo.fields import (BooleanField, DateTimeField, DictField, EmailField,
                            FloatField, IntField, ListField, ReferenceField,
                            StringField, URLField, UUIDField)
 
-from app import db
+from app import app
 from app import bcrypt
 from app.main.config import key
 
@@ -36,7 +36,7 @@ EVENT_CODE_GET_ENDPOINT_CONFIG = 208
 
 LOCK_TIMEOUT = 20
 
-instance = Instance(db)
+instance = Instance(app.config.db)
 
 class IPAddressField(StringField):
     """A field that validates input as an IP address, may including port.

@@ -12,11 +12,11 @@ BACK_SCRIPT_ROOT = 'back_scripts'
 TEST_PACKAGE_ROOT = 'pypi'
 USER_DOCUMENT_ROOT = 'document'
 USER_PICTURE_ROOT = 'pictures'
-USERS_ROOT = Path(app.config['USERS_ROOT'])
-UPLOAD_ROOT = Path(app.config['UPLOAD_ROOT'])
-STORE_ROOT = Path(app.config['STORE_ROOT'])
-DOCUMENT_ROOT = Path(app.config['DOCUMENT_ROOT'])
-PICTURE_ROOT = Path(app.config['PICTURE_ROOT'])
+USERS_ROOT = Path(app.config.USERS_ROOT)
+UPLOAD_ROOT = Path(app.config.UPLOAD_ROOT)
+STORE_ROOT = Path(app.config.STORE_ROOT)
+DOCUMENT_ROOT = Path(app.config.DOCUMENT_ROOT)
+PICTURE_ROOT = Path(app.config.PICTURE_ROOT)
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USERS_ROOT.mkdir(parents=True, exist_ok=True)

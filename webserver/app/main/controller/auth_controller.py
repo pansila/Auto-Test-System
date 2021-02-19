@@ -19,7 +19,7 @@ bp = Blueprint('auth', url_prefix='/auth')
 async def handler(request):
     post_data = request.json
     ret = await Auth.login_user(data=post_data)
-    if ret['code'] != SUCCESS[0]:
+    if ret['code'] != SUCCESS.code:
         return json(ret)
 
     user = await User.find_one({'email': post_data.get('email')})

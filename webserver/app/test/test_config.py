@@ -1,39 +1,37 @@
 import os
 import unittest
 
-from flask_testing import TestCase
-
-from manage import app
+from app import app
 from app.main.config import basedir
 
 
-class TestDevelopmentConfig(TestCase):
+class TestDevelopmentConfig(unittest.TestCase):
     def create_app(self):
         app.config.from_object('app.main.config.DevelopmentConfig')
         return app
 
     def test_app_is_development(self):
-        self.assertFalse(app.config['SECRET_KEY'] is 'my_precious')
+        self.assertFalse(app.config['SECRET_KEY'] == 'my_precious')
         self.assertTrue(app.config['DEBUG'] is True)
         self.assertTrue(
             app.config['SQLALCHEMY_DATABASE_URI'] == 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_main.db')
         )
 
 
-class TestTestingConfig(TestCase):
+class TestTestingConfig(unittest.TestCase):
     def create_app(self):
         app.config.from_object('app.main.config.TestingConfig')
         return app
 
     def test_app_is_testing(self):
-        self.assertFalse(app.config['SECRET_KEY'] is 'my_precious')
+        self.assertFalse(app.config['SECRET_KEY'] == 'my_precious')
         self.assertTrue(app.config['DEBUG'])
         self.assertTrue(
             app.config['SQLALCHEMY_DATABASE_URI'] == 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_test.db')
         )
 
 
-class TestProductionConfig(TestCase):
+class TestProductionConfig(unittest.TestCase):
     def create_app(self):
         app.config.from_object('app.main.config.ProductionConfig')
         return app

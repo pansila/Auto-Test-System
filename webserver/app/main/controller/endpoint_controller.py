@@ -15,7 +15,8 @@ from ..model.database import (EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, QUE
                               QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX,
                               QUEUE_PRIORITY_MIN, Endpoint, Task, TaskQueue,
                               Test)
-from ..util import js2python_bool, push_event
+from ..util import js2python_bool
+from ..util.eventqueue import push_event
 from ..util.decorator import (organization_team_required_by_args,
                               organization_team_required_by_json,
                               token_required)

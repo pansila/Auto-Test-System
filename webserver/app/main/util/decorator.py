@@ -18,7 +18,7 @@ def token_required(f):
             request = args[1]
 
         ret = await Auth.get_logged_in_user(request.headers.get('X-Token'))
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
 
         request.ctx.user = await User.find_one({'_id': ObjectId(ret['data']['user_id'])})
@@ -32,7 +32,7 @@ async def token_required_if_proprietary(request, args, kwargs):
 
     if proprietary:
         ret = await Auth.get_logged_in_user(request.headers.get('X-Token'))
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
         user = await User.find_one({'_id': ObjectId(ret['data']['user_id'])})
         request.ctx.user = user
@@ -68,7 +68,7 @@ def token_required_if_proprietary_by_args(f):
 
         request.ctx.data = request.args
         ret = await token_required_if_proprietary(request, args, kwargs)
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
 
         return await f(*args, **kwargs)
@@ -84,7 +84,7 @@ def token_required_if_proprietary_by_json(f):
 
         request.ctx.data = request.json
         ret = await token_required_if_proprietary(request, args, kwargs)
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
 
         return await f(*args, **kwargs)
@@ -99,7 +99,7 @@ def admin_token_required(f):
             request = args[1]
 
         ret = await Auth.get_logged_in_user(request.headers.get('X-Token'))
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
 
         user = await User.find_one({'_id': ObjectId(ret['data']['user_id'])})
@@ -149,7 +149,7 @@ def organization_team_required_by_args(f):
 
         request.ctx.data = request.args
         ret = await organization_team_required(request, *args, **kwargs)
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
         return await f(*args, **kwargs)
     return decorated
@@ -163,7 +163,7 @@ def organization_team_required_by_json(f):
 
         request.ctx.data = request.json
         ret = await organization_team_required(request, *args, **kwargs)
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
         return await f(*args, **kwargs)
     return decorated
@@ -177,7 +177,7 @@ def organization_team_required_by_form(f):
 
         request.ctx.data = request.form
         ret = await organization_team_required(request, *args, **kwargs)
-        if ret['code'] != SUCCESS[0]:
+        if ret['code'] != SUCCESS.code:
             return json(ret)
         return await f(*args, **kwargs)
     return decorated

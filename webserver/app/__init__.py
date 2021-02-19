@@ -29,23 +29,23 @@ else:
     sio = socketio.AsyncServer(async_mode='sanic')
 sio.attach(app)
 
-db = None
-
-limits = ['200 per hour', '2000 per day']
-if development:
-    limits = ['20000 per hour', '200000 per day']
+limits = ['20000 per hour', '200000 per day'] if development else ['200 per hour', '2000 per day']
 limiter = Limiter(app, global_limits=limits, key_func=get_remote_address)
+event_task = None
+heartbeat_task = None
+rpc_server = None
 
 @app.listener('before_server_start')
 async def setup_connection(app, loop):
-    global db
+    global event_task, heartbeat_task, rpc_server
+
     client = motor.motor_asyncio.AsyncIOMotorClient(f"{app.config['MONGODB_URL']}:{app.config['MONGODB_PORT']}")
-    db = client[app.config['MONGODB_DATABASE']]
+    app.config.db = client[app.config['MONGODB_DATABASE']]
 
     from task_runner.runner import initialize_runner, start_event_thread, start_heartbeat_thread, start_xmlrpc_server
-    asyncio.create_task(start_event_thread(app))
-    asyncio.create_task(start_heartbeat_thread(app))
-    start_xmlrpc_server(app)
+    event_task = asyncio.create_task(start_event_thread(app))
+    heartbeat_task = asyncio.create_task(start_heartbeat_thread(app))
+    rpc_server = start_xmlrpc_server(app)
     initialize_runner(app)
 
     from app.main.controller.auth_controller import bp as auth_bp
@@ -74,6 +74,18 @@ async def setup_connection(app, loop):
     sio.on('join', handle_join_room)
     sio.on('enter', handle_enter_room)
     sio.on('leave', handle_leave_room)
+
+@app.listener('after_server_start')
+async def wait_tasks_ready(app, loop):
+    pass
+
+@app.listener('before_server_stop')
+async def cleanup(app, loop):
+    global event_task, heartbeat_task, rpc_server
+    event_task.cancel()
+    heartbeat_task.cancel()
+    rpc_server.server.stop()
+
 
 @sio.event
 def connect(sid, environ):

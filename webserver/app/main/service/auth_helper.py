@@ -1,5 +1,4 @@
 import json
-from app import db
 from app.main.model.database import User
 from sanic.log import logger
 from bson import ObjectId, json_util
@@ -62,6 +61,6 @@ class Auth:
     @staticmethod
     async def is_user_authenticated(token):
         ret = await Auth.get_logged_in_user(token)
-        if ret['code'] == SUCCESS[0]:
+        if ret['code'] == SUCCESS.code:
             return True
         return False

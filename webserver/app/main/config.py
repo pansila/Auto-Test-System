@@ -17,13 +17,9 @@ class Config:
 
 
 class DevelopmentConfig(Config):
-    # uncomment the line below to use postgres
-    # SQLALCHEMY_DATABASE_URI = postgres_local_base
     DEBUG = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_main.db')
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    UPLOAD_ROOT = 'static/upload'
     USERS_ROOT = 'static/users'
-    UPLOAD_ROOT = 'upload'
     STORE_ROOT = 'static/pypi'
     DOCUMENT_ROOT = 'static/document'
     PICTURE_ROOT = 'static/pictures'
@@ -45,17 +41,30 @@ class DevelopmentConfig(Config):
 class TestingConfig(Config):
     DEBUG = True
     TESTING = True
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'flask_boilerplate_test.db')
-    PRESERVE_CONTEXT_ON_EXCEPTION = False
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
+    UPLOAD_ROOT = 'test/upload'
+    USERS_ROOT = 'test/users'
+    STORE_ROOT = 'test/pypi'
+    DOCUMENT_ROOT = 'test/document'
+    PICTURE_ROOT = 'test/pictures'
+    MONGODB_URL = '127.0.0.1'
+    MONGODB_PORT = 27017
+    MONGODB_DATABASE = 'test_auto_test'
+    SMTP_SERVER = 'smtp.abc.com'
+    SMTP_SERVER_PORT = 25
+    SMTP_USER = 'abc@123.com'
+    SMTP_PASSWORD = '12345678'
+    FROM_ADDR = 'Auto Test Admin <abc@123.com>'
+    SMTP_ALWAYS_CC = 'ccc@123.com'
+    API_SECURITY = [{"ApiKeyAuth": []}]
+    API_SECURITY_DEFINITIONS = {
+        "ApiKeyAuth": {"type": "apiKey", "in": "header", "name": "X-TOKEN"}
+    }
 
 
 class ProductionConfig(Config):
     DEBUG = False
-    # uncomment the line below to use postgres
-    # SQLALCHEMY_DATABASE_URI = postgres_local_base
-    USERS_ROOT = 'static/users'
     UPLOAD_ROOT = 'upload'
+    USERS_ROOT = 'static/users'
     STORE_ROOT = 'static/pypi'
     DOCUMENT_ROOT = 'static/document'
     PICTURE_ROOT = 'static/pictures'

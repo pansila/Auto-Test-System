@@ -25,7 +25,6 @@ _task_id = TaskResourceDto.task_id
 _task_resource_file_list = TaskResourceDto.task_resource_file_list
 
 TARBALL_TEMP = Path('temp')
-UPLOAD_DIR = Path(get_config().UPLOAD_ROOT)
 
 
 bp = Blueprint('taskresource', url_prefix='/taskresource')
@@ -99,8 +98,8 @@ class TaskResourceView(HTTPMethodView):
         temp_id = request.form.get('resource_id', None)
         if not temp_id:
             temp_id = str(ObjectId())
-            await aiofiles.os.mkdir(UPLOAD_DIR / temp_id)
-        upload_root = UPLOAD_DIR / temp_id
+            await aiofiles.os.mkdir(request.app.config.UPLOAD_ROOT / temp_id)
+        upload_root = request.app.config.UPLOAD_ROOT / temp_id
 
         for name, file in request.files.items():
             if not is_path_secure(file.name):

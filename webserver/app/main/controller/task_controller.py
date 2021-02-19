@@ -14,7 +14,8 @@ from marshmallow.exceptions import ValidationError
 
 from ..util.decorator import token_required, organization_team_required_by_args, organization_team_required_by_json, task_required
 from ..util.get_path import get_test_result_path
-from ..util import push_event, js2python_bool, async_exists
+from ..util import js2python_bool, async_exists
+from ..util.eventqueue import push_event
 from ..util.tarball import path_to_dict
 from ..model.database import Task, Test, Endpoint, TaskQueue, EVENT_CODE_CANCEL_TASK, EVENT_CODE_START_TASK, QUEUE_PRIORITY_DEFAULT, QUEUE_PRIORITY_MAX, QUEUE_PRIORITY_MIN
 from ..util.dto import TaskDto, json_response, organization_team

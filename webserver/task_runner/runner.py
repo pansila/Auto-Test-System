@@ -49,6 +49,7 @@ TASK_PER_ENDPOINT = {}     # {taskqueue id: idle counter (int)}}
 ROOM_MESSAGES = {}  # {"organziation:team": old_message, new_message}
 RPC_PROXIES = {}    # {"endpoint_id": (websocket, rpc)}
 TASKS_CACHED = {}
+RUNNER_READY = False
 
 bp = Blueprint('rpc_proxy', url_prefix='/rpc_proxy')
 
@@ -733,9 +734,7 @@ def start_xmlrpc_server(app):
     thread = XMLRPCServer(RPC_PROXIES, host='0.0.0.0', port=8270)
     thread.daemon = True
     thread.start()
+    return thread
 
 def initialize_runner(app):
     notification_chain_init(app)
-
-if __name__ == '__main__':
-    pass

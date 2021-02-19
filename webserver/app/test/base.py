@@ -1,11 +1,8 @@
-
-from flask_testing import TestCase
-
-from app.main import db
-from manage import app
+import unittest
+from app import app
 
 
-class BaseTestCase(TestCase):
+class BaseTestCase(unittest.TestCase):
     """ Base Tests """
 
     def create_app(self):
@@ -13,9 +10,19 @@ class BaseTestCase(TestCase):
         return app
 
     def setUp(self):
-        db.create_all()
-        db.session.commit()
+        print(111)
+        # app.config.db.create_all()
+        # app.config.db.session.commit()
 
     def tearDown(self):
-        db.session.remove()
-        db.drop_all()
+        print(222)
+        # app.config.db.session.remove()
+        # app.config.db.drop_all()
+
+    @classmethod
+    def tearDownClass(cls):
+        print(444)
+
+    @classmethod
+    def setUpClass(cls):
+        print(333)
