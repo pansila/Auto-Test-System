@@ -1055,7 +1055,7 @@ def main():
     args = parser.parse_args()
 
     base_url = Installer.BASE_URL
-    urlopen(Installer.REPOSITORY_URL)
+    #urlopen(Installer.REPOSITORY_URL)
 
     installer = Installer(
         version=args.version or os.getenv("COLLIE_VERSION"),

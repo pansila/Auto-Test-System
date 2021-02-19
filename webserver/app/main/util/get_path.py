@@ -35,7 +35,7 @@ async def get_test_results_root(task=None, team=None, organization=None):
             return None
         organization = await task.organization.fetch()
         team = None
-        if team:
+        if task.team:
             team = await task.team.fetch()
 
     result_dir = USERS_ROOT / organization.path
@@ -51,7 +51,7 @@ async def get_back_scripts_root(task=None, team=None, organization=None):
             return None
         organization = await task.organization.fetch()
         team = None
-        if team:
+        if task.team:
             team = await task.team.fetch()
 
     result_dir = USERS_ROOT / organization.path
@@ -67,7 +67,7 @@ async def get_user_scripts_root(task=None, team=None, organization=None):
             return None
         organization = await task.organization.fetch()
         team = None
-        if team:
+        if task.team:
             team = await task.team.fetch()
 
     result_dir = USERS_ROOT / organization.path
@@ -83,7 +83,7 @@ async def get_test_store_root(task=None, proprietary=False, team=None, organizat
     if task:
         organization = await task.organization.fetch()
         team = None
-        if team:
+        if task.team:
             team = await task.team.fetch()
         test = await task.test.fetch()
         package = await test.package.fetch()

@@ -113,9 +113,10 @@ class EndpointView(HTTPMethodView):
 
         if await TaskQueue.count_documents({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None}) == 0:
             await endpoint.delete()
+            logger.critical('Deleting the endpoint without any attached task queues')
             return json(response_message(SUCCESS))
-        taskqueues = await TaskQueue.find({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None})
-        async for taskqueue in taskqueues:
+        taskqueues = await TaskQueue.find({'endpoint': endpoint.pk, 'organization': organization.pk, 'team': team.pk if team else None}).to_list(len(QUEUE_PRIORITY))
+        for taskqueue in taskqueues:
             taskqueue.to_delete = True
             await taskqueue.commit()
 
@@ -390,7 +391,7 @@ async def handler(request):
 # @doc.produces(_endpoint_config) #TODO
 @token_required
 @organization_team_required_by_args
-def handler(request):
+async def handler(request):
     organization = request.ctx.organization
     team = request.ctx.team
 

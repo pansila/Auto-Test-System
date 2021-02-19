@@ -110,7 +110,7 @@ class SelfUpdate:
         self.uuid = config['tool.collie.settings']['uuid']
         server_host = self.server_host.strip('"')
         server_port = self.server_port.strip('"')
-        self.SERVER_URL = f'http://{server_host}:{server_port}'
+        self.SERVER_URL = f'http://{server_host}:{server_port}/api_v1'
         self.METADATA_URL = self.SERVER_URL + "/setting/get-endpoint/json"
         self.BASE_URL = self.SERVER_URL + "/setting/download"
         self._version = None if isinstance(version, bool) else version

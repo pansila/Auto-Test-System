@@ -248,14 +248,12 @@ async def handler(request):
         }
         ret.append(r)
         check.append(organization)
-        try:
-            if not organization.team:
-                continue
-        except AttributeError:
+        if not organization.teams:
             continue
         if len(organization.teams) > 0:
             r['children'] = []
         for team in organization.teams:
+            team = await team.fetch()
             owner = await team.owner.fetch()
             r['children'].append({
                 'label': team.name,
@@ -267,6 +265,7 @@ async def handler(request):
     for organization in user.organizations:
         if organization in check:
             continue
+        organization = await organization.fetch()
         owner = await organization.owner.fetch()
         r = {
             'label': organization.name,
@@ -276,11 +275,12 @@ async def handler(request):
             'value': str(organization.pk)
         }
         ret.append(r)
-        if not 'teams' in organization:
+        if not organization.teams:
             continue
         if len(organization.teams) > 0:
             r['children'] = []
         for team in organization.teams:
+            team = await team.fetch()
             owner = await team.owner.fetch()
             r['children'].append({
                 'label': team.name,

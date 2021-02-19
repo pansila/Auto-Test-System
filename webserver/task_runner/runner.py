@@ -318,12 +318,15 @@ async def process_task_per_endpoint(app, endpoint, organization=None, team=None)
 
     endpoint_id = str(endpoint.pk)
     endpoint_uid = endpoint.uid
-    org_name = team.organization.name + '-' + team.name if team else organization.name
+    if team and not organization:
+        organization = await team.organization.fetch()
+    org_name = (organization.name + '-' + team.name) if team else organization.name
 
     while True:
         await taskqueue_first.reload()
         if taskqueue_first.to_delete:
-            await taskqueues.delete()
+            for taskqueue in taskqueues:
+                await taskqueue.delete()
             await endpoint.delete()
             logger.info('Abort the task loop: {} @ {}'.format(org_name, endpoint_uid))
             break
@@ -387,7 +390,7 @@ async def process_task_per_endpoint(app, endpoint, organization=None, team=None)
 
             if hasattr(task, 'variables') and task.variables:
                 variable_file = result_dir / 'variablefile.py'
-                convert_json_to_robot_variable(task.variables, task.test.variables, variable_file)
+                convert_json_to_robot_variable(task.variables, test.variables, variable_file)
                 args.extend(['--variablefile', str(variable_file)])
 
             addr, port = '127.0.0.1', 8270
@@ -505,6 +508,7 @@ async def process_task_per_endpoint(app, endpoint, organization=None, team=None)
                 logger.info('Run the recently scheduled task')
                 continue
             # del TASK_PER_ENDPOINT[endpoint_id]
+            logger.info('task processing finished, exiting the process loop')
             break
 
 async def check_endpoint(app, endpoint_uid, organization, team):
@@ -602,7 +606,7 @@ async def rpc_proxy(request, ws):
         if not team:
             await ws.send('Organization or team not found')
             return
-        assert organization == team.organization
+        organization = await team.organization.fetch()
     if not endpoint:
         try:
             endpoint = Endpoint(uid=uid, organization=organization, status='Unauthorized')

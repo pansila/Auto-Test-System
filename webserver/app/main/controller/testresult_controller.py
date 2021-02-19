@@ -87,20 +87,20 @@ class TestResultView(HTTPMethodView):
                 return json(response_message(EINVAL, 'Endpoint not found'))
             query['endpoint_run'] = endpoint.pk
 
-        try:
-            dirs = await async_listdir(await get_test_results_root(team=team, organization=organization))
-        except FileNotFoundError:
-            return json(response_message(ENOENT, 'test result files not found', items=[], total=0))
-        ret = []
-        for d in dirs:
-            try:
-                ObjectId(d)
-            except ValidationError as e:
-                logger.exception(e)
-            else:
-                ret.append(d)
-
-        query['id'] = {'$in': ret}
+        # try:
+        #     dirs = await async_listdir(await get_test_results_root(team=team, organization=organization))
+        # except FileNotFoundError:
+        #     return json(response_message(ENOENT, 'test result files not found', items=[], total=0))
+        # ret = []
+        # for d in dirs:
+        #     try:
+        #         ObjectId(d)
+        #     except ValidationError as e:
+        #         logger.exception(e)
+        #     else:
+        #         ret.append(d)
+        #
+        # query['id'] = {'$in': ret}
         ret = []
 
         sort_string_start = 1 if sort[0] in ('-', '+') else 0
@@ -119,7 +119,7 @@ class TestResultView(HTTPMethodView):
                 'tester': tester.name,
                 'status': t.status,
                 'variables': t.variables,
-                'endpoint_list': t.endpoint_list,
+                'endpoint_list': [str(e) for e in t.endpoint_list],
                 'parallelization': t.parallelization
             })
 

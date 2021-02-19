@@ -313,7 +313,7 @@ class Installer:
 
     CURRENT_PYTHON = sys.executable
     CURRENT_PYTHON_VERSION = sys.version_info[:2]
-    REPOSITORY_URL = "{server_url}"
+    REPOSITORY_URL = "{server_url}/api_v1"
     METADATA_URL = REPOSITORY_URL + "/setting/get-poetry/json"
     VERSION_REGEX = re.compile(
         r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.(\d+))?"
@@ -947,13 +947,13 @@ def main():
     args = parser.parse_args()
 
     base_url = Installer.BASE_URL
-    try:
-        urlopen(Installer.REPOSITORY_URL)
-    except HTTPError as e:
-        if e.code == 404:
-            base_url = Installer.FALLBACK_BASE_URL
-        else:
-            raise
+    # try:
+    #     urlopen(Installer.REPOSITORY_URL)
+    # except HTTPError as e:
+    #     if e.code == 404:
+    #         base_url = Installer.FALLBACK_BASE_URL
+    #     else:
+    #         raise
 
     installer = Installer(
         version=args.version or os.getenv("POETRY_VERSION"),

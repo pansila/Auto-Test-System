@@ -346,7 +346,7 @@ class Event(Document):
     code = IntField(required=True)
     message = DictField()
     organization = ReferenceField('Organization', required=True)
-    team = ReferenceField('Team')
+    team = ReferenceField('Team', default=None)
     status = StringField(validate=validate.Length(max=10), default='Triggered')
     date = DateTimeField(default=datetime.datetime.utcnow)
 
@@ -417,7 +417,8 @@ class PackageFile(Document):
     download_times = IntField(default=0)
     version = StringField(default='0.0.1')
 
-    meta = {'collection': 'package_files'}
+    class Meta:
+        collection_name = 'package_files'
 
 @instance.register
 class Package(Document):

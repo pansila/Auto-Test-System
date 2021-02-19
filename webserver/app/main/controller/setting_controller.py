@@ -44,7 +44,7 @@ async def handler(request):
 @doc.summary('Get package information for the poetry')
 @doc.produces(doc.String(name='releases', description='the release versions'))
 def handler(request):
-    return json({'releases': ["0.2.7"]})
+    return json({'releases': ["0.3.0"]})
 
 @bp.get('/get-poetry/json')
 @doc.summary('Get package information for the poetry')
