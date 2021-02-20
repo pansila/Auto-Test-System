@@ -47,8 +47,7 @@ class UserView(HTTPMethodView):
     @doc.consumes(_account, location='body')
     @doc.produces(json_response)
     async def post(self, request):
-        data = request.json
-        return json(await save_new_user(data=data))
+        return json(await save_new_user(data=request.json))
 
 
 @bp.get('/info')

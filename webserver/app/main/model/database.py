@@ -502,4 +502,22 @@ class Documentation(Document):
     locked = BooleanField(default=False)
     language = StringField(default='en')
 
-    meta = {'collection': 'documents'}
+    class Meta:
+        collection_name = 'documents'
+
+# def register_all(db):
+#     instance = Instance(db)
+#     instance.register(Organization)
+#     instance.register(Team)
+#     instance.register(User)
+#     instance.register(BlacklistToken)
+#     instance.register(Test)
+#     instance.register(Task)
+#     instance.register(Endpoint)
+#     instance.register(TaskQueue)
+#     instance.register(TestResult)
+#     instance.register(Event)
+#     instance.register(EventQueue)
+#     instance.register(PackageFile)
+#     instance.register(Package)
+#     instance.register(Documentation)

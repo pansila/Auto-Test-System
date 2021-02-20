@@ -17,15 +17,7 @@ bp = Blueprint('auth', url_prefix='/auth')
 @doc.consumes(user_auth, location='body')
 @doc.produces(json_response)
 async def handler(request):
-    post_data = request.json
-    ret = await Auth.login_user(data=post_data)
-    if ret['code'] != SUCCESS.code:
-        return json(ret)
-
-    user = await User.find_one({'email': post_data.get('email')})
-    if not user:
-        return json(response_message(USER_NOT_EXIST))
-
+    ret = await Auth.login_user(data=request.json)
     return json(ret)
 
 

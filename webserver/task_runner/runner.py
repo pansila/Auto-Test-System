@@ -49,7 +49,6 @@ TASK_PER_ENDPOINT = {}     # {taskqueue id: idle counter (int)}}
 ROOM_MESSAGES = {}  # {"organziation:team": old_message, new_message}
 RPC_PROXIES = {}    # {"endpoint_id": (websocket, rpc)}
 TASKS_CACHED = {}
-RUNNER_READY = False
 
 bp = Blueprint('rpc_proxy', url_prefix='/rpc_proxy')
 
@@ -517,36 +516,36 @@ async def check_endpoint(app, endpoint_uid, organization, team):
         assert organization == team.organization
     org_name = (organization.name + '-' + team.name) if team else organization.name
     url = 'http://127.0.0.1:8270/{}'.format(endpoint_uid)
-    server = aiohttp_xmlrpc.client.ServerProxy(url)
-    endpoint = await Endpoint.find_one({'uid': endpoint_uid, 'organization': organization.pk, 'team': team.pk if team else None})
-    try:
-        ret = await server.get_keyword_names()
-    except ConnectionRefusedError:
-        err_msg = 'Endpoint {} @ {} connecting failed'.format(endpoint.name, org_name)
-    except asyncio.exceptions.TimeoutError:
-        err_msg = 'Endpoint {} @ {} connecting timeouted'.format(endpoint.name, org_name)
-    # except xmlrpc.client.Fault as e:  # TODO
-    #     err_msg = 'Endpoint {} @ {} RPC calling error'.format(endpoint.name, org_name)
-    #     logger.exception(e)
-    except OSError as e:
-        err_msg = 'Endpoint {} @ {} unreachable'.format(endpoint.name, org_name)
-    except Exception as e:
-        err_msg = 'Endpoint {} @ {} has error:'.format(endpoint.name, org_name)
-        logger.exception(e)
-    else:
-        if ret:
-            if endpoint and endpoint.status == 'Offline':
-                endpoint.status = 'Online'
-                await endpoint.commit()
-            await server.close()
-            return True
+    async with aiohttp_xmlrpc.client.ServerProxy(url) as server:
+        endpoint = await Endpoint.find_one({'uid': endpoint_uid, 'organization': organization.pk, 'team': team.pk if team else None})
+        try:
+            ret = await server.get_keyword_names()
+        except ConnectionRefusedError:
+            err_msg = 'Endpoint {} @ {} connecting failed'.format(endpoint.name, org_name)
+        except asyncio.exceptions.TimeoutError:
+            err_msg = 'Endpoint {} @ {} connecting timeouted'.format(endpoint.name, org_name)
+        except AttributeError:
+            err_msg = 'Endpoint {} @ {} RPC server not ready'.format(endpoint.name, org_name)
+        # except xmlrpc.client.Fault as e:  # TODO
+        #     err_msg = 'Endpoint {} @ {} RPC calling error'.format(endpoint.name, org_name)
+        #     logger.exception(e)
+        except OSError as e:
+            err_msg = 'Endpoint {} @ {} unreachable'.format(endpoint.name, org_name)
+        except Exception as e:
+            err_msg = 'Endpoint {} @ {} has error:'.format(endpoint.name, org_name)
+            logger.exception(e)
         else:
-            err_msg = 'Endpoint {} @ {} RPC proxy not found'.format(endpoint.name, org_name)
-    if endpoint and endpoint.status == 'Online':
-        logger.error(err_msg)
-        endpoint.status = 'Offline'
-        await endpoint.commit()
-    await server.close()
+            if ret:
+                if endpoint and endpoint.status == 'Offline':
+                    endpoint.status = 'Online'
+                    await endpoint.commit()
+                return True
+            else:
+                err_msg = 'Endpoint {} @ {} RPC proxy not found'.format(endpoint.name, org_name)
+        if endpoint and endpoint.status == 'Online':
+            logger.error(err_msg)
+            endpoint.status = 'Offline'
+            await endpoint.commit()
     return False
 
 def normalize_url(url):

@@ -34,13 +34,14 @@ limiter = Limiter(app, global_limits=limits, key_func=get_remote_address)
 event_task = None
 heartbeat_task = None
 rpc_server = None
+db_client = None
 
 @app.listener('before_server_start')
 async def setup_connection(app, loop):
-    global event_task, heartbeat_task, rpc_server
+    global event_task, heartbeat_task, rpc_server, db_client
 
-    client = motor.motor_asyncio.AsyncIOMotorClient(f"{app.config['MONGODB_URL']}:{app.config['MONGODB_PORT']}")
-    app.config.db = client[app.config['MONGODB_DATABASE']]
+    db_client = motor.motor_asyncio.AsyncIOMotorClient(f"{app.config['MONGODB_URL']}:{app.config['MONGODB_PORT']}")
+    app.config.db = db_client[app.config['MONGODB_DATABASE']]
 
     from task_runner.runner import initialize_runner, start_event_thread, start_heartbeat_thread, start_xmlrpc_server
     event_task = asyncio.create_task(start_event_thread(app))
@@ -81,10 +82,11 @@ async def wait_tasks_ready(app, loop):
 
 @app.listener('before_server_stop')
 async def cleanup(app, loop):
-    global event_task, heartbeat_task, rpc_server
+    global event_task, heartbeat_task, rpc_server, db_client
     event_task.cancel()
     heartbeat_task.cancel()
     rpc_server.server.stop()
+    db_client.close()
 
 
 @sio.event

@@ -16,7 +16,6 @@ def register_user(self):
             password='123456'
         )
     )
-    assert response.status == 200
     return response
 
 
@@ -28,7 +27,6 @@ def login_user(self):
             password='123456'
         )
     )
-    assert response.status == 200
     return response
 
 
