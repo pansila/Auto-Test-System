@@ -576,7 +576,9 @@ async def rpc_message_relay(request, ws):
             TASKS_CACHED[task_id] = task
         else:
             task = TASKS_CACHED[task_id]
-        room_id = get_room_id(str(task.organization.id), str(task.team.id) if task.team else '')
+        organization = await task.organization.fetch()
+        team = await task.team.fetch()
+        room_id = get_room_id(str(organization.id), str(team.id) if team else '')
         await sio.emit('test log', {'task_id': task_id, 'message': data}, room=room_id)
 
 @bp.websocket('/rpc')
