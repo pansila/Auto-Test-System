@@ -37,7 +37,7 @@ wheel = "^0.38.1"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.5.1"
-poetry = "^1.1.4"
+poetry = "^1.1.9"
 
 [tool.taskipy.tasks]
 server = "python app/__init__.py"
